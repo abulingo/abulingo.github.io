@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Abulingo - Aprende Inglés</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Work+Sans:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css"></link>
+    <link rel="stylesheet" href="style.css">   
+</head>
+<body class="min-h-screen">
+
+    <div id="navBarra"></div>
+
+    <main class="pt-24 pb-12 flex flex-col items-center justify-center min-h-screen">
+        <div id="app-container" class="w-full max-w-2xl mx-auto px-4">
+            <div class="text-center"><h1 class="text-3xl font-bold font-heading">Cargando tu aventura...</h1><p class="text-slate-600">Por favor, espera un momento.</p></div>
+        </div>
+    </main>
+
+    <script type="module">
+        // --- 1. CONFIGURACIÓN E INICIALIZACIÓN ---
+        const SUPABASE_URL = 'https://tdbnnaeifooivzldvotm.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRkYm5uYWVpZm9vaXZ6bGR2b3RtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc5ODQ1NzksImV4cCI6MjA3MzU2MDU3OX0.YS1ghAXsLyFe3uSXf9-lIykbmfliNPDOPoEtHTo4vYE';
+
+        if (!SUPABASE_URL || !SUPABASE_ANON_KEY) alert("¡Error! Debes configurar tus credenciales de Supabase.");
+
+        const { createClient } = supabase;
+        const dbClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        let currentUser = null, userProfile = null, currentWord = null;
+        const appContainer = document.getElementById('app-container');
+
+        // --- 2. LÓGICA DEL SISTEMA DE REPETICIÓN ESPACIADA (SRS) ---
+        const srsIntervals = [ 5 * 60 * 1000, 24 * 60 * 60 * 1000, 3 * 24 * 60 * 60 * 1000, 7 * 24 * 60 * 60 * 1000, 14 * 24 * 60 * 60 * 1000, 30 * 24 * 60 * 60 * 1000 ];
+        
+        async function updateWordProgress(wordId, wasCorrect) {
+            if (!currentUser) return;
+            const { data: progress } = await dbClient.from('user_word_progress').select('srs_level').eq('user_id', currentUser.id).eq('word_id', wordId).single();
+            let newSrsLevel = progress ? progress.srs_level : 0;
+            newSrsLevel = wasCorrect ? newSrsLevel + 1 : 0; // Incrementa si es correcto, reinicia si no
+            const interval = srsIntervals[Math.min(newSrsLevel, srsIntervals.length - 1)];
+            const next_review_at = new Date(Date.now() + interval).toISOString();
+            const { error } = await dbClient.from('user_word_progress').upsert({ user_id: currentUser.id, word_id: wordId, srs_level: newSrsLevel, next_review_at: next_review_at }, { onConflict: 'user_id, word_id' });
+            if (error) console.error("Error al actualizar progreso:", error);
+            else if (wasCorrect) await updateUserPoints(5);
+        }
+
+        // --- 3. LÓGICA DE FLUJOS DE APRENDIZAJE (CONTROLADOR PRINCIPAL) ---
+        async function iniciarFlujoDeAprendizaje() {
+            if (!userProfile || !userProfile.flujo) {
+                appContainer.innerHTML = `<h2 class="text-center font-bold">Error: No se encontró flujo de aprendizaje.</h2>`;
+                return;
+            }
+            switch (userProfile.flujo.currentFlow) {
+                case 1: await renderFlow1_Flashcards(); break;
+                case 2: await renderFlow2_Practice(); break;
+                case 3: await renderFlow3_Sentences(); break;
+                // case 4: await renderFlow4_Conversation(); break;
+                default: appContainer.innerHTML = `<h2 class="text-center font-bold">¡Has completado todos los flujos!</h2>`;
+            }
+        }
+
+        async function renderFlow1_Flashcards() {
+            const word = await getNextWordForReview();
+            if (word) {
+                currentWord = word;
+                appContainer.innerHTML = getFlashcardHTML(word);
+                addFlashcardEventListeners();
+            } else {
+                console.log("Flujo 1 completado. Avanzando a Flujo 2...");
+                const newFlowState = userProfile.flujo;
+                newFlowState.currentFlow = 2;
+                newFlowState.flowState[newFlowState.currentGroup].flow1_flashcards.status = "completed";
+                await updateUserFlowState(newFlowState);
+                await renderFlow2_Practice();
+            }
+        }
+
+        async function renderFlow2_Practice() {
+            const flowState = userProfile.flujo.flowState[userProfile.flujo.currentGroup];
+            if (!flowState.flow2_practice.queue || flowState.flow2_practice.queue.length === 0) {
+                await generatePracticeQueue();
+                await loadUserProfile();
+            }
+            const queue = userProfile.flujo.flowState[userProfile.flujo.currentGroup].flow2_practice.queue;
+            const currentIndex = userProfile.flujo.flowState[userProfile.flujo.currentGroup].flow2_practice.currentIndex || 0;
+            if (currentIndex >= queue.length) {
+                console.log("Flujo 2 completado. Avanzando a Flujo 3...");
+                const newFlowState = userProfile.flujo;
+                newFlowState.currentFlow = 3;
+                newFlowState.flowState[newFlowState.currentGroup].flow2_practice.status = "completed";
+                await updateUserFlowState(newFlowState);
+                await renderFlow3_Sentences();
+                return;
+            }
+            const exercise = queue[currentIndex];
+            const { data: wordData, error } = await dbClient.from('palabras').select('*').eq('id', exercise.word_id).single();
+            if (error) { console.error("No se pudo cargar la palabra:", error); return; }
+            currentWord = wordData;
+            switch (exercise.type) {
+                case 'select_word_by_image': await renderSelectWordByImageExercise(wordData, exercise.options); break;
+                case 'write_word_by_audio': renderWriteWordByAudioExercise(wordData); break;
+                default: await advanceInQueue();
+            }
+        }
+        
+        async function renderFlow3_Sentences() {
+            const flowState = userProfile.flujo.flowState[userProfile.flujo.currentGroup];
+            if (!flowState.flow3_sentences.queue || flowState.flow3_sentences.queue.length === 0) {
+                await generateSentenceQueue();
+                await loadUserProfile();
+            }
+            const queue = userProfile.flujo.flowState[userProfile.flujo.currentGroup].flow3_sentences.queue;
+            const currentIndex = userProfile.flujo.flowState[userProfile.flujo.currentGroup].flow3_sentences.currentIndex || 0;
+            if (currentIndex >= queue.length) {
+                appContainer.innerHTML = `<h2 class="text-2xl font-bold font-heading text-center">¡Genial! ¡Terminaste las frases!</h2><p class="text-center">Próximamente: ¡Conversación con IA!</p>`;
+                // Aquí avanzarías al Flujo 4
+                return;
+            }
+            const exercise = queue[currentIndex];
+            switch (exercise.type) {
+                case 'dialogo_video': renderVideoDialogueExercise(exercise.data); break;
+                case 'organizar_frase': renderSentenceScrambleExercise(exercise.data); break;
+                case 'escribir_frase': renderSentenceDictationExercise(exercise.data); break;
+                default: await advanceInSentenceQueue();
+            }
+        }
+
+        // --- 4. RENDERIZADO DE EJERCICIOS Y COMPONENTES ---
+        function getFlashcardHTML(word) {
+            return `
+                <div id="flashcard-container" class="card-style w-full max-w-md mx-auto p-8 rounded-2xl text-center card-loading">
+                <img id="card-image" src="${word.imagen || `https://via.placeholder.com/400/200/e6f0ff/0d47a1?text=${word.ingles}`}" alt="Imagen de la palabra" class="rounded-lg mb-2 w-full object-cover h-48">
+                <h1 id="card-english" class="text-5xl font-bold font-heading mb-1">${word.ingles}</h1>
+                <p id="card-spanish" class="text-2xl text-slate-500 opacity-75 mb-2">${word.espanol}</p>
+                <p id="card-phonetic" class="text-xl font-mono text-[#FF7A00] mb-2 hidden">${word.fonetica || ''}</p>
+
+                <div class="flex justify-center space-x-4 mb-4">
+                    <button id="pronounce-btn" class="flex-1 bg-blue-100 text-[#0D47A1] font-semibold py-3 rounded-lg hover:bg-blue-200 transition flex items-center justify-center space-x-2">
+                        <i class="fas fa-comment-dots"></i>
+                        <span>Pronunciación</span>
+                    </button>
+                    <button id="sound-btn" class="flex-1 bg-blue-100 text-[#0D47A1] font-semibold py-3 rounded-lg hover:bg-blue-200 transition flex items-center justify-center space-x-2">
+                        <i class="fas fa-play"></i>
+                        <span>Sonido</span>
+                    </button>
+                </div>
+
+                <div class="flex space-x-4">
+                    <button id="btn-easy" class="w-1/2 py-3 rounded-lg font-bold transition text-green-800 bg-green-100 hover:bg-green-200" style="background-color: #C8E6C9; color: #2E7D32;">Fácil</button>
+                    <button id="btn-hard" class="w-1/2 py-3 rounded-lg font-bold transition text-red-800 bg-red-100 hover:bg-red-200" style="background-color: #FFCDD2; color: #C62828;">Difícil</button>
+                </div>
+            </div>`;
+        }
+        
+        async function renderSelectWordByImageExercise(correctWord, options) {
+            let optionsHTML = options.sort(() => Math.random() - 0.5).map(option => `<button class="option-button w-full text-lg" data-word="${option}">${option}</button>`).join('');
+            appContainer.innerHTML = `
+                <div class="card-style w-full max-w-md mx-auto p-8 rounded-2xl text-center">
+                    <h2 class="text-2xl font-bold font-heading mb-4">Selecciona la palabra correcta</h2>
+                    <img src="${correctWord.imagen}" alt="Imagen" class="rounded-lg mb-6 w-full object-cover h-48">
+                    <div class="grid grid-cols-2 gap-4">${optionsHTML}</div>
+                </div>`;
+            document.querySelectorAll('.option-button').forEach(button => button.addEventListener('click', async (e) => {
+                const isCorrect = e.target.dataset.word === correctWord.ingles;
+                document.querySelectorAll('.option-button').forEach(btn => {
+                    btn.disabled = true;
+                    if (btn.dataset.word === correctWord.ingles) btn.classList.add('correct');
+                    else if (btn === e.target) btn.classList.add('incorrect');
+                });
+                await updateWordProgress(correctWord.id, isCorrect);
+                setTimeout(advanceInQueue, 2000);
+            }));
+        }
+        
+        function renderWriteWordByAudioExercise(word) {
+            appContainer.innerHTML = `
+                <div class="card-style w-full max-w-md mx-auto p-8 rounded-2xl text-center">
+                    <h2 class="text-2xl font-bold font-heading mb-4">Escribe lo que escuches</h2>
+                    <button id="play-audio-btn" class="mb-6 bg-blue-500 text-white rounded-full h-20 w-20 flex items-center justify-center mx-auto text-3xl hover:bg-blue-600 transition"><i class="fas fa-volume-up"></i></button>
+                    <input id="word-input" type="text" class="w-full border-2 border-gray-300 rounded-lg p-3 text-center text-xl" placeholder="Escribe aquí...">
+                    <button id="check-btn" class="w-full btn-primary py-3 rounded-lg font-bold mt-4">Comprobar</button>
+                    <div id="feedback" class="mt-4 h-10"></div>
+                </div>`;
+            const audio = new Audio(word.audio);
+            document.getElementById('play-audio-btn').addEventListener('click', () => audio.play());
+            document.getElementById('check-btn').addEventListener('click', async () => {
+                const input = document.getElementById('word-input'), feedback = document.getElementById('feedback');
+                const isCorrect = input.value.trim().toLowerCase() === word.ingles.toLowerCase();
+                await updateWordProgress(word.id, isCorrect);
+                feedback.innerHTML = isCorrect ? `<p class="text-green-600 font-bold">¡Correcto!</p>` : `<p class="text-red-600 font-bold">Respuesta: <span class="font-mono">${word.ingles}</span></p>`;
+                document.getElementById('check-btn').disabled = true;
+                setTimeout(advanceInQueue, 2500);
+            });
+            audio.play();
+        }
+
+        function renderVideoDialogueExercise(videoData) {
+            appContainer.innerHTML = `
+                <div class="card-style w-full p-6 rounded-2xl text-center">
+                    <h2 class="text-2xl font-bold font-heading mb-4">Mira y escucha</h2>
+                    <video controls class="w-full rounded-lg mb-4" src="${videoData.video}"></video>
+                    <div class="text-left space-y-2 p-4 bg-gray-50 rounded-lg">
+                        <p><strong class="text-blue-600">EN:</strong> ${videoData.textoingles.replace(/\n/g, '<br>')}</p>
+                        <p><strong class="text-orange-600">ES:</strong> ${videoData.textoespañol.replace(/\n/g, '<br>')}</p>
+                    </div>
+                    <button id="next-btn" class="w-full btn-primary py-3 rounded-lg font-bold mt-6">Continuar</button>
+                </div>`;
+            document.getElementById('next-btn').addEventListener('click', advanceInSentenceQueue);
+        }
+
+        function renderSentenceScrambleExercise(phraseData) {
+            const words = phraseData.fraseingles.split(' ').sort(() => Math.random() - 0.5);
+            let wordButtonsHTML = words.map(word => `<span class="scramble-word">${word}</span>`).join('');
+            appContainer.innerHTML = `
+                <div class="card-style w-full p-6 rounded-2xl">
+                    <h2 class="text-xl font-bold font-heading mb-2 text-center">Organiza la frase</h2>
+                    <p class="text-center text-slate-500 mb-4">Traducción: "${phraseData.fraseespañol}"</p>
+                    <div id="answer-area" class="answer-area flex flex-wrap items-center mb-4"></div>
+                    <div id="word-bank" class="flex flex-wrap justify-center items-center mb-4">${wordButtonsHTML}</div>
+                    <button id="check-btn" class="w-full btn-primary py-3 rounded-lg font-bold">Comprobar</button>
+                    <div id="feedback" class="mt-4 h-8 text-center font-bold"></div>
+                </div>`;
+            const wordBank = document.getElementById('word-bank'), answerArea = document.getElementById('answer-area');
+            const moveWord = (e) => {
+                if(e.target.classList.contains('scramble-word')) {
+                    const destination = e.currentTarget.id === 'word-bank' ? answerArea : wordBank;
+                    destination.appendChild(e.target);
+                }
+            };
+            wordBank.addEventListener('click', moveWord);
+            answerArea.addEventListener('click', moveWord);
+            document.getElementById('check-btn').addEventListener('click', async () => {
+                const constructed = [...answerArea.children].map(el => el.textContent).join(' ');
+                const isCorrect = constructed === phraseData.fraseingles;
+                const feedback = document.getElementById('feedback');
+                feedback.className = `mt-4 h-8 text-center font-bold ${isCorrect ? 'text-green-600' : 'text-red-600'}`;
+                feedback.textContent = isCorrect ? '¡Correcto!' : 'Inténtalo de nuevo.';
+                if (isCorrect) {
+                    await updateUserPoints(10);
+                    document.getElementById('check-btn').disabled = true;
+                    setTimeout(advanceInSentenceQueue, 1500);
+                }
+            });
+        }
+
+        function renderSentenceDictationExercise(audioData) {
+            appContainer.innerHTML = `
+                <div class="card-style w-full p-6 rounded-2xl text-center">
+                    <h2 class="text-2xl font-bold font-heading mb-4">Escribe lo que escuches</h2>
+                    <button id="play-audio-btn" class="mb-6 bg-blue-500 text-white rounded-full h-20 w-20 flex items-center justify-center mx-auto text-3xl hover:bg-blue-600 transition"><i class="fas fa-volume-up"></i></button>
+                    <input id="sentence-input" type="text" class="w-full border-2 border-gray-300 rounded-lg p-3 text-center text-xl" placeholder="Escribe la frase...">
+                    <button id="check-btn" class="w-full btn-primary py-3 rounded-lg font-bold mt-4">Comprobar</button>
+                    <div id="feedback" class="mt-4 h-10"></div>
+                </div>`;
+            const audio = new Audio(audioData.audio);
+            document.getElementById('play-audio-btn').addEventListener('click', () => audio.play());
+            document.getElementById('check-btn').addEventListener('click', async () => {
+                const input = document.getElementById('sentence-input'), feedback = document.getElementById('feedback');
+                const cleanInput = input.value.trim().replace(/[.,!?]/g, '').toLowerCase();
+                const cleanAnswer = audioData.fraseingles.replace(/[.,!?]/g, '').toLowerCase();
+                const isCorrect = cleanInput === cleanAnswer;
+                if (isCorrect) {
+                    feedback.innerHTML = `<p class="text-green-600 font-bold">¡Perfecto!</p>`;
+                    await updateUserPoints(15);
+                    document.getElementById('check-btn').disabled = true;
+                    setTimeout(advanceInSentenceQueue, 2000);
+                } else {
+                    feedback.innerHTML = `<p class="text-red-600 font-bold">Correcto: <span class="block mt-1">${audioData.fraseingles}</span></p>`;
+                }
+            });
+            audio.play();
+        }
+
+        // --- 5. FUNCIONES AUXILIARES ---
+        async function getNextWordForReview() {
+            const now = new Date().toISOString(), group = userProfile.flujo.currentGroup;
+            const { data: review } = await dbClient.from('user_word_progress').select(`srs_level, palabras!inner(*)`).eq('user_id', currentUser.id).eq('palabras.grupo', group).lte('next_review_at', now).order('next_review_at').limit(1).single();
+            if (review) return { ...review.palabras, srs_level: review.srs_level };
+            const { data: seen } = await dbClient.from('user_word_progress').select('word_id').eq('user_id', currentUser.id);
+            const seenIds = seen ? seen.map(w => w.word_id) : [];
+            let query = dbClient.from('palabras').select('*').eq('grupo', group);
+            if (seenIds.length > 0) query = query.not('id', 'in', `(${seenIds.join(',')})`);
+            const { data: newWord } = await query.order('id').limit(1).single();
+            return newWord ? { ...newWord, srs_level: 0 } : null;
+        }
+
+        async function generatePracticeQueue() {
+            const group = userProfile.flujo.currentGroup;
+            const { data: words } = await dbClient.from('palabras').select('id, ingles').eq('grupo', group);
+            if (!words) return;
+            const types = ['select_word_by_image', 'write_word_by_audio'];
+            let queue = words.map(word => {
+                const type = types[Math.floor(Math.random() * types.length)];
+                let exercise = { type, word_id: word.id };
+                if (type === 'select_word_by_image') {
+                    let options = [word.ingles];
+                    let others = words.filter(w => w.id !== word.id).sort(() => .5 - Math.random()).slice(0, 3);
+                    options.push(...others.map(w => w.ingles));
+                    exercise.options = options;
+                }
+                return exercise;
+            }).sort(() => Math.random() - 0.5);
+            const newFlow = userProfile.flujo;
+            newFlow.flowState[group].flow2_practice = { status: "in_progress", queue, currentIndex: 0 };
+            await updateUserFlowState(newFlow);
+        }
+
+        async function generateSentenceQueue() {
+            const group = userProfile.flujo.currentGroup;
+            const { data: frases } = await dbClient.from('frases').select('*').eq('grupo', group);
+            const { data: audios } = await dbClient.from('audios').select('*').eq('grupo', group);
+            const { data: videos } = await dbClient.from('videos').select('*').eq('grupo', group);
+            let queue = [];
+            if (videos) videos.forEach(v => queue.push({ type: 'dialogo_video', data: v }));
+            if (frases) frases.forEach(f => queue.push({ type: 'organizar_frase', data: f }));
+            if (audios) audios.forEach(a => queue.push({ type: 'escribir_frase', data: a }));
+            queue.sort(() => Math.random() - 0.5);
+            const newFlow = userProfile.flujo;
+            newFlow.flowState[group].flow3_sentences = { status: "in_progress", queue, currentIndex: 0 };
+            await updateUserFlowState(newFlow);
+        }
+
+        async function advanceInQueue() {
+            const flow = userProfile.flujo;
+            flow.flowState[flow.currentGroup].flow2_practice.currentIndex++;
+            await updateUserFlowState(flow);
+            await renderFlow2_Practice();
+        }
+
+        async function advanceInSentenceQueue() {
+            const flow = userProfile.flujo;
+            flow.flowState[flow.currentGroup].flow3_sentences.currentIndex++;
+            await updateUserFlowState(flow);
+            await renderFlow3_Sentences();
+        }
+
+        function addFlashcardEventListeners() {
+            document.getElementById('pronounce-btn').addEventListener('click', () => {
+                document.getElementById('card-phonetic').classList.toggle('hidden');
+                if (currentWord && currentWord.audio) new Audio(currentWord.audio).play();
+            });
+            const handleResponse = async (isEasy) => {
+                await updateWordProgress(currentWord.id, isEasy);
+                await renderFlow1_Flashcards();
+            };
+            document.getElementById('btn-easy').addEventListener('click', () => handleResponse(true));
+            document.getElementById('btn-hard').addEventListener('click', () => handleResponse(false));
+        }
+
+        async function loadUserProfile() {
+            const { data, error } = await dbClient.from('profiles').select('*').eq('id', currentUser.id).single();
+            if (error) console.error("Error al cargar perfil:", error);
+            userProfile = data;
+        }
+
+        async function updateUserFlowState(newFlowState) {
+            const { error } = await dbClient.from('profiles').update({ flujo: newFlowState }).eq('id', currentUser.id);
+            if (error) console.error("Error al actualizar flujo:", error);
+            else userProfile.flujo = newFlowState;
+        }
+
+        async function updateUserPoints(pointsToAdd) {
+             const newPoints = (userProfile.points || 0) + pointsToAdd;
+             await dbClient.from('profiles').update({ points: newPoints }).eq('id', currentUser.id);
+             userProfile.points = newPoints;
+             document.getElementById('user-points').textContent = newPoints;
+        }
+
+        // --- 6. EJECUCIÓN INICIAL ---
+        document.addEventListener('DOMContentLoaded', async () => {
+            const { data: { session } } = await dbClient.auth.getSession();
+            if (!session) { window.location.href = 'index.html'; return; }
+            currentUser = session.user;
+            await loadUserProfile();
+            if (userProfile) {
+                document.getElementById('user-name-nav').textContent = userProfile.full_name || 'Mi Perfil';
+                document.getElementById('user-name-dropdown').textContent = userProfile.full_name || 'Sin nombre';
+                document.getElementById('user-email-dropdown').textContent = currentUser.email;
+                document.getElementById('user-points').textContent = userProfile.points || 0;
+                document.getElementById('user-lingots').textContent = userProfile.lingots || '0.00';
+                await iniciarFlujoDeAprendizaje();
+            }
+            const menuButton = document.getElementById('menu-button'), mobileMenu = document.getElementById('mobile-menu');
+            const profileMenuButton = document.getElementById('profile-menu-button'), profileMenuDropdown = document.getElementById('profile-menu-dropdown');
+            menuButton.addEventListener('click', e => { e.stopPropagation(); mobileMenu.classList.toggle('hidden'); });
+            profileMenuButton.addEventListener('click', e => { e.stopPropagation(); profileMenuDropdown.classList.toggle('hidden'); });
+            document.addEventListener('click', e => {
+                if (!mobileMenu.contains(e.target) && !menuButton.contains(e.target)) mobileMenu.classList.add('hidden');
+                if (!profileMenuDropdown.contains(e.target) && !profileMenuButton.contains(e.target)) profileMenuDropdown.classList.add('hidden');
+            });
+            document.getElementById('logout-btn').addEventListener('click', async () => {
+                await dbClient.auth.signOut();
+                window.location.href = 'index.html';
+            });
+        });
+    </script>
+    <script src="js/igual.js"></script> 
+</body>
+</html>
