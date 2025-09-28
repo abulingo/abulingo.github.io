@@ -6,6 +6,7 @@ navBarra.innerHTML=`
             <nav class="hidden md:flex items-center space-x-2">
                 <a href="abulingo.html" class="nav-link active">Continuar Aventura</a>
                 <a href="gramatica.html" class="nav-link">Gramática</a>
+                <a href="pro.html" class="nav-link">Pronunciación</a>
                 <a href="club.html" class="nav-link">Club</a>
                 <a href="traductor.html" class="nav-link">Traductor</a>
                 <a href="soporte.html" class="nav-link">Soporte</a>
