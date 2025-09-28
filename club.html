@@ -14,193 +14,255 @@
 </head>
 <body class="bg-[#E6F0FF]">
 
-    <div id="navBarra"></div>
+<div id="navBarra"></div>
 
-    <main class="pt-24 pb-12">
-        <div id="app-container" class="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            
-            <div class="bg-[#0D47A1] text-white p-6 sm:p-8 rounded-xl shadow-lg mb-8 flex flex-col sm:flex-row justify-between items-center gap-4">
-                <div>
-                    <h1 class="text-3xl font-bold">Club de Conversación</h1>
-                    <p class="text-blue-200 mt-1">Únete a una sesión o crea la tuya para practicar tu inglés.</p>
-                </div>
-                <button id="open-create-modal-btn" class="bg-[#FF7A00] w-full sm:w-auto text-white font-semibold py-3 px-6 rounded-lg hover:bg-orange-600 transition-transform hover:scale-105 flex items-center justify-center gap-2 shadow-md">
-                    <i class="fas fa-plus"></i> Crear Reunión
-                </button>
-            </div>
-
-            <div class="mb-12">
-                <h2 class="text-2xl font-bold text-[#0D47A1] mb-4 border-b-2 border-blue-200 pb-2">Mis Reuniones Inscritas</h2>
-                <div id="mis-reuniones-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
-            </div>
-
+<main class="pt-24 pb-12">
+    <div id="app-container" class="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        
+        <div class="bg-[#0D47A1] text-white p-6 sm:p-8 rounded-xl shadow-lg mb-8 flex flex-col sm:flex-row justify-between items-center gap-4">
             <div>
-                <h2 class="text-2xl font-bold text-[#0D47A1] mb-4 border-b-2 border-blue-200 pb-2">Reuniones Disponibles</h2>
-                <div id="reuniones-disponibles-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+                <h1 class="text-3xl font-bold">Club de Conversación</h1>
+                <p class="text-blue-200 mt-1">Únete a una sesión o crea la tuya para practicar tu inglés.</p>
             </div>
-
+            <button id="open-create-modal-btn" class="bg-[#FF7A00] w-full sm:w-auto text-white font-semibold py-3 px-6 rounded-lg hover:bg-orange-600 transition-transform hover:scale-105 flex items-center justify-center gap-2 shadow-md">
+                <i class="fas fa-plus"></i> Crear Reunión
+            </button>
         </div>
-    </main>
 
-    <div id="create-event-modal" class="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-[100] hidden">
-        <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-lg relative">
-            <button id="close-create-modal" class="absolute top-4 right-4 text-gray-400 hover:text-gray-800 text-2xl">&times;</button>
-            <h2 class="text-2xl font-bold text-[#0D47A1] mb-6 text-center">Crear Nueva Reunión</h2>
-            <form id="create-event-form" class="space-y-4">
-                <div><label for="meet-link" class="block text-sm font-medium text-gray-700">Link de Google Meet</label><input type="url" id="meet-link" class="mt-1 block w-full border border-gray-300 rounded-md p-2 focus:ring-[#FF7A00] focus:border-[#FF7A00]" placeholder="https://meet.google.com/..." required></div>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4"><div><label for="max-personas" class="block text-sm font-medium text-gray-700">Máx. de Personas</label><select id="max-personas" class="mt-1 block w-full border border-gray-300 rounded-md p-2 focus:ring-[#FF7A00] focus:border-[#FF7A00]" required><option value="">Selecciona</option><option value="2">2</option><option value="3">3</option><option value="4">4</option></select></div><div><label for="duracion" class="block text-sm font-medium text-gray-700">Duración (minutos)</label><input type="number" id="duracion" class="mt-1 block w-full border border-gray-300 rounded-md p-2 focus:ring-[#FF7A00] focus:border-[#FF7A00]" min="15" step="5" value="30" required></div></div>
-                <div><label for="fecha-hora" class="block text-sm font-medium text-gray-700">Fecha y Hora</label><input type="datetime-local" id="fecha-hora" class="mt-1 block w-full border border-gray-300 rounded-md p-2 focus:ring-[#FF7A00] focus:border-[#FF7A00]" required></div>
-                <div><label for="conversacion-select" class="block text-sm font-medium text-gray-700">Tema de Conversación</label><select id="conversacion-select" class="mt-1 block w-full border border-gray-300 rounded-md p-2 focus:ring-[#FF7A00] focus:border-[#FF7A00]" required disabled><option value="">Primero selecciona el # de personas</option></select></div>
-                <button type="submit" class="w-full bg-[#FF7A00] text-white font-bold py-3 rounded-lg mt-4 hover:bg-orange-600">Publicar Reunión</button>
-            </form>
+        <div class="mb-12">
+            <h2 class="text-2xl font-bold text-[#0D47A1] mb-4 border-b-2 border-blue-200 pb-2">Mis Reuniones Inscritas</h2>
+            <div id="mis-reuniones-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
         </div>
+
+        <div>
+            <h2 class="text-2xl font-bold text-[#0D47A1] mb-4 border-b-2 border-blue-200 pb-2">Reuniones Disponibles</h2>
+            <div id="reuniones-disponibles-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+        </div>
+
     </div>
+</main>
 
-    <div id="event-details-modal" class="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-[100] hidden">
-        <div class="bg-white p-6 sm:p-8 rounded-2xl shadow-2xl w-full max-w-2xl relative">
-            <button id="close-details-modal" class="absolute top-4 right-4 text-gray-400 hover:text-gray-800 text-2xl">&times;</button>
-            <div id="modal-content"></div>
-        </div>
+<div id="create-event-modal" class="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-[100] hidden">
+    <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-lg relative">
+        <button id="close-create-modal" class="absolute top-4 right-4 text-gray-400 hover:text-gray-800 text-2xl">&times;</button>
+        <h2 class="text-2xl font-bold text-[#0D47A1] mb-6 text-center">Crear Nueva Reunión</h2>
+        <form id="create-event-form" class="space-y-4">
+            <div><label for="meet-link" class="block text-sm font-medium text-gray-700">Link de Google Meet</label><input type="url" id="meet-link" class="mt-1 block w-full border border-gray-300 rounded-md p-2 focus:ring-[#FF7A00] focus:border-[#FF7A00]" placeholder="https://meet.google.com/..." required></div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4"><div><label for="max-personas" class="block text-sm font-medium text-gray-700">Máx. de Personas</label><select id="max-personas" class="mt-1 block w-full border border-gray-300 rounded-md p-2 focus:ring-[#FF7A00] focus:border-[#FF7A00]" required><option value="">Selecciona</option><option value="2">2</option><option value="3">3</option><option value="4">4</option></select></div><div><label for="duracion" class="block text-sm font-medium text-gray-700">Duración (minutos)</label><input type="number" id="duracion" class="mt-1 block w-full border border-gray-300 rounded-md p-2 focus:ring-[#FF7A00] focus:border-[#FF7A00]" min="15" step="5" value="30" required></div></div>
+            <div><label for="fecha-hora" class="block text-sm font-medium text-gray-700">Fecha y Hora</label><input type="datetime-local" id="fecha-hora" class="mt-1 block w-full border border-gray-300 rounded-md p-2 focus:ring-[#FF7A00] focus:border-[#FF7A00]" required></div>
+            <div><label for="conversacion-select" class="block text-sm font-medium text-gray-700">Tema de Conversación</label><select id="conversacion-select" class="mt-1 block w-full border border-gray-300 rounded-md p-2 focus:ring-[#FF7A00] focus:border-[#FF7A00]" required disabled><option value="">Primero selecciona el # de personas</option></select></div>
+            <button type="submit" class="w-full bg-[#FF7A00] text-white font-bold py-3 rounded-lg mt-4 hover:bg-orange-600">Publicar Reunión</button>
+        </form>
     </div>
+</div>
+
+<div id="event-details-modal" class="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-[100] hidden">
+    <div class="bg-white p-6 sm:p-8 rounded-2xl shadow-2xl w-full max-w-2xl relative">
+        <button id="close-details-modal" class="absolute top-4 right-4 text-gray-400 hover:text-gray-800 text-2xl">&times;</button>
+        <div id="modal-content"></div>
+    </div>
+</div>
+
+<script defer src="supabase.js"></script>
+<script type="module">
+    let currentUser = null, userProfile = null;
+    const misReunionesGrid = document.getElementById('mis-reuniones-grid');
+    const reunionesDisponiblesGrid = document.getElementById('reuniones-disponibles-grid');
+    const createModal = document.getElementById('create-event-modal');
+    const detailsModal = document.getElementById('event-details-modal');
+
+    async function initializeApp() {
+        try {
+            const { data: { session } } = await dbClient.auth.getSession();
+            if (!session) { window.location.href = 'index.html'; return; }
+            currentUser = session.user;
+
+            const { data, error } = await dbClient.from('profiles').select('*').eq('id', currentUser.id).single();
+            if (error) throw error;
+            userProfile = data;
+
+            await loadNav();
+            await renderReuniones();
+            setupEventListeners();
+        } catch (error) {
+            console.error("Error inicializando la aplicación:", error);
+        }
+    }
     
-    <script defer src="supabase.js"></script>
-    <script type="module">
-        let currentUser = null, userProfile = null;
-        const misReunionesGrid = document.getElementById('mis-reuniones-grid');
-        const reunionesDisponiblesGrid = document.getElementById('reuniones-disponibles-grid');
-        const createModal = document.getElementById('create-event-modal');
-        const detailsModal = document.getElementById('event-details-modal');
+    async function renderReuniones() {
+    misReunionesGrid.innerHTML = '<p class="text-center col-span-full">Cargando...</p>';
+    reunionesDisponiblesGrid.innerHTML = '<p class="text-center col-span-full">Cargando...</p>';
 
-        async function initializeApp() {
-            try {
-                const { data: { session } } = await dbClient.auth.getSession();
-                if (!session) { window.location.href = 'index.html'; return; }
-                currentUser = session.user;
+    const { data: todasLasReuniones, error } = await dbClient
+    .from('reuniones')
+    .select(`*, conversaciones(*), profiles!reuniones_creador_id_fkey(*), asistentes_reunion(perfil_id, profiles(full_name))`)
+    .order('fecha_hora', { ascending: true });
 
-                const { data, error } = await dbClient.from('profiles').select('*').eq('id', currentUser.id).single();
-                if (error) throw error;
-                userProfile = data;
+    if (error) {
+        console.error("Error cargando reuniones:", error);
+        misReunionesGrid.innerHTML = '<p class="text-red-500 col-span-full">Error al cargar reuniones.</p>';
+        reunionesDisponiblesGrid.innerHTML = '<p class="text-red-500 col-span-full">Error al cargar reuniones.</p>';
+        return;
+    }
 
-                await loadNav();
-                await renderReuniones();
-                setupEventListeners();
-            } catch (error) {
-                console.error("Error inicializando la aplicación:", error);
-            }
+    // Reuniones donde estoy inscrito
+    const misReuniones = todasLasReuniones.filter(reunion => 
+        reunion.asistentes_reunion.some(asistente => asistente.perfil_id === currentUser.id)
+    );
+
+    // 👉 Ahora en "Reuniones Disponibles" mostramos TODAS las reuniones
+    const reunionesDisponibles = todasLasReuniones;
+
+    populateGrid(misReunionesGrid, misReuniones, 'No estás inscrito en ninguna reunión.');
+    populateGrid(reunionesDisponiblesGrid, reunionesDisponibles, 'No hay reuniones disponibles en este momento.');
+}
+
+    function populateGrid(gridElement, reuniones, emptyMessage) {
+        gridElement.innerHTML = '';
+        if (!reuniones || reuniones.length === 0) {
+            gridElement.innerHTML = `<p class="col-span-full text-center text-gray-500">${emptyMessage}</p>`;
+            return;
         }
-        
-        async function renderReuniones() {
-            misReunionesGrid.innerHTML = '<p class="text-center col-span-full">Cargando...</p>';
-            reunionesDisponiblesGrid.innerHTML = '<p class="text-center col-span-full">Cargando...</p>';
-
-            const { data: todasLasReuniones, error } = await dbClient.from('reuniones').select(`*, conversaciones(*), profiles!reuniones_creador_id_fkey(*), asistentes_reunion(perfil_id, profiles(full_name))`).gt('fecha_hora', new Date().toISOString()).order('fecha_hora', { ascending: true });
-
-            if (error) {
-                console.error("Error cargando reuniones:", error);
-                misReunionesGrid.innerHTML = '<p class="text-red-500">Error al cargar. Revisa que las Políticas de Acceso (RLS) de tus tablas estén activadas en Supabase.</p>';
-                reunionesDisponiblesGrid.innerHTML = '<p class="text-red-500">Error al cargar. Revisa que las Políticas de Acceso (RLS) de tus tablas estén activadas en Supabase.</p>';
-                return;
-            }
-
-            const misReuniones = todasLasReuniones.filter(reunion => reunion.asistentes_reunion.some(asistente => asistente.perfil_id === currentUser.id));
-            const reunionesDisponibles = todasLasReuniones.filter(reunion => {
-                const noEstoyInscrito = !reunion.asistentes_reunion.some(asistente => asistente.perfil_id === currentUser.id);
-                const hayCupo = reunion.asistentes_reunion.length < reunion.max_personas;
-                return noEstoyInscrito && hayCupo;
-            });
-
-            populateGrid(misReunionesGrid, misReuniones, 'No estás inscrito en ninguna reunión.');
-            populateGrid(reunionesDisponiblesGrid, reunionesDisponibles, 'No hay reuniones disponibles en este momento.');
-        }
-
-        function populateGrid(gridElement, reuniones, emptyMessage) {
-            if (!reuniones || reuniones.length === 0) {
-                gridElement.innerHTML = `<p class="col-span-full text-center text-gray-500">${emptyMessage}</p>`;
-                return;
-            }
-            gridElement.innerHTML = '';
-            reuniones.forEach(reunion => {
-                const cardHTML = createReunionCard(reunion);
-                gridElement.insertAdjacentHTML('beforeend', cardHTML);
-                document.getElementById(`reunion-${reunion.id}`).addEventListener('click', () => showEventDetails(reunion.id));
-            });
-        }
-        
-        function createReunionCard(reunion) {
-            const asistentes = reunion.asistentes_reunion;
-            const inscritos = asistentes.length;
-            const faltantes = reunion.max_personas - inscritos;
-            const fecha = new Date(reunion.fecha_hora).toLocaleString('es-EC', { dateStyle: 'medium', timeStyle: 'short' });
-            const nombres = asistentes.map(a => a.profiles.full_name.split(' ')[0]).join(', ');
-            const nivelColor = { 'Beginner': 'bg-green-100 text-[#4CAF50]', 'Intermediate': 'bg-yellow-100 text-yellow-800', 'Advanced': 'bg-red-100 text-[#D32F2F]' }[reunion.conversaciones.nivel_ingles] || 'bg-gray-100 text-gray-800';
-
-            return `<div id="reunion-${reunion.id}" class="bg-white p-6 rounded-lg shadow-md hover:shadow-xl hover:-translate-y-1 transition-all cursor-pointer"><div class="flex justify-between items-start mb-3"><h3 class="font-bold text-lg text-[#0D47A1]">${reunion.conversaciones.titulo}</h3><span class="text-xs font-bold px-2 py-1 rounded-full ${nivelColor}">${reunion.conversaciones.nivel_ingles}</span></div><p class="text-sm text-gray-500 mb-4">Creado por: ${reunion.profiles.full_name.split(' ')[0]}</p><p class="text-sm text-gray-600 mb-4"><i class="fas fa-calendar-alt mr-2 text-gray-400"></i>${fecha}</p><div class="flex justify-between items-center text-sm mb-4"><span><i class="fas fa-users mr-2 text-gray-400"></i>${inscritos} de ${reunion.max_personas}</span><span class="font-semibold ${faltantes > 0 ? 'text-[#4CAF50]' : 'text-[#D32F2F]'}">${faltantes > 0 ? `${faltantes} lugares` : 'Completo'}</span></div><div class="border-t pt-3 mt-3"><p class="text-xs text-gray-500">Participantes:</p><p class="text-sm font-medium text-gray-700 truncate">${nombres || '¡Sé el primero en unirte!'}</p></div></div>`;
-        }
-
-        async function showEventDetails(reunionId) {
-            const { data: reunion, error } = await dbClient.from('reuniones').select('*, conversaciones(*), profiles!reuniones_creador_id_fkey(*), asistentes_reunion(perfil_id, profiles(full_name))').eq('id', reunionId).single();
-            if (error) return console.error("Error al cargar detalle:", error);
-
-            const asistentes = reunion.asistentes_reunion;
-            const yaEstaInscrito = asistentes.some(a => a.perfil_id === currentUser.id);
-            const estaLleno = asistentes.length >= reunion.max_personas;
-            const fecha = new Date(reunion.fecha_hora).toLocaleString('es-EC', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-            const calendarLink = generateGoogleCalendarLink(reunion);
-
-            document.getElementById('modal-content').innerHTML = `<h2 class="text-3xl font-bold text-[#0D47A1] mb-2">${reunion.conversaciones.titulo}</h2><p class="text-sm text-gray-500 mb-4">Nivel: ${reunion.conversaciones.nivel_ingles} &bull; Creado por: ${reunion.profiles.full_name}</p><div class="space-y-3 my-6 text-gray-700"><p><i class="fas fa-calendar-alt fa-fw mr-3 text-[#0D47A1]"></i><strong>Fecha y Hora:</strong> ${fecha}</p><p><i class="fas fa-clock fa-fw mr-3 text-[#0D47A1]"></i><strong>Duración:</strong> ${reunion.duracion_minutos} minutos</p><p><i class="fas fa-video fa-fw mr-3 text-[#0D47A1]"></i><strong>Enlace:</strong> <a href="${reunion.link_meet}" target="_blank" class="text-blue-600 hover:underline">Unirse a Google Meet</a></p><p><i class="fas fa-users fa-fw mr-3 text-[#0D47A1]"></i><strong>Asistentes (${asistentes.length}/${reunion.max_personas}):</strong> ${asistentes.map(a => a.profiles.full_name).join(', ') || 'Nadie se ha unido aún.'}</p></div><div class="bg-[#E6F0FF] p-4 rounded-lg"><h4 class="font-semibold text-[#0D47A1] mb-2">Tema de Conversación:</h4><p class="text-gray-800 whitespace-pre-wrap">${reunion.conversaciones.conversacion}</p></div><div class="mt-6 flex flex-col sm:flex-row gap-3">${!yaEstaInscrito && !estaLleno ? `<button id="join-btn" class="flex-1 bg-[#4CAF50] text-white font-bold py-3 rounded-lg hover:bg-green-600">Unirme a la Sesión</button>` : ''}${yaEstaInscrito ? `<button id="leave-btn" class="flex-1 bg-[#D32F2F] text-white font-bold py-3 rounded-lg hover:bg-red-700">Salir de la Sesión</button>` : ''}${estaLleno && !yaEstaInscrito ? `<button class="flex-1 bg-gray-400 text-white font-bold py-3 rounded-lg cursor-not-allowed">Grupo Lleno</button>` : ''}<a href="${calendarLink}" target="_blank" rel="noopener noreferrer" class="flex-1 text-center bg-gray-200 text-gray-800 font-bold py-3 rounded-lg hover:bg-gray-300">Añadir a Google Calendar</a></div>`;
-            
-            if(document.getElementById('join-btn')) { document.getElementById('join-btn').addEventListener('click', async () => { await dbClient.from('asistentes_reunion').insert({ reunion_id: reunionId, perfil_id: currentUser.id }); detailsModal.classList.add('hidden'); await renderReuniones(); }); }
-            if(document.getElementById('leave-btn')) { document.getElementById('leave-btn').addEventListener('click', async () => { await dbClient.from('asistentes_reunion').delete().match({ reunion_id: reunionId, perfil_id: currentUser.id }); detailsModal.classList.add('hidden'); await renderReuniones(); }); }
-            
-            detailsModal.classList.remove('hidden');
-        }
-
-        function generateGoogleCalendarLink(reunion) {
-            const startTime = new Date(reunion.fecha_hora);
-            const endTime = new Date(startTime.getTime() + reunion.duracion_minutos * 60000);
-            const toUTCFormat = (date) => date.toISOString().replace(/-|:|\.\d+/g, '');
-            const params = new URLSearchParams({ text: `Práctica de Inglés: ${reunion.conversaciones.titulo}`, dates: `${toUTCFormat(startTime)}/${toUTCFormat(endTime)}`, details: `¡A practicar!\n\nTema: ${reunion.conversaciones.conversacion}\n\nEnlace de Meet: ${reunion.link_meet}`, location: reunion.link_meet });
-            return `https://calendar.google.com/calendar/render?action=TEMPLATE&${params.toString()}`;
-        }
-
-        function setupEventListeners() {
-            document.getElementById('open-create-modal-btn').addEventListener('click', () => createModal.classList.remove('hidden'));
-            document.getElementById('close-create-modal').addEventListener('click', () => createModal.classList.add('hidden'));
-            const maxPersonasSelect = document.getElementById('max-personas');
-            const conversacionSelect = document.getElementById('conversacion-select');
-            maxPersonasSelect.addEventListener('change', async (e) => {
-                const cantidad = e.target.value;
-                conversacionSelect.innerHTML = '<option>Cargando temas...</option>';
-                conversacionSelect.disabled = true;
-                if (!cantidad) return;
-                const { data: conversaciones } = await dbClient.from('conversaciones').select('*').eq('cantidad', cantidad);
-                if(conversaciones && conversaciones.length > 0){
-                    conversacionSelect.innerHTML = '<option value="">Selecciona un tema</option>';
-                    conversaciones.forEach(c => { conversacionSelect.innerHTML += `<option value="${c.id}">${c.titulo} (${c.nivel_ingles})</option>`; });
-                    conversacionSelect.disabled = false;
-                } else { conversacionSelect.innerHTML = '<option value="">No hay temas para esta cantidad</option>'; }
-            });
-            document.getElementById('create-event-form').addEventListener('submit', async (e) => {
-                e.preventDefault();
-                const newReunion = { creador_id: currentUser.id, link_meet: document.getElementById('meet-link').value, max_personas: document.getElementById('max-personas').value, duracion_minutos: document.getElementById('duracion').value, fecha_hora: document.getElementById('fecha-hora').value, conversacion_id: document.getElementById('conversacion-select').value };
-                const { data, error } = await dbClient.from('reuniones').insert(newReunion).select().single();
-                if (error) return console.error("Error al crear la reunión", error);
-                await dbClient.from('asistentes_reunion').insert({ reunion_id: data.id, perfil_id: currentUser.id });
-                createModal.classList.add('hidden');
-                e.target.reset();
-                await renderReuniones();
-            });
-            document.getElementById('close-details-modal').addEventListener('click', () => detailsModal.classList.add('hidden'));
-        }
-
-        async function loadNav() {
-             if (userProfile) { document.getElementById('user-name-nav').textContent = userProfile.full_name.split(' ')[0] || 'Mi Perfil'; /* ...etc... */ }
-             // El resto de la lógica de la barra de navegación que ya tenías
-        }
-        
-        document.addEventListener('DOMContentLoaded', initializeApp);
-    </script>
+        reuniones.forEach(reunion => {
+            const cardHTML = createReunionCard(reunion);
+            gridElement.insertAdjacentHTML('beforeend', cardHTML);
+            document.getElementById(`reunion-${reunion.id}`).addEventListener('click', () => showEventDetails(reunion.id));
+        });
+    }
     
-    <script src="js/igual.js"></script> 
+   
+function createReunionCard(reunion) {
+    const asistentes = reunion.asistentes_reunion;
+    const inscritos = asistentes.length;
+    const faltantes = reunion.max_personas - inscritos;
+    const fecha = new Date(reunion.fecha_hora).toLocaleString('es-EC', { dateStyle: 'medium', timeStyle: 'short' });
+    const nombres = asistentes.map(a => a.profiles.full_name.split(' ')[0]).join(', ');
+    const nivelColor = { 'Beginner': 'bg-green-100 text-[#4CAF50]', 'Intermediate': 'bg-yellow-100 text-yellow-800', 'Advanced': 'bg-red-100 text-[#D32F2F]' }[reunion.conversaciones.nivel_ingles] || 'bg-gray-100 text-gray-800';
+
+    return `
+        <div id="reunion-${reunion.id}" class="bg-white p-6 rounded-lg shadow-md hover:shadow-xl hover:-translate-y-1 transition-all cursor-pointer">
+            <div class="flex justify-between items-start mb-3">
+                <h3 class="font-bold text-lg text-[#0D47A1]">${reunion.conversaciones.titulo}</h3>
+                <span class="text-xs font-bold px-2 py-1 rounded-full ${nivelColor}">${reunion.conversaciones.nivel_ingles}</span>
+            </div>
+            <p class="text-sm text-gray-500 mb-4">Creado por: ${reunion.profiles.full_name.split(' ')[0]}</p>
+            <p class="text-sm text-gray-600 mb-4"><i class="fas fa-calendar-alt mr-2 text-gray-400"></i>${fecha}</p>
+            
+            ${faltantes > 0 
+                ? `<div class="flex justify-between items-center text-sm mb-4">
+                        <span><i class="fas fa-users mr-2 text-gray-400"></i>${inscritos} de ${reunion.max_personas}</span>
+                        <span class="font-semibold text-[#4CAF50]">${faltantes} lugares</span>
+                   </div>`
+                : ''}
+            
+            <div class="border-t pt-3 mt-3">
+                <p class="text-xs text-gray-500">Participantes:</p>
+                <p class="text-sm font-medium text-gray-700 truncate">${nombres || '¡Sé el primero en unirte!'}</p>
+            </div>
+        </div>`;
+}
+    async function showEventDetails(reunionId) {
+        const { data: reunion, error } = await dbClient
+            .from('reuniones')
+            .select('*, conversaciones(*), profiles!reuniones_creador_id_fkey(*), asistentes_reunion(perfil_id, profiles(full_name))')
+            .eq('id', reunionId)
+            .single();
+        if (error) return console.error("Error al cargar detalle:", error);
+
+        const asistentes = reunion.asistentes_reunion;
+        const yaEstaInscrito = asistentes.some(a => a.perfil_id === currentUser.id);
+        const estaLleno = asistentes.length >= reunion.max_personas;
+        const fecha = new Date(reunion.fecha_hora).toLocaleString('es-EC', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+        const calendarLink = generateGoogleCalendarLink(reunion);
+
+        document.getElementById('modal-content').innerHTML = `<h2 class="text-3xl font-bold text-[#0D47A1] mb-2">${reunion.conversaciones.titulo}</h2><p class="text-sm text-gray-500 mb-4">Nivel: ${reunion.conversaciones.nivel_ingles} &bull; Creado por: ${reunion.profiles.full_name}</p><div class="space-y-3 my-6 text-gray-700"><p><i class="fas fa-calendar-alt fa-fw mr-3 text-[#0D47A1]"></i><strong>Fecha y Hora:</strong> ${fecha}</p><p><i class="fas fa-clock fa-fw mr-3 text-[#0D47A1]"></i><strong>Duración:</strong> ${reunion.duracion_minutos} minutos</p><p><i class="fas fa-video fa-fw mr-3 text-[#0D47A1]"></i><strong>Enlace:</strong> <a href="${reunion.link_meet}" target="_blank" class="text-blue-600 hover:underline">Unirse a Google Meet</a></p><p><i class="fas fa-users fa-fw mr-3 text-[#0D47A1]"></i><strong>Asistentes (${asistentes.length}/${reunion.max_personas}):</strong> ${asistentes.map(a => a.profiles.full_name).join(', ') || 'Nadie se ha unido aún.'}</p></div><div class="bg-[#E6F0FF] p-4 rounded-lg"><h4 class="font-semibold text-[#0D47A1] mb-2">Tema de Conversación:</h4><p class="text-gray-800 whitespace-pre-wrap">${reunion.conversaciones.conversacion}</p></div><div class="mt-6 flex flex-col sm:flex-row gap-3">${!yaEstaInscrito && !estaLleno ? `<button id="join-btn" class="flex-1 bg-[#4CAF50] text-white font-bold py-3 rounded-lg hover:bg-green-600">Unirme a la Sesión</button>` : ''}${yaEstaInscrito ? `<button id="leave-btn" class="flex-1 bg-[#D32F2F] text-white font-bold py-3 rounded-lg hover:bg-red-700">Salir de la Sesión</button>` : ''}${estaLleno && !yaEstaInscrito ? `<button class="flex-1 bg-gray-400 text-white font-bold py-3 rounded-lg cursor-not-allowed">Grupo Lleno</button>` : ''}<a href="${calendarLink}" target="_blank" rel="noopener noreferrer" class="flex-1 text-center bg-gray-200 text-gray-800 font-bold py-3 rounded-lg hover:bg-gray-300">Añadir a Google Calendar</a></div>`;
+        
+        const joinBtn = document.getElementById('join-btn');
+        if (joinBtn) {
+            joinBtn.addEventListener('click', async () => {
+                const { error } = await dbClient.from('asistentes_reunion').insert({ reunion_id: reunionId, perfil_id: currentUser.id });
+                if (error) console.error("Error al unirse:", error);
+                else {
+                    detailsModal.classList.add('hidden');
+                    await renderReuniones();
+                }
+            });
+        }
+        
+        const leaveBtn = document.getElementById('leave-btn');
+        if (leaveBtn) {
+            leaveBtn.addEventListener('click', async () => {
+                const { error } = await dbClient.from('asistentes_reunion').delete().match({ reunion_id: reunionId, perfil_id: currentUser.id });
+                if (error) console.error("Error al salir:", error);
+                else {
+                    detailsModal.classList.add('hidden');
+                    await renderReuniones();
+                }
+            });
+        }
+        
+        detailsModal.classList.remove('hidden');
+    }
+
+    function generateGoogleCalendarLink(reunion) {
+        const startTime = new Date(reunion.fecha_hora);
+        const endTime = new Date(startTime.getTime() + reunion.duracion_minutos * 60000);
+        const toUTCFormat = (date) => date.toISOString().replace(/-|:|\.\d+/g, '');
+        const params = new URLSearchParams({ text: `Práctica de Inglés: ${reunion.conversaciones.titulo}`, dates: `${toUTCFormat(startTime)}/${toUTCFormat(endTime)}`, details: `¡A practicar!\n\nTema: ${reunion.conversaciones.conversacion}\n\nEnlace de Meet: ${reunion.link_meet}`, location: reunion.link_meet });
+        return `https://calendar.google.com/calendar/render?action=TEMPLATE&${params.toString()}`;
+    }
+
+    function setupEventListeners() {
+        document.getElementById('open-create-modal-btn').addEventListener('click', () => createModal.classList.remove('hidden'));
+        document.getElementById('close-create-modal').addEventListener('click', () => createModal.classList.add('hidden'));
+        const maxPersonasSelect = document.getElementById('max-personas');
+        const conversacionSelect = document.getElementById('conversacion-select');
+        maxPersonasSelect.addEventListener('change', async (e) => {
+            const cantidad = e.target.value;
+            conversacionSelect.innerHTML = '<option>Cargando temas...</option>';
+            conversacionSelect.disabled = true;
+            if (!cantidad) return;
+            const { data: conversaciones, error } = await dbClient.from('conversaciones').select('*').eq('cantidad', cantidad);
+            if (error) console.error("Error cargando conversaciones:", error);
+            if (conversaciones && conversaciones.length > 0) {
+                conversacionSelect.innerHTML = '<option value="">Selecciona un tema</option>';
+                conversaciones.forEach(c => { conversacionSelect.innerHTML += `<option value="${c.id}">${c.titulo} (${c.nivel_ingles})</option>`; });
+                conversacionSelect.disabled = false;
+            } else { 
+                conversacionSelect.innerHTML = '<option value="">No hay temas para esta cantidad</option>'; 
+            }
+        });
+        document.getElementById('create-event-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const newReunion = { 
+                creador_id: currentUser.id, 
+                link_meet: document.getElementById('meet-link').value, 
+                max_personas: parseInt(document.getElementById('max-personas').value), 
+                duracion_minutos: parseInt(document.getElementById('duracion').value), 
+                fecha_hora: document.getElementById('fecha-hora').value, 
+                conversacion_id: parseInt(document.getElementById('conversacion-select').value) 
+            };
+            const { data, error } = await dbClient.from('reuniones').insert(newReunion).select().single();
+            if (error) return console.error("Error al crear la reunión:", error);
+            const { error: insertError } = await dbClient.from('asistentes_reunion').insert({ reunion_id: data.id, perfil_id: currentUser.id });
+            if (insertError) console.error("Error al inscribir creador:", insertError);
+            createModal.classList.add('hidden');
+            e.target.reset();
+            await renderReuniones();
+        });
+        document.getElementById('close-details-modal').addEventListener('click', () => detailsModal.classList.add('hidden'));
+    }
+
+    async function loadNav() {
+        if (userProfile) { 
+            document.getElementById('user-name-nav').textContent = userProfile.full_name.split(' ')[0] || 'Mi Perfil'; 
+            // Agrega aquí el resto de la lógica de la barra de navegación si es necesario
+        }
+    }
+    
+    document.addEventListener('DOMContentLoaded', initializeApp);
+</script>
+
+<script src="js/igual.js"></script> 
 </body>
 </html>
