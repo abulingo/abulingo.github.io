@@ -306,9 +306,9 @@
     </div>
 <script>
     document.addEventListener('DOMContentLoaded', () => {
-        const supabaseUrl = 'https://lzlygnnvqkcobvmqxzcq.supabase.co';
-        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx6bHlnbm52cWtjb2J2bXF4emNxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTkxNzUxNDgsImV4cCI6MjA3NDc1MTE0OH0.TN2sYObTC8imuN7NZwww6Vmv-RgBspv32cX9svtZhX4'
-          
+        const supabaseUrl = 'https://zdybpplggppjrmxhfhik.supabase.co';
+        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpkeWJwcGxnZ3BwanJteGhmaGlrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTkxODY0MTcsImV4cCI6MjA3NDc2MjQxN30._1LRLhgIsNnc48Tj431F7xRWwHma0WCkc613ztmpjtU'
+ 
         let supabase = null;
         if (supabaseUrl && supabaseKey) {
             supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
@@ -365,6 +365,7 @@
                     options: {
                         data: {
                             full_name: name,
+                            phone: phone,
                             english_group: group
                         }
                     }
