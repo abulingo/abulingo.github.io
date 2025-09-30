@@ -4,7 +4,7 @@ navBarra.innerHTML=`
         <div class="container mx-auto flex justify-between items-center px-6">
             <a href="abulingo.html" class="text-3xl font-bold font-heading">Abulingo<span style="color: #FF7A00;">.</span></a>
             <nav class="hidden md:flex items-center space-x-2">
-                <a href="abulingo.html" class="nav-link active">Continuar Aventura</a>
+                <a href="abulingo.html" class="nav-link">Continuar Aventura</a>
                 <a href="gramatica.html" class="nav-link">Gramática</a>
                 <a href="pro.html" class="nav-link text-center active">Pronunciación</a>
                 <a href="club.html" class="nav-link">Club</a>
@@ -60,4 +60,5 @@ navBarra.innerHTML=`
         <a href="traductor.html" class="nav-link text-center">Traductor</a>
         <a href="soporte.html" class="nav-link text-center">Soporte</a>
     </div>
+
 `
