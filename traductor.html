@@ -58,12 +58,13 @@
         const btnEnToEs = document.getElementById('translate-en-to-es');
         const feedback = document.getElementById('translator-feedback');
         const btnClear = document.getElementById('clear-text');
-        // --- CAMBIO JS 1: OBTENER EL BOTÓN DE COPIAR ---
+        // --- CAMBIO JS 1: OBTENER EL BOTÓN DE CO
         const btnCopy = document.getElementById('copy-btn');
 
-        const FUNCTION_URL = 'https://tdbnnaeifooivzldvotm.supabase.co/functions/v1/gemini-translator';
-        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRkYm5uYWVpZm9vaXZ6bGR2b3RtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc5ODQ1NzksImV4cCI6MjA3MzU2MDU3OX0.YS1ghAXsLyFe3uSXf9-lIykbmfliNPDOPoEtHTo4vYE';
+        const FUNCTION_URL = 'https://zdybpplggppjrmxhfhik.supabase.co/functions/v1/gemini-translator'
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpkeWJwcGxnZ3BwanJteGhmaGlrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTkxODY0MTcsImV4cCI6MjA3NDc2MjQxN30._1LRLhgIsNnc48Tj431F7xRWwHma0WCkc613ztmpjtU'
 
+        
         async function translateText(textToTranslate, targetLang) {
             if (!textToTranslate.trim()) {
                 feedback.textContent = 'Por favor, escribe algo para traducir.';
@@ -150,6 +151,6 @@
 
         document.addEventListener('DOMContentLoaded', initializeTranslator);
     </script>
-    <script src="js/igual.js"></script> 
+    <script src="js/igual5.js"></script> 
 </body>
 </html>
