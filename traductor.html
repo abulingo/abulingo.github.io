@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Abulingo</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Work+Sans:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css"></link>
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" href="icono.png" type="image/x-icon">
+</head>
+<body class="min-h-screen bg-[#E6F0FF]">
+    <div id="navBarra"></div>
+    <main class="pt-24 pb-12 flex flex-col items-center justify-center min-h-screen">
+        <div id="app-container" class="w-full max-w-4xl mx-auto px-4">
+            <div id="translator-section" class="bg-white p-8 rounded-xl shadow-md">
+                <h2 class="text-2xl font-bold text-[#0D47A1] mb-4 text-center">Traductor Abulingo</h2>
+                <!--<p class="text-gray-600 mb-6 text-center">Escribe el texto que deseas traducir.</p>-->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Texto Original</label>
+                        <textarea id="source-text" rows="4" class="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#FF7A00] focus:border-[#FF7A00] transition" placeholder="Escribe aquí..."></textarea>
+                    </div>
+
+                    <div class="relative">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Traducción</label>
+                        <textarea id="result-text" rows="4" class="w-full p-3 border border-gray-300 bg-gray-50 rounded-md transition" placeholder="Traducción..." readonly></textarea>
+                        
+                        <button id="copy-btn" title="Copiar al portapapeles" class="absolute top-9 right-2 p-2 text-gray-400 hover:text-blue-600 transition">
+                            <i class="fas fa-copy"></i>
+                        </button>
+                    </div>
+                </div>
+                <div id="translator-feedback" class="text-sm my-4 font-medium text-center"></div>
+                <div class="flex flex-col md:flex-row items-center justify-center gap-4 mt-4">
+                    <button id="translate-es-to-en" class="w-full md:w-auto px-6 py-3 bg-[#FF7A00] text-white rounded-md hover:bg-orange-600 font-semibold transition flex items-center justify-center gap-2">
+                        <i class="fas fa-language"></i> Traducir a Inglés
+                    </button>
+                    <button id="translate-en-to-es" class="w-full md:w-auto px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-semibold transition flex items-center justify-center gap-2">
+                        <i class="fas fa-language"></i> Traducir a Español
+                    </button>
+                    <button id="clear-text" class="w-full md:w-auto px-6 py-3 bg-gray-400 text-white rounded-md hover:bg-gray-500 font-semibold transition flex items-center justify-center gap-2">
+                        <i class="fas fa-trash-alt"></i> Borrar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </main>
+    
+    <script defer src="supabase.js"></script>
+    <script type="module">
+        const sourceText = document.getElementById('source-text');
+        const resultText = document.getElementById('result-text');
+        const btnEsToEn = document.getElementById('translate-es-to-en');
+        const btnEnToEs = document.getElementById('translate-en-to-es');
+        const feedback = document.getElementById('translator-feedback');
+        const btnClear = document.getElementById('clear-text');
+        // --- CAMBIO JS 1: OBTENER EL BOTÓN DE CO
+        const btnCopy = document.getElementById('copy-btn');
+
+        const FUNCTION_URL = 'https://zdybpplggppjrmxhfhik.supabase.co/functions/v1/gemini-translator'
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpkeWJwcGxnZ3BwanJteGhmaGlrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTkxODY0MTcsImV4cCI6MjA3NDc2MjQxN30._1LRLhgIsNnc48Tj431F7xRWwHma0WCkc613ztmpjtU'
+
+        
+        async function translateText(textToTranslate, targetLang) {
+            if (!textToTranslate.trim()) {
+                feedback.textContent = 'Por favor, escribe algo para traducir.';
+                feedback.className = 'text-sm my-4 font-medium text-center text-[#D32F2F]';
+                return;
+            }
+
+            resultText.value = 'Traduciendo...';
+            feedback.textContent = '';
+            btnEsToEn.disabled = true;
+            btnEnToEs.disabled = true;
+            btnClear.disabled = true;
+
+            try {
+                    
+                const bodyPayload = {
+                    "textToTranslate": textToTranslate,
+                    "targetLang": targetLang
+                };
+
+                const response = await fetch(FUNCTION_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`  // Corrección: Usa 'Authorization' con 'Bearer'
+                    },
+                    body: JSON.stringify(bodyPayload)
+                });
+                if (!response.ok) {
+                    throw new Error('La respuesta de la función no fue exitosa.');
+                }
+
+                const data = await response.json();
+                resultText.value = data.translation;
+
+            } catch (error) {
+                console.error('Error al traducir:', error);
+                resultText.value = '';
+                feedback.textContent = 'Hubo un error al traducir.';
+                feedback.className = 'text-sm my-4 font-medium text-center text-[#D32F2F]';
+            } finally {
+                btnEsToEn.disabled = false;
+                btnEnToEs.disabled = false;
+                btnClear.disabled = false;
+            }
+        }
+        
+
+
+        function clearInputs() {
+            sourceText.value = '';
+            resultText.value = '';
+            feedback.textContent = '';
+        }
+
+        // --- CAMBIO JS 2: FUNCIÓN PARA COPIAR AL PORTAPAPELES ---
+        function copyTranslatedText() {
+            const textToCopy = resultText.value;
+            if (textToCopy) {
+                navigator.clipboard.writeText(textToCopy).then(() => {
+                    // Feedback visual para el usuario
+                    const originalIcon = btnCopy.innerHTML;
+                    btnCopy.innerHTML = '<i class="fas fa-check text-green-500"></i>';
+                    setTimeout(() => {
+                        btnCopy.innerHTML = originalIcon;
+                    }, 2000); // Vuelve al icono original después de 2 segundos
+                }).catch(err => {
+                    console.error('Error al copiar texto: ', err);
+                });
+            }
+        }
+
+        function initializeTranslator() {
+            btnEsToEn.addEventListener('click', () => {
+                translateText(sourceText.value, 'Inglés');
+            });
+            btnEnToEs.addEventListener('click', () => {
+                translateText(sourceText.value, 'Español');
+            });
+            btnClear.addEventListener('click', clearInputs);
+            // --- CAMBIO JS 3: AÑADIR EL EVENTO AL BOTÓN DE COPIAR ---
+            btnCopy.addEventListener('click', copyTranslatedText);
+        }
+
+        document.addEventListener('DOMContentLoaded', initializeTranslator);
+    </script>
+    <script src="js/igual5.js"></script> 
+</body>
+</html>

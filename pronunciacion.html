@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="es" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Abulingo</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Work+Sans:wght@400;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="icon" href="icono.png" type="image/x-icon">
+    <style>
+        /* La fuente 'Inter' se usará para el cuerpo del chat para mejor legibilidad */
+        body { font-family: 'Inter', sans-serif; }
+        .chat-messages { scroll-behavior: smooth; }
+        .chat-messages::-webkit-scrollbar { width: 8px; }
+        .chat-messages::-webkit-scrollbar-track { background: #f1f5f9; }
+        .chat-messages::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 4px; }
+        .dot { animation: thinking-blink 1.4s infinite both; }
+        .dot:nth-child(2) { animation-delay: 0.2s; }
+        .dot:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes thinking-blink { 0% { opacity: 0.2; } 20% { opacity: 1; } 100% { opacity: 0.2; } }
+    </style>
+</head>
+<body class="min-h-screen bg-[#E6F0FF] flex flex-col">
+
+    <div id="navBarra"></div>
+
+    <main class="flex-1 flex items-center justify-center p-4">
+        <div class="container w-full max-w-2xl max-h-[80vh] flex flex-col bg-white rounded-2xl shadow-2xl">
+            
+            <header class="p-4 border-b border-slate-200 flex justify-between items-center">
+                <h1 class="text-xl font-bold text-slate-800">Práctica de Pronunciación 🗣️</h1>
+                <div class="status-indicator flex items-center space-x-2">
+                    <div id="status-dot" class="w-3 h-3 rounded-full bg-green-500" aria-hidden="true"></div>
+                    <span id="status-text" role="status" class="text-sm font-medium text-slate-600">En línea</span>
+                </div>
+            </header>
+
+            <div class="chat-container flex-1 flex flex-col p-4 overflow-hidden">
+                <div id="chat-messages" class="chat-messages flex-1 space-y-4 overflow-y-auto pr-2"></div>
+                <div id="error-container" class="my-2"></div>
+                <div class="input-container mt-4 flex items-center space-x-3">
+                    <textarea id="message-input" class="flex-1 p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none transition resize-none" placeholder="Escribe 'start' o usa el micrófono..." rows="1" aria-label="Mensaje" disabled></textarea>
+                    <button id="mic-button" class="mic-button bg-slate-500 text-white p-3 rounded-full hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 transition disabled:opacity-50 disabled:cursor-not-allowed" aria-label="Grabar mensaje de voz" disabled>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-mic"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="22"></line></svg>
+                    </button>
+                    <button id="send-button" class="send-button bg-indigo-600 text-white p-3 rounded-full hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition disabled:opacity-50 disabled:cursor-not-allowed" aria-label="Enviar mensaje" disabled>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-send"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </main>
+    
+    <script src="supabase.js"></script>
+    <script src="js/igual3.js"></script> 
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+
+            // --- ELEMENTOS DEL DOM ---
+            const messageInput = document.getElementById('message-input');
+            const sendButton = document.getElementById('send-button');
+            const chatMessages = document.getElementById('chat-messages');
+            const errorContainer = document.getElementById('error-container');
+            const micButton = document.getElementById('mic-button');
+
+            // --- ESTADO DE LA APLICACIÓN ---
+            let conversationHistory = [];
+            let isLoading = false;
+            let currentPhraseToPractice = "";
+            let currentUser = null;
+
+            // --- INSTRUCCIÓN DEL SISTEMA PARA LA IA ---
+            const systemPrompt = `
+You are Lucía, a friendly and expert pronunciation coach from the UK. Your mission is to help a Spanish-speaking user improve their English pronunciation.
+Follow this methodology:
+1.  **Welcome:** Start with a friendly welcome message and ask the user to say or type "start" when they are ready to begin.
+2.  **Provide a Phrase:** When the user is ready, provide one simple English phrase and its Spanish translation. Format it clearly using Markdown. For example: "**English:** How are you? | **Español:** ¿Cómo estás?". Do not provide more than one phrase at a time.
+3.  **Wait for User's Audio:** After providing the phrase, your job is to wait. The user will record their voice repeating the English phrase. The system will then send you their speech-to-text transcription.
+4.  **Analyze Pronunciation:** You will receive a prompt with the original phrase and the user's transcription. Your task is to compare them and provide feedback.
+    * **If Perfect:** Praise the user! "Perfect pronunciation! That was excellent. Let's try another one." Then, provide the next phrase.
+    * **If Minor Mistakes:** Be encouraging. "Very close! Your pronunciation is good. Just a small tip: the word 'word' sounds more like 'werd', not 'word'. Try it again!"
+    * **If Major Mistakes:** Be gentle and specific. "Good effort! Let's work on a few words. For 'I live in a house', the word 'live' should sound like 'liv', not 'laiv'. Can you try repeating the phrase one more time?"
+    * **Focus on sounds**, not just spelling.
+5.  **Be Concise:** Keep your feedback short, positive, and focused on one or two key points.
+6.  **Cycle:** Continue this loop: provide a phrase, wait for the user's attempt, give feedback, and provide the next phrase. Increase the difficulty of the phrases gradually. Start with 3-4 word sentences.
+`;
+
+            // --- SÍNTESIS DE VOZ (TEXT-TO-SPEECH) ---
+            function speak(text) {
+                if ('speechSynthesis' in window) {
+                    window.speechSynthesis.cancel();
+                    const utterance = new SpeechSynthesisUtterance(text);
+                    utterance.lang = 'en-US';
+                    utterance.rate = 0.9;
+                    window.speechSynthesis.speak(utterance);
+                }
+            }
+
+            // --- LÓGICA DE RECONOCIMIENTO DE VOZ ---
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            let recognition;
+            let isRecording = false;
+
+            if (SpeechRecognition) {
+                recognition = new SpeechRecognition();
+                recognition.continuous = false;
+                recognition.lang = 'en-US';
+                recognition.interimResults = false;
+                micButton.addEventListener('click', () => { if (isLoading) return; if (isRecording) { recognition.stop(); } else { recognition.start(); } });
+                recognition.onstart = () => { isRecording = true; micButton.classList.remove('bg-slate-500', 'hover:bg-slate-600'); micButton.classList.add('bg-red-500', 'hover:bg-red-600'); messageInput.placeholder = "Escuchando... habla ahora."; };
+                recognition.onend = () => { isRecording = false; micButton.classList.remove('bg-red-500', 'hover:bg-red-600'); micButton.classList.add('bg-slate-500', 'hover:bg-slate-600'); messageInput.placeholder = "Procesando tu audio..."; };
+                recognition.onresult = (event) => { const transcript = event.results[0][0].transcript; handlePronunciationCheck(transcript); };
+                recognition.onerror = (event) => { console.error('Speech recognition error:', event.error); showError('Error de reconocimiento de voz: ' + event.error); isRecording = false; };
+            } else {
+                micButton.style.display = 'none';
+                showError('Tu navegador no soporta el reconocimiento de voz.');
+            }
+
+            // --- LÓGICA PRINCIPAL ---
+            function showError(message) {
+                errorContainer.innerHTML = `<div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg relative" role="alert"><strong class="font-bold">Error: </strong><span class="block sm:inline">${message}</span></div>`;
+            }
+
+            function clearError() { errorContainer.innerHTML = ''; }
+
+            function appendMessage(content, type) {
+                const isUser = type === 'user';
+                const avatarChar = isUser ? (currentUser?.email?.[0]?.toUpperCase() || 'T') : 'L';
+                const name = isUser ? 'Tú' : 'Lucía';
+                const avatarBg = isUser ? 'bg-blue-500' : 'bg-indigo-500';
+                const nameColor = isUser ? 'text-blue-600' : 'text-indigo-600';
+                const messageBg = isUser ? 'bg-blue-100' : 'bg-slate-200';
+                const alignment = isUser ? 'flex-row-reverse space-x-reverse' : 'space-x-3';
+                const bubbleRadius = isUser ? 'rounded-br-none' : 'rounded-bl-none';
+                const sanitizedContent = marked.parse(content, { gfm: true, breaks: true });
+                const messageId = `msg-${Date.now()}`;
+                const messageHtml = `<div id="${messageId}" class="message flex items-end ${alignment}"><div class="avatar ${avatarBg} w-10 h-10 rounded-full text-white flex items-center justify-center font-bold text-lg flex-shrink-0" aria-hidden="true">${avatarChar}</div><div class="message-content ${messageBg} text-slate-800 p-3 rounded-2xl ${bubbleRadius} max-w-md"><p class="font-semibold ${nameColor} mb-1">${name}</p><div class="prose prose-sm max-w-none">${sanitizedContent}</div></div></div>`;
+                chatMessages.insertAdjacentHTML('beforeend', messageHtml);
+                document.getElementById(messageId).scrollIntoView({ behavior: "smooth", block: "end" });
+
+                if (type === 'ai' && content.includes("English:")) {
+                    const messageElement = document.getElementById(messageId).querySelector('.message-content');
+                    const englishPhraseMatch = content.match(/\*\*English:\*\*\s*(.*?)\s*\|/);
+                    if (englishPhraseMatch && englishPhraseMatch[1]) {
+                        const phraseForThisMessage = englishPhraseMatch[1].trim();
+                        currentPhraseToPractice = phraseForThisMessage;
+                        const buttonContainer = document.createElement('div');
+                        buttonContainer.className = 'mt-2 flex items-center space-x-2';
+                        const speakButton = document.createElement('button');
+                        speakButton.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-volume-2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>`;
+                        speakButton.className = 'bg-indigo-100 text-indigo-700 p-2 rounded-full hover:bg-indigo-200 transition';
+                        speakButton.setAttribute('aria-label', 'Escuchar frase');
+                        speakButton.onclick = () => speak(phraseForThisMessage);
+                        buttonContainer.appendChild(speakButton);
+                        messageElement.appendChild(buttonContainer);
+                        speak(phraseForThisMessage);
+                    }
+                }
+            }
+
+            async function callApiProxy(history) {
+                if (!dbClient) { showError("El cliente de Supabase no está disponible."); return null; }
+                const EDGE_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/pronunciacion`;
+                try {
+                    const { data: { session }, error: sessionError } = await dbClient.auth.getSession();
+                    if (sessionError || !session) throw new Error("No hay una sesión activa. Por favor, inicia sesión.");
+                    
+                    const response = await fetch(EDGE_FUNCTION_URL, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${session.access_token}`,
+                            'apikey': SUPABASE_ANON_KEY
+                        },
+                        body: JSON.stringify({ contents: history, systemInstruction: { parts: [{ text: systemPrompt }] } })
+                    });
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.error || `Error HTTP ${response.status}`);
+                    }
+                    const data = await response.json();
+                    if (!data.candidates || data.candidates.length === 0) throw new Error("La función devolvió una respuesta vacía.");
+                    return data.candidates[0].content.parts[0].text;
+                } catch (error) {
+                    console.error('Error llamando a la Edge Function:', error);
+                    showError(`Error de comunicación con el servidor. ${error.message}`);
+                    return null;
+                }
+            }
+            
+            async function handleGenericMessage(messageText) {
+                const message = messageText.trim();
+                if (!message || isLoading) return;
+                clearError();
+                isLoading = true;
+                sendButton.disabled = true;
+                micButton.disabled = true;
+                appendMessage(message, 'user');
+                const tempHistory = [...conversationHistory, { role: "user", parts: [{ text: message }] }];
+                showThinkingIndicator();
+                try {
+                    const response = await callApiProxy(tempHistory);
+                    if (response) {
+                        conversationHistory.push({ role: "user", parts: [{ text: message }] });
+                        conversationHistory.push({ role: "model", parts: [{ text: response }] });
+                        removeThinkingIndicator();
+                        appendMessage(response, 'ai');
+                    } else {
+                        removeThinkingIndicator();
+                    }
+                } finally {
+                    isLoading = false;
+                    sendButton.disabled = false;
+                    micButton.disabled = false;
+                    messageInput.value = "";
+                }
+            }
+            
+            async function handlePronunciationCheck(transcript) {
+                if (isLoading) return;
+                isLoading = true;
+                sendButton.disabled = true;
+                micButton.disabled = true;
+                appendMessage(`(He repetido: "${transcript}")`, 'user');
+                const correctionPrompt = `The user is practicing pronunciation. Original phrase: "${currentPhraseToPractice}". User's transcription: "${transcript}". Analyze the transcription and give friendly, concise feedback based on the rules. Then provide a new phrase.`;
+                const tempHistory = [...conversationHistory, { role: "user", parts: [{ text: correctionPrompt }] }];
+                showThinkingIndicator();
+                try {
+                    const response = await callApiProxy(tempHistory);
+                    if (response) {
+                        conversationHistory.push({ role: "user", parts: [{ text: correctionPrompt }] });
+                        conversationHistory.push({ role: "model", parts: [{ text: response }] });
+                        removeThinkingIndicator();
+                        appendMessage(response, 'ai');
+                    } else {
+                        removeThinkingIndicator();
+                    }
+                } finally {
+                    isLoading = false;
+                    sendButton.disabled = false;
+                    micButton.disabled = false;
+                    messageInput.placeholder = "Puedes hablar o escribir...";
+                    messageInput.value = "";
+                }
+            }
+
+            function showThinkingIndicator() {
+                const thinkingId = 'thinking-indicator';
+                const thinkingHtml = `<div id="${thinkingId}" class="message flex items-end space-x-3"><div class="avatar bg-indigo-500 w-10 h-10 rounded-full text-white flex items-center justify-center font-bold text-lg flex-shrink-0">L</div><div class="message-content bg-slate-200 p-3 rounded-2xl rounded-bl-none flex items-center space-x-1.5"><div class="dot w-2 h-2 bg-slate-400 rounded-full"></div><div class="dot w-2 h-2 bg-slate-400 rounded-full"></div><div class="dot w-2 h-2 bg-slate-400 rounded-full"></div></div></div>`;
+                chatMessages.insertAdjacentHTML('beforeend', thinkingHtml);
+                document.getElementById(thinkingId).scrollIntoView({ behavior: "smooth", block: "end" });
+            }
+
+            function removeThinkingIndicator() {
+                const thinkingIndicator = document.getElementById('thinking-indicator');
+                if (thinkingIndicator) thinkingIndicator.remove();
+            }
+
+            sendButton.addEventListener('click', () => handleGenericMessage(messageInput.value));
+            messageInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleGenericMessage(messageInput.value); }
+            });
+            
+            function startApp() {
+                // Autenticación y arranque de la app
+                dbClient.auth.onAuthStateChange(async (event, session) => {
+                    if (session) {
+                        currentUser = session.user;
+                        messageInput.disabled = false;
+                        sendButton.disabled = false;
+                        micButton.disabled = false;
+
+                        // Solo iniciar la conversación si está vacía
+                        if (conversationHistory.length === 0) {
+                            const initialPrompt = "Greet me and start the pronunciation lesson.";
+                            const initialHistory = [{ role: 'user', parts: [{ text: initialPrompt }] }];
+                            showThinkingIndicator();
+                            const response = await callApiProxy(initialHistory);
+                            if (response) {
+                                conversationHistory.push({ role: 'user', parts: [{ text: initialPrompt }] });
+                                conversationHistory.push({ role: 'model', parts: [{ text: response }] });
+                                removeThinkingIndicator();
+                                appendMessage(response, 'ai');
+                            }
+                        }
+                    } else {
+                        currentUser = null;
+                        showError("Necesitas iniciar sesión para usar esta función.");
+                        window.location.href = '/login.html'; // Redirigir si no hay sesión
+                    }
+                });
+            }
+            
+            // Iniciar la aplicación
+            startApp();
+        });
+    </script>
+</body>
+</html>
