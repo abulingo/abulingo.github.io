@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -353,4 +354,360 @@
     </script>
     
 </body>
+=======
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Abulingo - Conversación con IA</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css"></link>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Work+Sans:wght@400;600&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="style.css">
+    <style>
+        body { 
+            font-family: 'Work Sans', sans-serif; 
+            background-color: #E6F0FF; /* Color Dominante (60%) */
+        }
+        .font-heading { 
+            font-family: 'Space Grotesk', sans-serif; 
+            color: #0D47A1; /* Encabezados: Azul Oscuro */
+        }
+        .btn-primary { 
+            background-color: #FF7A00; /* Acento (10%): Naranja */
+            color: #FFFFFF;
+            transition: all 0.3s ease;
+        }
+        .btn-primary:hover { 
+            background-color: #e66e00;
+        }
+        .nav-link {
+            @apply px-4 py-2 text-slate-600 font-semibold rounded-lg transition-all duration-300;
+        }
+        .nav-link:hover {
+            @apply text-[#0D47A1] bg-blue-100;
+        }
+        .nav-link.active {
+            @apply text-white bg-[#FF7A00]; /* Color de acento para el link activo */
+        }
+        .nav-link.active:hover {
+            @apply text-white bg-[#e66e00];
+        }
+        .feedback-error {
+            color: #D32F2F; /* Alertas: Rojo */
+        }
+        /* Estilos para el chat y animaciones */
+        .chat-messages { scroll-behavior: smooth; }
+        .chat-messages::-webkit-scrollbar { width: 8px; }
+        .chat-messages::-webkit-scrollbar-track { background: #f1f5f9; }
+        .chat-messages::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 4px; }
+        .dot { animation: thinking-blink 1.4s infinite both; }
+        .dot:nth-child(2) { animation-delay: 0.2s; }
+        .dot:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes thinking-blink { 0% { opacity: 0.2; } 20% { opacity: 1; } 100% { opacity: 0.2; } }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center">
+    <header class="fixed top-0 left-0 w-full bg-white/80 backdrop-blur-lg py-3 z-50 border-b border-blue-100">
+        <div class="container mx-auto flex justify-between items-center px-6">
+            <a href="abulingo.html" class="text-3xl font-bold font-heading">Abulingo<span style="color: #FF7A00;">.</span></a>
+            
+            <nav class="hidden md:flex items-center space-x-2">
+                <a href="abulingo.html" class="nav-link">Continuar Aventura</a>
+                <a href="gramatica.html" class="nav-link">Gramática</a>
+                <a href="pro.html" class="nav-link text-center active">Pronunciación</a>
+                <a href="club.html" class="nav-link">Club</a>
+                <a href="traductor.html" class="nav-link">Traductor</a>
+                <a href="soporte.html" class="nav-link">Soporte</a>
+            </nav>
+
+            <div class="flex items-center space-x-4">
+                <button id="menu-button" class="md:hidden text-[#0D47A1]"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"/></svg></button>
+                
+                <div class="relative hidden md:block">
+                    <button id="profile-menu-button" class="flex items-center space-x-2 cursor-pointer group">
+                        <img id="user-avatar" src="https://picsum.photos/seed/user-avatar/40/40" alt="Avatar de usuario" class="w-10 h-10 rounded-full border-2 border-transparent group-hover:border-[#FF7A00] transition">
+                        <span id="user-name-nav" class="font-semibold text-slate-700 hidden lg:block">Mi Perfil</span>
+                    </button>
+                    <div id="profile-menu-dropdown" class="hidden absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-xl border border-slate-200 z-50">
+                        <div class="p-4 border-b">
+                            <h3 id="user-name-dropdown" class="font-bold text-slate-800">Cargando...</h3>
+                            <p id="user-email-dropdown" class="text-sm text-slate-500">...</p>
+                        </div>
+                        <div class="py-2">
+                            <div class="flex items-center px-4 py-2 text-slate-700"><i class="fas fa-star w-6 text-yellow-500"></i><span><span id="user-points" class="font-bold">0</span> Puntos</span></div>
+                            <div class="flex items-center px-4 py-2 text-slate-700"><i class="fas fa-coins w-6 text-yellow-600"></i><span><span id="user-lingots" class="font-bold">0</span> Lingots</span></div>
+                            <a href="#" class="flex items-center px-4 py-2 text-slate-700 hover:bg-slate-100"><i class="fas fa-key w-6 text-slate-500"></i><span>Cambiar Contraseña</span></a>
+                        </div>
+                        <div class="py-2 border-t">
+                            <button id="logout-btn" class="w-full text-left flex items-center px-4 py-2 text-red-600 hover:bg-red-50"><i class="fas fa-sign-out-alt w-6"></i><span>Cerrar Sesión</span></button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+    
+    <div id="mobile-menu" class="hidden md:hidden fixed top-[65px] right-4 w-56 bg-white/90 backdrop-blur-lg p-4 rounded-lg shadow-xl z-40 space-y-2 flex flex-col">
+        <a href="abulingo.html" class="nav-link active text-center">Continuar Aventura</a>
+        <a href="gramatica.html" class="nav-link text-center">Gramática</a>
+        <a href="club.html" class="nav-link text-center">Club</a>
+        <a href="traductor.html" class="nav-link text-center">Traductor</a>
+        <a href="soporte.html" class="nav-link text-center">Soporte</a>
+    </div>
+
+    <main class="w-full flex justify-center pt-24 pb-8 px-4">
+        <div class="container w-full max-w-2xl max-h-[80vh] flex flex-col bg-white rounded-2xl shadow-2xl">
+            <div class="p-4 border-b border-slate-200">
+                <h1 class="text-xl font-bold font-heading">Conversación con Lucía 🇬🇧</h1>
+            </div>
+            <div class="chat-container flex-1 flex flex-col p-4 overflow-hidden">
+                <div id="chat-messages" class="chat-messages flex-1 space-y-4 overflow-y-auto pr-2"></div>
+                <div id="suggestions-container" class="flex flex-wrap gap-2 py-3 justify-center"></div>
+                <div id="error-container" class="my-2"></div>
+                <div class="input-container mt-auto flex items-center space-x-3">
+                    <textarea id="message-input" class="flex-1 p-3 border border-slate-300 rounded-xl focus:ring-2 focus:outline-none transition resize-none" placeholder="Cargando..." rows="1" disabled></textarea>
+                    
+                    <button id="mic-button" class="mic-button bg-[#0D47A1] text-white p-3 rounded-full hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-900 transition disabled:opacity-50" aria-label="Grabar mensaje de voz" disabled>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="22"></line></svg>
+                    </button>
+                    <button id="send-button" class="send-button btn-primary text-white p-3 rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition disabled:opacity-50" aria-label="Enviar mensaje" disabled>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="supabase.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Lógica para menú móvil
+            const menuButton = document.getElementById('menu-button');
+            const mobileMenu = document.getElementById('mobile-menu');
+            if (menuButton) {
+                menuButton.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    mobileMenu.classList.toggle('hidden');
+                });
+            }
+
+            // Lógica para menú de perfil
+            const profileMenuButton = document.getElementById('profile-menu-button');
+            const profileMenuDropdown = document.getElementById('profile-menu-dropdown');
+            if(profileMenuButton) {
+                profileMenuButton.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    profileMenuDropdown.classList.toggle('hidden');
+                });
+            }
+
+            // Cerrar menús al hacer clic afuera
+            document.addEventListener('click', (e) => {
+                if (mobileMenu && !mobileMenu.classList.contains('hidden') && !mobileMenu.contains(e.target) && !menuButton.contains(e.target)) {
+                    mobileMenu.classList.add('hidden');
+                }
+                if (profileMenuDropdown && !profileMenuDropdown.classList.contains('hidden') && !profileMenuDropdown.contains(e.target) && !profileMenuButton.contains(e.target)) {
+                    profileMenuDropdown.classList.add('hidden');
+                }
+            });
+        });
+    </script>
+    
+    <script>
+        // --- CONFIGURACIÓN ---
+        const SUPABASE_PROJECT_ID = "zdybpplggppjrmxhfhik";
+        const EDGE_FUNCTION_URL = `https://${SUPABASE_PROJECT_ID}.supabase.co/functions/v1/conversacion`;
+        
+        // --- ELEMENTOS DEL DOM ---
+        const messageInput = document.getElementById('message-input');
+        const sendButton = document.getElementById('send-button');
+        const chatMessages = document.getElementById('chat-messages');
+        const suggestionsContainer = document.getElementById('suggestions-container');
+        const errorContainer = document.getElementById('error-container');
+        const micButton = document.getElementById('mic-button');
+
+        // --- ESTADO ---
+        let conversationHistory = [];
+        let isLoading = false;
+        
+        // --- SÍNTESIS DE VOZ ---
+        function speak(text) {
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'en-GB';
+                utterance.rate = 0.9;
+                window.speechSynthesis.speak(utterance);
+            }
+        }
+
+        // --- RECONOCIMIENTO DE VOZ ---
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        let recognition;
+        let isRecording = false;
+        if (SpeechRecognition) {
+            recognition = new SpeechRecognition();
+            recognition.continuous = false;
+            recognition.lang = 'en-US';
+            recognition.interimResults = false;
+            micButton.addEventListener('click', () => { if (isLoading) return; isRecording ? recognition.stop() : recognition.start(); });
+            // ✅ MEJORA: Color de acento naranja para indicar grabación
+            recognition.onstart = () => { isRecording = true; micButton.classList.remove('bg-[#0D47A1]'); micButton.classList.add('bg-[#FF7A00]'); messageInput.placeholder = "Escuchando..."; };
+            recognition.onend = () => { isRecording = false; micButton.classList.remove('bg-[#FF7A00]'); micButton.classList.add('bg-[#0D47A1]'); messageInput.placeholder = "Elige, escribe o habla..."; };
+            recognition.onresult = (event) => { const transcript = event.results[0][0].transcript; messageInput.value = transcript; handleSendMessage(); };
+            recognition.onerror = (event) => { console.error('Speech recognition error:', event.error); showError('No se pudo reconocer el audio.'); };
+        } else {
+            micButton.style.display = 'none';
+        }
+
+        // --- FUNCIONES DE UI ---
+        function showError(message) { 
+            // ✅ MEJORA: Aplicando clase de error definida en <style>
+            errorContainer.innerHTML = `<div class="bg-red-100 border border-[#D32F2F] text-[#D32F2F] px-4 py-3 rounded-lg" role="alert"><p><strong class="font-bold">Error: </strong>${message}</p></div>`; 
+        }
+        function clearError() { errorContainer.innerHTML = ''; }
+
+        function appendMessage(data) {
+            const isUser = data.type === 'user';
+            const content = data.reply;
+            const translation = data.translation;
+            const messageId = `msg-${Date.now()}`;
+
+            // ✅ MEJORA: Paleta de colores aplicada a los mensajes del chat
+            const userAvatar = `<div class="avatar bg-[#4CAF50] w-10 h-10 rounded-full text-white flex items-center justify-center font-bold text-lg flex-shrink-0">T</div>`;
+            const aiAvatar = `<div class="avatar bg-[#0D47A1] w-10 h-10 rounded-full text-white flex items-center justify-center font-bold text-lg flex-shrink-0">L</div>`;
+
+            const messageHtml = `
+                <div id="${messageId}" class="message flex items-end ${isUser ? 'justify-end' : 'justify-start'}">
+                    ${!isUser ? aiAvatar : ''}
+                    <div class="mx-3">
+                        <div class="message-content ${isUser ? 'bg-green-100' : 'bg-blue-100'} text-slate-800 p-3 rounded-2xl ${isUser ? 'rounded-br-none' : 'rounded-bl-none'} max-w-md">
+                            <div class="flex justify-between items-center mb-1">
+                                <p class="font-semibold ${isUser ? 'text-green-800' : 'text-blue-900'}">${isUser ? 'Tú' : 'Lucía'}</p>
+                                ${!isUser ? `<button class="speak-btn text-slate-400 hover:text-blue-800"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg></button>` : ''}
+                            </div>
+                            <div class="prose prose-sm max-w-none">${marked.parse(content, { gfm: true, breaks: true })}</div>
+                            ${!isUser && translation ? `<div class="translation border-t border-slate-300 mt-2 pt-2 text-xs text-slate-500 italic">${translation}</div>` : ''}
+                        </div>
+                    </div>
+                    ${isUser ? userAvatar : ''}
+                </div>`;
+            chatMessages.insertAdjacentHTML('beforeend', messageHtml);
+            
+            if (!isUser) {
+                const speakButton = document.querySelector(`#${messageId} .speak-btn`);
+                speakButton.onclick = () => speak(content);
+                speak(content);
+            }
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function renderSuggestions(suggestions, suggestions_es) {
+            suggestionsContainer.innerHTML = '';
+            if (!suggestions || suggestions.length === 0) return;
+            suggestions.forEach((text, index) => {
+                const button = document.createElement('button');
+                button.textContent = text;
+                button.className = 'bg-slate-100 text-slate-700 px-3 py-1.5 rounded-full text-sm hover:bg-slate-200 transition';
+                if (suggestions_es && suggestions_es[index]) {
+                    button.title = suggestions_es[index];
+                }
+                button.onclick = () => { messageInput.value = text; handleSendMessage(); };
+                suggestionsContainer.appendChild(button);
+            });
+        }
+        
+        function toggleLoading(loading) {
+            isLoading = loading;
+            sendButton.disabled = loading;
+            messageInput.disabled = loading;
+            micButton.disabled = loading;
+            if (loading) {
+                renderSuggestions([]);
+                const thinkingHtml = `<div id="thinking-indicator" class="message flex items-end"><div class="avatar bg-[#0D47A1] w-10 h-10 rounded-full flex-shrink-0"></div><div class="ml-3 message-content bg-blue-100 p-3 rounded-2xl flex space-x-1.5"><div class="dot w-2 h-2 bg-slate-400 rounded-full"></div><div class="dot w-2 h-2 bg-slate-400 rounded-full"></div><div class="dot w-2 h-2 bg-slate-400 rounded-full"></div></div></div>`;
+                chatMessages.insertAdjacentHTML('beforeend', thinkingHtml);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            } else {
+                document.getElementById('thinking-indicator')?.remove();
+            }
+        }
+
+        // --- LÓGICA PRINCIPAL ---
+        async function handleSendMessage() {
+            const message = messageInput.value.trim();
+            if (!message || isLoading) return;
+            clearError();
+            appendMessage({ type: 'user', reply: message });
+            conversationHistory.push({ role: "user", parts: [{ text: message }] });
+            messageInput.value = '';
+            toggleLoading(true);
+            try {
+                const response = await fetch(EDGE_FUNCTION_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
+                    body: JSON.stringify({ history: conversationHistory })
+                });
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || `Server error: ${response.status}`);
+                }
+                const data = await response.json();
+                appendMessage({ type: 'ai', reply: data.reply, translation: data.translation });
+                conversationHistory.push({ role: "model", parts: [{ text: data.reply }] });
+                renderSuggestions(data.suggestions, data.suggestions_es);
+            } catch (error) {
+                console.error('Error:', error);
+                showError(error.message);
+            } finally {
+                toggleLoading(false);
+                messageInput.placeholder = "Elige, escribe o habla...";
+            }
+        }
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            messageInput.disabled = false;
+            sendButton.disabled = false;
+            if (SpeechRecognition) micButton.disabled = false;
+            
+            toggleLoading(true);
+            const initialHistory = [{ role: 'user', parts: [{ text: "Hello, please start the conversation." }] }];
+            
+            fetch(EDGE_FUNCTION_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
+                body: JSON.stringify({ history: initialHistory })
+            })
+            .then(res => {
+                if (!res.ok) {
+                    return res.text().then(text => { throw new Error(text || 'Server error') });
+                }
+                return res.json();
+            })
+            .then(data => {
+                appendMessage({ type: 'ai', reply: data.reply, translation: data.translation });
+                conversationHistory.push({ role: "model", parts: [{ text: data.reply }] });
+                renderSuggestions(data.suggestions, data.suggestions_es);
+            })
+            .catch(error => { showError(error.message || String(error)); })
+            .finally(() => {
+                toggleLoading(false);
+                messageInput.placeholder = "Elige, escribe o habla...";
+            });
+
+            sendButton.addEventListener('click', handleSendMessage);
+            messageInput.addEventListener('keypress', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } });
+        });
+    </script>
+    
+</body>
+>>>>>>> 0dd812a4c0f5f9cc2f2fc9027e7e92a3e635d9c0
 </html>

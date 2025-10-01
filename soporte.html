@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -135,4 +136,142 @@
     </script>
     <script src="js/igual6.js"></script> 
 </body>
+=======
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Abulingo - Soporte</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Work+Sans:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css"></link>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="min-h-screen bg-[#E6F0FF]">
+
+    <div id="navBarra"></div>
+
+    <main class="pt-24 pb-12 flex flex-col items-center justify-center min-h-screen">
+        <div id="app-container" class="w-full max-w-2xl mx-auto px-4">
+            
+            <div id="support-section" class="bg-white p-8 rounded-xl shadow-md">
+                <h2 class="text-2xl font-bold text-[#0D47A1] mb-4">Soporte y Retroalimentación</h2>
+                <p class="text-gray-600 mb-6">¿Tienes alguna pregunta, sugerencia o encontraste un error? Déjanos un mensaje y te responderemos lo antes posible.</p>
+                
+                <form id="support-form">
+                    <div class="mb-4">
+                        <label for="support-message" class="block text-sm font-medium text-gray-700 mb-2">Tu mensaje:</label>
+                        <textarea 
+                            id="support-message" 
+                            name="mensaje" 
+                            rows="6" 
+                            class="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#FF7A00] focus:border-[#FF7A00] transition"
+                            placeholder="Escribe aquí tu pregunta, sugerencia o reporte de error..." 
+                            required></textarea>
+                    </div>
+                    
+                    <div id="support-feedback" class="text-sm mb-4 font-medium"></div>
+
+                    <div class="flex items-center justify-end">
+                        <button id="send-support-btn" type="submit" class="px-6 py-2 bg-[#FF7A00] text-white rounded-md hover:bg-orange-600 font-semibold transition">
+                            Enviar Mensaje
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+        </div>
+    </main>
+    
+    <script defer src="supabase.js"></script>
+    <script type="module">
+        let currentUser = null, userProfile = null;
+        const appContainer = document.getElementById('app-container');
+
+        async function loadUserProfile() {
+            const { data, error } = await dbClient.from('profiles').select('*').eq('id', currentUser.id).single();
+            if (error) console.error("Error al cargar perfil:", error);
+            userProfile = data;
+        }
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            const { data: { session } } = await dbClient.auth.getSession();
+            if (!session) { window.location.href = 'index.html'; return; }
+            currentUser = session.user;
+            await loadUserProfile();
+            if (userProfile) {
+                const userNameNav = document.getElementById('user-name-nav');
+                if (userNameNav) userNameNav.textContent = userProfile.full_name || 'Mi Perfil';
+                document.getElementById('user-name-dropdown').textContent = userProfile.full_name || 'Sin nombre';
+                document.getElementById('user-email-dropdown').textContent = currentUser.email;
+                document.getElementById('user-points').textContent = userProfile.points || 0;
+                document.getElementById('user-lingots').textContent = userProfile.lingots || '0.00';
+            }
+            const menuButton = document.getElementById('menu-button'), mobileMenu = document.getElementById('mobile-menu');
+            const profileMenuButton = document.getElementById('profile-menu-button'), profileMenuDropdown = document.getElementById('profile-menu-dropdown');
+            
+            menuButton.addEventListener('click', e => { e.stopPropagation(); mobileMenu.classList.toggle('hidden'); });
+            profileMenuButton.addEventListener('click', e => { e.stopPropagation(); profileMenuDropdown.classList.toggle('hidden'); });
+            
+            document.addEventListener('click', e => {
+                if (mobileMenu && !mobileMenu.contains(e.target) && !menuButton.contains(e.target)) mobileMenu.classList.add('hidden');
+                if (profileMenuDropdown && !profileMenuDropdown.contains(e.target) && !profileMenuButton.contains(e.target)) profileMenuDropdown.classList.add('hidden');
+            });
+            
+            document.getElementById('logout-btn').addEventListener('click', async () => {
+                await dbClient.auth.signOut();
+                window.location.href = 'index.html';
+            });
+
+            const supportForm = document.getElementById('support-form');
+            const supportMessageInput = document.getElementById('support-message');
+            const supportFeedback = document.getElementById('support-feedback');
+            const sendSupportBtn = document.getElementById('send-support-btn');
+
+            supportForm.addEventListener('submit', async (e) => {
+                e.preventDefault(); 
+                const message = supportMessageInput.value.trim();
+                
+                if (!message) {
+                    supportFeedback.textContent = 'Por favor, escribe un mensaje antes de enviar.';
+                    supportFeedback.className = 'text-sm mb-4 font-medium text-[#D32F2F]';
+                    return;
+                }
+                
+                if (!currentUser) {
+                    supportFeedback.textContent = 'Error: No se ha podido identificar al usuario. Por favor, recarga la página.';
+                    supportFeedback.className = 'text-sm mb-4 font-medium text-[#D32F2F]';
+                    return;
+                }
+
+                sendSupportBtn.disabled = true;
+                sendSupportBtn.innerHTML = 'Enviando...';
+                supportFeedback.textContent = '';
+
+                const { error } = await dbClient.from('soporte').insert([
+                    { user_id: currentUser.id, email: currentUser.email, mensaje: message }
+                ]);
+
+                if (error) {
+                    console.error('Error al enviar mensaje de soporte:', error);
+                    supportFeedback.textContent = 'Hubo un error al enviar tu mensaje. Inténtalo de nuevo.';
+                    supportFeedback.className = 'text-sm mb-4 font-medium text-[#D32F2F]';
+                } else {
+                    supportFeedback.textContent = '¡Mensaje enviado con éxito! Gracias por tu retroalimentación.';
+                    supportFeedback.className = 'text-sm mb-4 font-medium text-[#4CAF50]';
+                    supportForm.reset(); 
+                }
+
+                sendSupportBtn.disabled = false;
+                sendSupportBtn.innerHTML = 'Enviar Mensaje';
+            });
+        });
+    </script>
+    <script src="js/igual6.js"></script> 
+</body>
+>>>>>>> 0dd812a4c0f5f9cc2f2fc9027e7e92a3e635d9c0
 </html>

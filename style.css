@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 body { font-family: 'Work Sans', sans-serif; background-color: #E6F0FF; color: #212121; }
 .font-heading { font-family: 'Space Grotesk', sans-serif; color: #0D47A1; }
 .btn-primary { background-color: #FF7A00; color: #FFFFFF; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(255, 122, 0, 0.3); }
@@ -14,3 +15,21 @@ body { font-family: 'Work Sans', sans-serif; background-color: #E6F0FF; color: #
 .scramble-word { cursor: pointer; background-color: #e0e7ff; border: 1px solid #c7d2fe; padding: 0.5rem 1rem; margin: 0.25rem; border-radius: 0.5rem; user-select: none; }
 .scramble-word:hover { background-color: #c7d2fe; }
 .answer-area { min-height: 50px; background-color: #f3f4f6; border: 2px dashed #d1d5db; padding: 0.5rem; border-radius: 0.5rem; }
+=======
+body { font-family: 'Work Sans', sans-serif; background-color: #E6F0FF; color: #212121; }
+.font-heading { font-family: 'Space Grotesk', sans-serif; color: #0D47A1; }
+.btn-primary { background-color: #FF7A00; color: #FFFFFF; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(255, 122, 0, 0.3); }
+.btn-primary:hover { transform: translateY(-3px); box-shadow: 0 6px 20px rgba(255, 122, 0, 0.4); }
+.card-style { background: #FFFFFF; border: 1px solid #dbeafe; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05); }
+.nav-link { color: #4B5563; font-weight: 600; padding: 0.5rem 1rem; border-radius: 9999px; transition: all 0.2s ease-in-out; }
+.nav-link:hover { background-color: #DBEAFE; color: #0D47A1; }
+.nav-link.active { background-color: #0D47A1; color: #FFFFFF; }
+.option-button { border: 2px solid #e5e7eb; padding: 0.75rem; border-radius: 0.75rem; transition: all 0.2s; }
+.option-button:hover { border-color: #3b82f6; background-color: #eff6ff; }
+.option-button.correct { border-color: #22c55e; background-color: #dcfce7; }
+.option-button.incorrect { border-color: #ef4444; background-color: #fee2e2; }
+/* Estilos para Flujo 3: Sentence Scramble */
+.scramble-word { cursor: pointer; background-color: #e0e7ff; border: 1px solid #c7d2fe; padding: 0.5rem 1rem; margin: 0.25rem; border-radius: 0.5rem; user-select: none; }
+.scramble-word:hover { background-color: #c7d2fe; }
+.answer-area { min-height: 50px; background-color: #f3f4f6; border: 2px dashed #d1d5db; padding: 0.5rem; border-radius: 0.5rem; }
+>>>>>>> 0dd812a4c0f5f9cc2f2fc9027e7e92a3e635d9c0
