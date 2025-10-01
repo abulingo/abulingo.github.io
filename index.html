@@ -508,4 +508,519 @@
     });
 </script>
 </body>
+<<<<<<< HEAD
 </html>
+=======
+=======
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Abulingo - Aprende Inglés en un Entorno Positivo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Work+Sans:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css"></link>
+    <style>
+        body { font-family: 'Work Sans', sans-serif; background-color: #E6F0FF; color: #212121; scroll-behavior: smooth; }
+        .font-heading { font-family: 'Space Grotesk', sans-serif; color: #0D47A1; }
+        .btn-primary { background-color: #FF7A00; color: #FFFFFF; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(255, 122, 0, 0.3); }
+        .btn-primary:hover { transform: translateY(-3px); box-shadow: 0 6px 20px rgba(255, 122, 0, 0.4); }
+        .card-style { background: #FFFFFF; border: 1px solid #dbeafe; transition: all 0.3s ease; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05); }
+        .card-style:hover { transform: translateY(-5px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.07), 0 4px 6px -4px rgba(0, 0, 0, 0.07); }
+        .wave-divider { position: absolute; bottom: -1px; left: 0; width: 100%; overflow: hidden; line-height: 0; transform: rotate(180deg); }
+        .wave-divider svg { position: relative; display: block; width: calc(100% + 1.3px); height: 150px; }
+        .wave-divider .shape-fill { fill: #E6F0FF; }
+        .animate-on-scroll { transform: translateY(20px); opacity: 0; transition: opacity 0.6s ease-out, transform 0.6s ease-out; }
+        .animate-on-scroll.is-visible { transform: translateY(0); opacity: 1; }
+        .highlight-yellow { background-color: #FFEB3B; padding: 0 0.25rem; border-radius: 0.2rem; color: #333; }
+        .text-feedback-success { color: #4CAF50; }
+        .text-feedback-error { color: #D32F2F; }
+        .input-field { background-color: #F8FAFC; border: 1px solid #CFD8DC; border-radius: 0.5rem; padding: 0.75rem; color: #374151; }
+        .input-field:focus { outline: none; border-color: #FF7A00; box-shadow: 0 0 0 2px rgba(255, 122, 0, 0.2); }
+        .faq-answer { max-height: 0; overflow: hidden; transition: max-height 0.3s ease-in-out; }
+    </style>
+</head>
+<body class="overflow-x-hidden">
+
+    <header class="fixed top-0 left-0 w-full bg-white/80 backdrop-blur-lg py-4 z-50 border-b border-blue-100">
+        <div class="container mx-auto flex justify-between items-center px-6">
+            <a href="#" class="text-3xl font-bold font-heading">Abulingo<span style="color: #FF7A00;">.</span></a>
+            <nav class="hidden md:flex items-center space-x-6">
+                <a href="#features" class="text-slate-600 hover:text-[#0D47A1] transition font-semibold">Características</a>
+                <a href="#pricing" class="text-slate-600 hover:text-[#0D47A1] transition font-semibold">Planes</a>
+                <a href="#faq" class="text-slate-600 hover:text-[#0D47A1] transition font-semibold">FAQ</a>
+                <div id="logged-out-nav" class="flex items-center space-x-4">
+                    <button class="auth-btn-login text-slate-600 hover:text-[#0D47A1] transition font-semibold">Iniciar Sesión</button>
+                    <button class="auth-btn-signup btn-primary px-5 py-2 rounded-full text-sm font-bold">Registrarse</button>
+                </div>
+                <div id="logged-in-nav" class="hidden items-center space-x-4">
+                    <span id="user-name" class="text-slate-500 text-sm font-semibold"></span>
+                    <button id="logout-btn" class="bg-red-100 text-[#D32F2F] font-bold px-5 py-2 rounded-full text-sm hover:bg-red-200 transform transition">Salir</button>
+                </div>
+            </nav>
+            <button id="menu-button" class="md:hidden text-[#0D47A1]">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"/></svg>
+            </button>
+        </div>
+    </header>
+    
+    <div id="mobile-menu" class="hidden md:hidden fixed top-20 right-4 w-56 bg-white/90 backdrop-blur-lg p-4 rounded-lg shadow-xl z-40 space-y-4 border border-blue-100">
+    </div>
+
+    <section class="bg-white relative pt-32 pb-40 text-center overflow-hidden">
+        <div class="container mx-auto px-6 relative z-10">
+            <h1 class="text-5xl md:text-7xl font-bold font-heading leading-tight mb-4 animate-on-scroll">
+                Aprender Inglés te da <br> un Nuevo <span style="color: #FF7A00;">Superpoder</span>.
+            </h1>
+            <p class="text-xl text-slate-600 max-w-3xl mx-auto mb-8 animate-on-scroll" style="transition-delay: 0.2s;">
+                Nuestra plataforma está diseñada con <span class="highlight-yellow">psicología del color</span> para maximizar tu concentración y motivación.
+            </p>
+            <div class="animate-on-scroll" style="transition-delay: 0.4s;">
+                <button class="auth-btn-signup btn-primary inline-block px-10 py-4 rounded-full text-lg font-bold">
+                    Empieza tu Aventura Gratis
+                </button>
+            </div>
+        </div>
+        <div class="wave-divider">
+            <svg viewBox="0 0 1200 120" preserveAspectRatio="none"><path d="M321.39,56.44c58-10.79,114.16-30.13,172-41.86,82.39-16.72,168.19-17.73,250.45-.39C823.78,31,906.67,72,985.66,92.83c70.05,18.48,146.53,26.09,214.34,3V0H0V27.35A600.21,600.21,0,0,0,321.39,56.44Z" class="shape-fill"></path></svg>
+        </div>
+    </section>
+
+    <section id="features" class="py-24">
+        <div class="container mx-auto px-6 text-center">
+            <h2 class="text-4xl font-bold font-heading mb-2 animate-on-scroll">¿Qué Hace a Abulingo <span style="color: #FF7A00;">Especial</span>?</h2>
+            <p class="text-slate-600 mb-12 max-w-2xl mx-auto animate-on-scroll" style="transition-delay: 0.2s;">No solo aprendes, vives el idioma de forma positiva.</p>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <div class="card-style p-8 rounded-2xl animate-on-scroll">
+                    <div class="text-5xl mb-4">🚀</div>
+                    <h3 class="text-2xl font-bold font-heading mb-2">Misiones Diarias</h3>
+                    <p class="text-slate-600">Completa desafíos prácticos que te hacen usar el inglés en situaciones reales. ¡Sube de nivel cada día!</p>
+                </div>
+                <div class="card-style p-8 rounded-2xl animate-on-scroll" style="transition-delay: 0.2s;">
+                    <div class="text-5xl mb-4">🤖</div>
+                    <h3 class="text-2xl font-bold font-heading mb-2">Tutor con IA</h3>
+                    <p class="text-slate-600">Practica conversaciones 24/7. Nuestro tutor inteligente corrige tu pronunciación y gramática al instante.</p>
+                </div>
+                <div class="card-style p-8 rounded-2xl animate-on-scroll" style="transition-delay: 0.4s;">
+                    <div class="text-5xl mb-4">🌍</div>
+                    <h3 class="text-2xl font-bold font-heading mb-2">Club de Conversación</h3>
+                    <p class="text-slate-600">Únete a videollamadas grupales con estudiantes de todo el mundo y pierde el miedo a hablar.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="how-it-works" class="py-24 bg-white">
+        <div class="container mx-auto px-6">
+            <div class="text-center mb-12">
+                <h2 class="text-4xl font-bold font-heading">Un Método Diseñado para el <span style="color: #FF7A00;">Mundo Real</span></h2>
+                <p class="text-slate-600 mt-2 max-w-2xl mx-auto animate-on-scroll" style="transition-delay: 0.2s;">Olvídate de memorizar. Empieza a comunicar.</p>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8 text-center">
+                <div class="animate-on-scroll">
+                    <div class="p-6 bg-[#E6F0FF] rounded-full w-24 h-24 flex items-center justify-center mx-auto mb-4 text-4xl">🎬</div>
+                    <h3 class="text-xl font-bold font-heading mb-2">Lecciones Interactivas</h3>
+                    <p class="text-slate-600">Videos cortos y ejercicios gamificados que te enganchan desde el primer minuto.</p>
+                </div>
+                <div class="animate-on-scroll" style="transition-delay: 0.2s;">
+                    <div class="p-6 bg-[#E6F0FF] rounded-full w-24 h-24 flex items-center justify-center mx-auto mb-4 text-4xl">💬</div>
+                    <h3 class="text-xl font-bold font-heading mb-2">Práctica Real</h3>
+                    <p class="text-slate-600">Habla con nuestro tutor IA o únete a conversaciones con tutores. La fluidez se logra hablando.</p>
+                </div>
+                <div class="animate-on-scroll" style="transition-delay: 0.4s;">
+                    <div class="p-6 bg-[#E6F0FF] rounded-full w-24 h-24 flex items-center justify-center mx-auto mb-4 text-4xl">🎵</div>
+                    <h3 class="text-xl font-bold font-heading mb-2">Contenido Inmersivo</h3>
+                    <p class="text-slate-600">Aprende con canciones, fragmentos de películas y noticias. El inglés que se usa de verdad.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="testimonials" class="py-24">
+        <div class="container mx-auto px-6">
+            <div class="text-center mb-12">
+                <h2 class="text-4xl font-bold font-heading mb-2 animate-on-scroll">Transformamos Carreras y <span style="color: #FF7A00;">Vidas</span></h2>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                <div class="card-style p-8 rounded-2xl animate-on-scroll">
+                    <p class="text-slate-700 mb-4">"Estaba preocupada por mi futuro laboral y el inglés era mi debilidad. En 3 meses, Abulingo me dio la seguridad para hablar en público en ingles."</p>
+                    <div class="flex items-center">
+                        <img src="https://picsum.photos/seed/user1/40/40.jpg" alt="User" class="w-10 h-10 rounded-full mr-4">
+                        <div>
+                            <p class="font-bold text-[#0D47A1]">Laura Vega</p>
+                            <p class="text-sm text-slate-500">Estudiante Universitaria</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-style p-8 rounded-2xl animate-on-scroll" style="transition-delay: 0.2s;">
+                    <p class="text-slate-700 mb-4">"Siempre quise viajar sin miedo a no poder comunicarme. Gracias a Abulingo, mi viaje a Nueva York fue un sueño hecho realidad."</p>
+                    <div class="flex items-center">
+                        <img src="https://picsum.photos/seed/user2/40/40.jpg" alt="User" class="w-10 h-10 rounded-full mr-4">
+                        <div>
+                            <p class="font-bold text-[#0D47A1]">Carlos Morales</p>
+                            <p class="text-sm text-slate-500">Viajero Apasionado</p>
+                        </div>
+                    </div>
+                </div>
+                 <div class="card-style p-8 rounded-2xl md:col-span-2 lg:col-span-1 animate-on-scroll" style="transition-delay: 0.4s;">
+                    <p class="text-slate-700 mb-4">"Como desarrollador, el inglés es esencial. La IA para practicar conversaciones técnicas es simplemente brillante."</p>
+                    <div class="flex items-center">
+                        <img src="https://picsum.photos/seed/user3/40/40.jpg" alt="User" class="w-10 h-10 rounded-full mr-4">
+                        <div>
+                            <p class="font-bold text-[#0D47A1]">Sofía Delgado</p>
+                            <p class="text-sm text-slate-500">Desarrolladora de Software</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+     <section id="pricing" class="py-24 bg-white">
+        <div class="container mx-auto px-6 text-center">
+            <h2 class="text-4xl font-bold font-heading mb-2 animate-on-scroll">Planes Flexibles para <span style="color: #FF7A00;">Todos</span></h2>
+            <p class="text-slate-600 mb-12 max-w-2xl mx-auto animate-on-scroll" style="transition-delay: 0.2s;">Empieza gratis y mejora tu plan cuando estés listo.</p>
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 max-w-5xl mx-auto">
+                <div class="card-style p-8 rounded-2xl animate-on-scroll">
+                    <h3 class="text-2xl font-bold font-heading">Gratis</h3>
+                    <p class="text-slate-500 mb-6">Para empezar a explorar</p>
+                    <p class="text-5xl font-bold font-heading mb-6">$0<span class="text-lg text-slate-500">/mes</span></p>
+                    <ul class="text-left space-y-2 mb-8 text-slate-700">
+                        <li class="flex items-center"><span class="text-[#4CAF50] mr-2 font-bold">✔</span> Acceso a lecciones para principiantes</li>
+                        <li class="flex items-center"><span class="text-[#4CAF50] mr-2 font-bold">✔</span> Nivel A1 gratis</li>
+                    </ul>
+                    <button class="auth-btn-signup w-full py-3 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100 font-semibold transition">Empieza Ahora</button>
+                </div>
+                <div class="card-style p-8 rounded-2xl animate-on-scroll border-2 border-[#FF7A00] relative" style="transition-delay: 0.2s;">
+                     <div class="absolute top-0 -translate-y-1/2 left-1/2 -translate-x-1/2 bg-[#FF7A00] text-white text-xs font-bold px-3 py-1 rounded-full">MÁS POPULAR</div>
+                    <h3 class="text-2xl font-bold font-heading">Plus</h3>
+                    <p class="text-slate-500 mb-1">Para hablar con fluidez</p>
+                    <p class="text-slate-500 mb-6">Pago anual</p>
+                    <p class="text-5xl font-bold font-heading mb-6">$5<span class="text-lg text-slate-500">/mes</span></p>
+                    <ul class="text-left space-y-2 mb-8 text-slate-700">
+                        <li class="flex items-center"><span class="text-[#4CAF50] mr-2 font-bold">✔</span> Todas las lecciones y niveles</li>
+                        <li class="flex items-center"><span class="text-[#4CAF50] mr-2 font-bold">✔</span> Misiones Diarias Ilimitadas</li>
+                        <li class="flex items-center"><span class="text-[#4CAF50] mr-2 font-bold">✔</span> Tutor con IA Ilimitado</li>
+                        <li class="flex items-center"><span class="text-[#4CAF50] mr-2 font-bold">✔</span> Acceso al Club de Conversación</li>
+                    </ul>
+                    <a href="https://wa.me/573163748711" target="_blank"><button class="w-full py-3 rounded-lg btn-primary font-bold">Elegir plan plus</button></a>
+                </div>
+                <div class="card-style p-8 rounded-2xl animate-on-scroll" style="transition-delay: 0.4s;">
+                    <h3 class="text-2xl font-bold font-heading">Pro</h3>
+                    <p class="text-slate-500 mb-6">Para dominar el idioma</p>
+                    <p class="text-5xl font-bold font-heading mb-6">$20<span class="text-lg text-slate-500">/mes</span></p>
+                    <ul class="text-left space-y-2 mb-8 text-slate-700">
+                        <li class="flex items-center"><span class="text-[#4CAF50] mr-2 font-bold">✔</span> Todo lo del plan Plus</li>
+                        <li class="flex items-center"><span class="text-[#4CAF50] mr-2 font-bold">✔</span> Sesiones 1 a 1 con tutores</li>
+                    </ul>
+                    <a href="https://wa.me/573163748711" target="_blank"><button class="w-full py-3 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100 font-semibold transition">Contactar</button></a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="faq" class="py-24">
+        <div class="container mx-auto px-6 max-w-3xl">
+            <h2 class="text-4xl font-bold font-heading mb-8 text-center animate-on-scroll">Preguntas Frecuentes</h2>
+            <div class="space-y-4 animate-on-scroll">
+                <div class="card-style rounded-lg p-1">
+                    <div class="faq-question flex justify-between items-center p-4 cursor-pointer">
+                        <h3 class="text-lg font-bold font-heading">¿Abulingo es para principiantes?</h3>
+                        <span class="text-2xl text-[#FF7A00] transform transition-transform faq-icon">+</span>
+                    </div>
+                    <div class="faq-answer px-4 pb-4 text-slate-600">
+                        <p>¡Absolutamente! Nuestro curso para principiantes te lleva desde "Hello" hasta tus primeras conversaciones con una base sólida. No necesitas ningún conocimiento previo.</p>
+                    </div>
+                </div>
+                <div class="card-style rounded-lg p-1">
+                     <div class="faq-question flex justify-between items-center p-4 cursor-pointer">
+                        <h3 class="text-lg font-bold font-heading">¿Puedo cancelar mi suscripción?</h3>
+                        <span class="text-2xl text-[#FF7A00] transform transition-transform faq-icon">+</span>
+                    </div>
+                    <div class="faq-answer px-4 pb-4 text-slate-600">
+                        <p>Sí, puedes cancelar tu suscripción a los planes de pago en cualquier momento desde tu panel de control, sin preguntas ni complicaciones.</p>
+                    </div>
+                </div>
+                 <div class="card-style rounded-lg p-1">
+                     <div class="faq-question flex justify-between items-center p-4 cursor-pointer">
+                        <h3 class="text-lg font-bold font-heading">¿Qué es el Club de Conversación?</h3>
+                        <span class="text-2xl text-[#FF7A00] transform transition-transform faq-icon">+</span>
+                    </div>
+                    <div class="faq-answer px-4 pb-4 text-slate-600">
+                        <p>Son videollamadas grupales moderadas por un tutor donde puedes practicar tu inglés hablado en un ambiente relajado y de apoyo con otros estudiantes de tu nivel.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+    
+    <footer class="bg-white border-t border-blue-100 py-12">
+        <div class="container mx-auto px-6 text-center text-slate-500">
+            <p>&copy; 2025 Abulingo. Diseñado para un aprendizaje positivo y efectivo.</p>
+        </div>
+    </footer>
+
+    <div id="login-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 hidden">
+        <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md relative">
+            <button class="close-modal-btn absolute top-4 right-4 text-slate-400 hover:text-slate-800 text-2xl">&times;</button>
+            <h2 class="text-2xl font-bold font-heading mb-6 text-center">Iniciar Sesión</h2>
+            <form id="login-form">
+                <div class="mb-4">
+                    <label for="login-email" class="block text-sm font-medium text-slate-600 mb-1">Correo Electrónico</label>
+                    <input type="email" id="login-email" placeholder="tu@correo.com" class="w-full input-field" required>
+                </div>
+                <div class="mb-6">
+                    <label for="login-password" class="block text-sm font-medium text-slate-600 mb-1">Contraseña</label>
+                    <input type="password" id="login-password" class="w-full input-field" required>
+                </div>
+                <button type="submit" class="w-full btn-primary font-bold py-3 rounded-lg">Entrar</button>
+            </form>
+            <div id="login-error" class="text-sm mt-4 text-center h-4 text-feedback-error"></div>
+        </div>
+    </div>
+
+    <div id="signup-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 hidden">
+        <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md relative">
+            <button class="close-modal-btn absolute top-4 right-4 text-slate-400 hover:text-slate-800 text-2xl">&times;</button>
+            <h2 class="text-2xl font-bold font-heading mb-6 text-center">Crea tu Cuenta</h2>
+            <form id="signup-form" class="space-y-4">
+                <div>
+                    <label for="signup-name" class="block text-sm font-medium text-slate-600 mb-1">Nombre Completo</label>
+                    <input type="text" id="signup-name" class="w-full input-field" required>
+                </div>
+                <div>
+                    <label for="signup-phone" class="block text-sm font-medium text-slate-600 mb-1">Número Celular</label>
+                    <input type="tel" id="signup-phone" placeholder="Ej: 3123456789" class="w-full input-field" required>
+                </div>
+                <div>
+                    <label for="signup-group" class="block text-sm font-medium text-slate-600 mb-1">Grupo de inglés</label>
+                    <select id="signup-group" class="w-full input-field" required>
+                        <option value="No tengo">No tengo</option>
+                        <option value="A">A</option>
+                        <option value="B">B</option>
+                        <option value="C">C</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="signup-email" class="block text-sm font-medium text-slate-600 mb-1">Correo (para verificar tu cuenta)</label>
+                    <input type="email" id="signup-email" class="w-full input-field" required>
+                </div>
+                <div>
+                    <label for="signup-password" class="block text-sm font-medium text-slate-600 mb-1">Contraseña (mín. 6 caracteres)</label>
+                    <input type="password" id="signup-password" class="w-full input-field" minlength="6" required>
+                </div>
+                <button type="submit" class="w-full btn-primary font-bold py-3 rounded-lg !mt-6">Crear Cuenta</button>
+            </form>
+            <div id="signup-message" class="text-sm mt-4 text-center h-4"></div>
+        </div>
+    </div>
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const supabaseUrl = 'https://zdybpplggppjrmxhfhik.supabase.co';
+        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpkeWJwcGxnZ3BwanJteGhmaGlrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTkxODY0MTcsImV4cCI6MjA3NDc2MjQxN30._1LRLhgIsNnc48Tj431F7xRWwHma0WCkc613ztmpjtU'
+
+
+        let supabase = null;
+        if (supabaseUrl && supabaseKey) {
+            supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+        } else {
+            console.error('ADVERTENCIA: Las credenciales de Supabase no están configuradas.');
+        }
+        
+        const loginModal = document.getElementById('login-modal');
+        const signupModal = document.getElementById('signup-modal');
+        const loggedOutNav = document.getElementById('logged-out-nav');
+        const loggedInNav = document.getElementById('logged-in-nav');
+        const userNameSpan = document.getElementById('user-name');
+        const mobileMenu = document.getElementById('mobile-menu');
+        const menuButton = document.getElementById('menu-button');
+
+        const openModal = (modal) => modal.classList.remove('hidden');
+        const closeModal = (modal) => modal.classList.add('hidden');
+        document.querySelectorAll('.auth-btn-login').forEach(btn => btn.addEventListener('click', () => openModal(loginModal)));
+        document.querySelectorAll('.auth-btn-signup').forEach(btn => btn.addEventListener('click', () => openModal(signupModal)));
+        document.querySelectorAll('.close-modal-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                closeModal(loginModal);
+                closeModal(signupModal);
+            });
+        });
+
+        if (supabase) {
+            // REGISTRO DE USUARIO
+            document.getElementById('signup-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const name = document.getElementById('signup-name').value;
+                const phone = document.getElementById('signup-phone').value;
+                const group = document.getElementById('signup-group').value;
+                const email = document.getElementById('signup-email').value;
+                const password = document.getElementById('signup-password').value;
+                const msgEl = document.getElementById('signup-message');
+                msgEl.textContent = 'Creando cuenta...';
+                msgEl.className = 'text-sm mt-4 text-center h-4 text-slate-500';
+
+                const { data, error } = await supabase.auth.signUp({
+                    email: email,
+                    phone: phone,
+                    password: password,
+                    options: {
+                        data: {
+                            full_name: name,
+                            phone: phone,
+                            english_group: group
+                        }
+                    }
+                });
+
+                if (error) {
+                    msgEl.textContent = `Error: ${error.message}`;
+                    msgEl.classList.add('text-feedback-error');
+                } else if (data.user) {
+                    msgEl.textContent = '¡Registro exitoso! Revisa tu correo para verificar la cuenta.';
+                    msgEl.classList.add('text-feedback-success');
+                    e.target.reset();
+                    setTimeout(() => {
+                        closeModal(signupModal);
+                        msgEl.textContent = '';
+                    }, 4000);
+                }
+            });
+
+            // INICIO DE SESIÓN
+            document.getElementById('login-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const email = document.getElementById('login-email').value;
+                const password = document.getElementById('login-password').value;
+                const errEl = document.getElementById('login-error');
+                errEl.textContent = '';
+                
+                const { error } = await supabase.auth.signInWithPassword({
+                    email: email,
+                    password: password
+                });
+
+                if (error) {
+                    if (error.message.includes("Email not confirmed")) {
+                         errEl.textContent = "Debes verificar tu correo antes de iniciar sesión.";
+                    } else {
+                         errEl.textContent = "Correo o contraseña incorrectos.";
+                    }
+                } else {
+                    // Si el inicio de sesión es exitoso, redirige.
+                    window.location.href = 'abulingo.html';
+                }
+            });
+            
+            // CERRAR SESIÓN
+            document.getElementById('logout-btn').addEventListener('click', async () => {
+                await supabase.auth.signOut();
+                // Al cerrar sesión, el onAuthStateChange se encargará de actualizar la UI
+            });
+            
+            // GESTIÓN DE UI
+            const updateUI = async (user) => {
+                const isLoggedIn = !!user;
+                loggedOutNav.classList.toggle('hidden', isLoggedIn);
+                loggedInNav.classList.toggle('hidden', !isLoggedIn);
+                loggedInNav.classList.toggle('flex', isLoggedIn);
+
+                let mobileNavHTML = `
+                    <a href="#features" class="block text-slate-600 hover:text-[#0D47A1] font-semibold">Características</a>
+                    <a href="#pricing" class="block text-slate-600 hover:text-[#0D47A1] font-semibold">Planes</a>
+                    <a href="#faq" class="block text-slate-600 hover:text-[#0D47A1] font-semibold">FAQ</a>
+                    <hr class="border-slate-200"/>`;
+                
+                if (isLoggedIn) {
+                    // Este código se mantendría por si en el futuro se decide no redirigir
+                    let displayName = user.email.split('@')[0]; // Fallback name
+                    const { data: profile } = await supabase
+                        .from('profiles')
+                        .select('full_name')
+                        .eq('id', user.id)
+                        .single();
+                    
+                    if (profile && profile.full_name) {
+                        displayName = profile.full_name.split(' ')[0];
+                    }
+                    userNameSpan.textContent = `Hola, ${displayName}`;
+                    mobileNavHTML += `
+                        <p class="text-slate-700 text-center text-sm font-semibold">Hola, ${displayName}</p>
+                        <button id="mobile-logout-btn" class="w-full bg-red-100 text-[#D32F2F] font-bold py-2 rounded-lg text-sm">Salir</button>`;
+                } else {
+                    userNameSpan.textContent = '';
+                    mobileNavHTML += `
+                        <button class="auth-btn-login w-full text-slate-700 hover:text-[#0D47A1] transition py-2 font-semibold">Iniciar Sesión</button>
+                        <button class="auth-btn-signup w-full btn-primary font-bold py-2 rounded-lg text-sm">Registrarse</button>`;
+                }
+                mobileMenu.innerHTML = mobileNavHTML;
+                
+                if (isLoggedIn) document.getElementById('mobile-logout-btn').addEventListener('click', () => supabase.auth.signOut());
+                mobileMenu.querySelectorAll('.auth-btn-login').forEach(btn => btn.addEventListener('click', () => { openModal(loginModal); mobileMenu.classList.add('hidden'); }));
+                mobileMenu.querySelectorAll('.auth-btn-signup').forEach(btn => btn.addEventListener('click', () => { openModal(signupModal); mobileMenu.classList.add('hidden'); }));
+                mobileMenu.querySelectorAll('a').forEach(a => a.addEventListener('click', () => mobileMenu.classList.add('hidden')));
+            };
+
+            // ### INICIO DE LA CORRECCIÓN ###
+            // GESTIÓN DE ESTADO DE AUTENTICACIÓN Y REDIRECCIÓN
+            
+            // 1. Escucha cambios de estado (login/logout) para actualizar la UI si el usuario permanece en la página.
+            supabase.auth.onAuthStateChange((_, session) => {
+                updateUI(session?.user);
+            });
+
+            // 2. Al cargar la página, comprueba si ya existe una sesión.
+            (async () => {
+                const { data: { session } } = await supabase.auth.getSession();
+                
+                // Si hay una sesión activa, redirige inmediatamente a la plataforma.
+                if (session) {
+                    window.location.href = 'abulingo.html';
+                } else {
+                    // Si no hay sesión, asegúrate de que la UI muestre el estado de "no logueado".
+                    updateUI(null);
+                }
+            })();
+            // ### FIN DE LA CORRECCIÓN ###
+        }
+
+        // OTRAS FUNCIONALIDADES (sin cambios)
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) entry.target.classList.add('is-visible');
+            });
+        }, { threshold: 0.1 });
+        document.querySelectorAll('.animate-on-scroll').forEach(el => observer.observe(el));
+        
+        menuButton.addEventListener('click', (e) => {
+            e.stopPropagation();
+            mobileMenu.classList.toggle('hidden');
+        });
+        document.addEventListener('click', (e) => {
+            if (!mobileMenu.contains(e.target) && !menuButton.contains(e.target)) {
+                mobileMenu.classList.add('hidden');
+            }
+        });
+        
+        document.querySelectorAll('.faq-question').forEach(item => {
+            item.addEventListener('click', () => {
+                const answer = item.nextElementSibling;
+                const icon = item.querySelector('.faq-icon');
+                const isOpen = answer.style.maxHeight;
+                document.querySelectorAll('.faq-answer').forEach(ans => { ans.style.maxHeight = null });
+                document.querySelectorAll('.faq-icon').forEach(ic => ic.style.transform = 'rotate(0deg)');
+                if (!isOpen) {
+                    answer.style.maxHeight = answer.scrollHeight + "px";
+                    icon.style.transform = 'rotate(45deg)';
+                }
+            });
+        });
+    });
+</script>
+</body>
+>>>>>>> 0dd812a4c0f5f9cc2f2fc9027e7e92a3e635d9c0
+</html>
+>>>>>>> f389540b5b143bd84eaae4b2892a2c1adc8d0c59
