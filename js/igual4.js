@@ -54,9 +54,10 @@ navBarra.innerHTML=`
     </header>
     
     <div id="mobile-menu" class="hidden md:hidden fixed top-20 right-4 w-56 bg-white/90 backdrop-blur-lg p-4 rounded-lg shadow-xl z-40 space-y-2 flex flex-col">
-        <a href="abulingo.html" class="nav-link active text-center">Continuar Aventura</a>
+        <a href="abulingo.html" class="nav-link text-center">Continuar Aventura</a>
         <a href="gramatica.html" class="nav-link text-center">Gramática</a>
-        <a href="club.html" class="nav-link text-center">Club</a>
+        <a href="pro.html" class="nav-link text-center">Pronunicación</a>
+        <a href="club.html" class="nav-link text-center active">Club</a>
         <a href="traductor.html" class="nav-link text-center">Traductor</a>
         <a href="soporte.html" class="nav-link text-center">Soporte</a>
     </div>
