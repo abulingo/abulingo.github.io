@@ -4,30 +4,61 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Abulingo - Aprende Inglés</title>
+    
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Work+Sans:wght@400;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css"></link>
     <link rel="stylesheet" href="style.css">   
     <link rel="icon" href="icono.png" type="image/x-icon">
+
+    <style>
+        body { background-color: #f8fafc; }
+        .card-style { background-color: white; box-shadow: 0 10px 25px -5px rgb(0 0 0 / 0.05), 0 8px 10px -6px rgb(0 0 0 / 0.05); }
+        .btn-primary { background-color: #FF7A00; color: white; }
+        .font-heading { font-family: 'Space Grotesk', sans-serif; }
+        .chat-messages { scroll-behavior: smooth; }
+        .chat-messages::-webkit-scrollbar { width: 8px; }
+        .chat-messages::-webkit-scrollbar-track { background: #f1f5f9; }
+        .chat-messages::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 4px; }
+        .dot { animation: thinking-blink 1.4s infinite both; }
+        .dot:nth-child(2) { animation-delay: 0.2s; }
+        .dot:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes thinking-blink { 0% { opacity: 0.2; } 20% { opacity: 1; } 100% { opacity: 0.2; } }
+        
+        /* === NUEVOS ESTILOS PARA EL MICRÓFONO === */
+        .mic-button.is-recording {
+            background-color: #dc2626; /* Rojo */
+            animation: pulse-red 1.5s infinite;
+        }
+        @keyframes pulse-red {
+            0% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(220, 38, 38, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+        }
+    </style>
 </head>
 <body class="min-h-screen">
 
     <div id="navBarra"></div>
-
+    
     <main class="pt-24 pb-12 flex flex-col items-center justify-center min-h-screen">
         <div id="app-container" class="w-full max-w-2xl mx-auto px-4">
-            <div class="text-center"><h1 class="text-3xl font-bold font-heading">Cargando tu aventura...</h1><p class="text-slate-600">Por favor, espera un momento.</p></div>
+            <div class="text-center">
+                <h1 class="text-3xl font-bold font-heading">Cargando tu aventura...</h1>
+                <p class="text-slate-600">Por favor, espera un momento.</p>
+            </div>
         </div>
     </main>
 
     <script type="module">
+        // --- 1. CONFIGURACIÓN INICIAL ---
         const SUPABASE_URL = 'https://zdybpplggppjrmxhfhik.supabase.co';
-        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpkeWJwcGxnZ3BwanJteGhmaGlrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTkxODY0MTcsImV4cCI6MjA3NDc2MjQxN30._1LRLhgIsNnc48Tj431F7xRWwHma0WCkc613ztmpjtU'
-
-        if (!SUPABASE_URL || !SUPABASE_ANON_KEY) alert("¡Error! Debes configurar tus credenciales de Supabase.");
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpkeWJwcGxnZ3BwanJteGhmaGlrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTkxODY0MTcsImV4cCI6MjA3NDc2MjQxN30._1LRLhgIsNnc48Tj431F7xRWwHma0WCkc613ztmpjtU';
+        const EDGE_FUNCTION_URL = `https://${SUPABASE_URL.split('//')[1]}/functions/v1/conversacion`;
 
         const { createClient } = supabase;
         const dbClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -35,14 +66,14 @@
         let currentUser = null, userProfile = null, currentWord = null;
         const appContainer = document.getElementById('app-container');
 
-        // --- 2. LÓGICA DEL SISTEMA DE REPETICIÓN ESPACIADA (SRS) ---
-        const srsIntervals = [ 5 * 60 * 1000, 24 * 60 * 60 * 1000, 3 * 24 * 60 * 60 * 1000, 7 * 24 * 60 * 60 * 1000, 14 * 24 * 60 * 60 * 1000, 30 * 24 * 60 * 60 * 1000 ];
+        // --- 2. LÓGICA DEL SRS ---
+        const srsIntervals = [10 * 60 * 1000, 24 * 60 * 60 * 1000, 3 * 24 * 60 * 60 * 1000, 7 * 24 * 60 * 60 * 1000, 14 * 24 * 60 * 60 * 1000, 30 * 24 * 60 * 60 * 1000];
         
         async function updateWordProgress(wordId, wasCorrect) {
             if (!currentUser) return;
             const { data: progress } = await dbClient.from('user_word_progress').select('srs_level').eq('user_id', currentUser.id).eq('word_id', wordId).single();
             let newSrsLevel = progress ? progress.srs_level : 0;
-            newSrsLevel = wasCorrect ? newSrsLevel + 1 : 0; // Incrementa si es correcto, reinicia si no
+            newSrsLevel = wasCorrect ? newSrsLevel + 1 : 0;
             const interval = srsIntervals[Math.min(newSrsLevel, srsIntervals.length - 1)];
             const next_review_at = new Date(Date.now() + interval).toISOString();
             const { error } = await dbClient.from('user_word_progress').upsert({ user_id: currentUser.id, word_id: wordId, srs_level: newSrsLevel, next_review_at: next_review_at }, { onConflict: 'user_id, word_id' });
@@ -50,7 +81,7 @@
             else if (wasCorrect) await updateUserPoints(5);
         }
 
-        // --- 3. LÓGICA DE FLUJOS DE APRENDIZAJE (CONTROLADOR PRINCIPAL) ---
+        // --- 3. LÓGICA DE FLUJOS DE APRENDIZAJE ---
         async function iniciarFlujoDeAprendizaje() {
             if (!userProfile || !userProfile.flujo) {
                 appContainer.innerHTML = `<h2 class="text-center font-bold">Error: No se encontró flujo de aprendizaje.</h2>`;
@@ -60,8 +91,9 @@
                 case 1: await renderFlow1_Flashcards(); break;
                 case 2: await renderFlow2_Practice(); break;
                 case 3: await renderFlow3_Sentences(); break;
-                // case 4: await renderFlow4_Conversation(); break;
-                default: appContainer.innerHTML = `<h2 class="text-center font-bold">¡Has completado todos los flujos!</h2>`;
+                case 4: await renderFlow4_Conversation(); break;
+                default:
+                    appContainer.innerHTML = `<h2 class="text-center font-bold">¡Has completado todos los flujos!</h2><p>Pronto habrá más contenido.</p>`;
             }
         }
 
@@ -72,12 +104,12 @@
                 appContainer.innerHTML = getFlashcardHTML(word);
                 addFlashcardEventListeners();
             } else {
-                console.log("Flujo 1 completado. Avanzando a Flujo 2...");
-                const newFlowState = userProfile.flujo;
-                newFlowState.currentFlow = 2;
-                newFlowState.flowState[newFlowState.currentGroup].flow1_flashcards.status = "completed";
-                await updateUserFlowState(newFlowState);
-                await renderFlow2_Practice();
+                appContainer.innerHTML = `
+                    <div class="text-center card-style w-full max-w-md mx-auto p-8 rounded-2xl">
+                        <h2 class="text-2xl font-bold font-heading mb-4">¡Todo al día! 👏</h2>
+                        <p class="text-slate-600">Has repasado todas las palabras disponibles por ahora. Vuelve más tarde para seguir practicando.</p>
+                    </div>
+                `;
             }
         }
 
@@ -90,7 +122,6 @@
             const queue = userProfile.flujo.flowState[userProfile.flujo.currentGroup].flow2_practice.queue;
             const currentIndex = userProfile.flujo.flowState[userProfile.flujo.currentGroup].flow2_practice.currentIndex || 0;
             if (currentIndex >= queue.length) {
-                console.log("Flujo 2 completado. Avanzando a Flujo 3...");
                 const newFlowState = userProfile.flujo;
                 newFlowState.currentFlow = 3;
                 newFlowState.flowState[newFlowState.currentGroup].flow2_practice.status = "completed";
@@ -118,8 +149,11 @@
             const queue = userProfile.flujo.flowState[userProfile.flujo.currentGroup].flow3_sentences.queue;
             const currentIndex = userProfile.flujo.flowState[userProfile.flujo.currentGroup].flow3_sentences.currentIndex || 0;
             if (currentIndex >= queue.length) {
-                appContainer.innerHTML = `<h2 class="text-2xl font-bold font-heading text-center">¡Genial! ¡Terminaste las frases!</h2><p class="text-center">Próximamente: ¡Conversación con IA!</p>`;
-                // Aquí avanzarías al Flujo 4
+                const newFlowState = userProfile.flujo;
+                newFlowState.currentFlow = 4;
+                newFlowState.flowState[newFlowState.currentGroup].flow3_sentences.status = "completed";
+                await updateUserFlowState(newFlowState);
+                await renderFlow4_Conversation();
                 return;
             }
             const exercise = queue[currentIndex];
@@ -132,34 +166,26 @@
         }
 
         // --- 4. RENDERIZADO DE EJERCICIOS Y COMPONENTES ---
+
         function getFlashcardHTML(word) {
             return `
-                <div id="flashcard-container" class="card-style w-full max-w-md mx-auto p-8 rounded-2xl text-center card-loading">
-                <img id="card-image" src="${word.imagen || `https://via.placeholder.com/400/200/e6f0ff/0d47a1?text=${word.ingles}`}" alt="Imagen de la palabra" class="rounded-lg mb-2 w-full object-cover h-48">
-                <h1 id="card-english" class="text-5xl font-bold font-heading mb-1">${word.ingles}</h1>
-                <p id="card-spanish" class="text-2xl text-slate-500 opacity-75 mb-2">${word.espanol}</p>
-                <p id="card-phonetic" class="text-xl font-mono text-[#FF7A00] mb-2 hidden">${word.fonetica || ''}</p>
-
-                <div class="flex justify-center space-x-4 mb-4">
-                    <button id="pronounce-btn" class="flex-1 bg-blue-100 text-[#0D47A1] font-semibold py-3 rounded-lg hover:bg-blue-200 transition flex items-center justify-center space-x-2">
-                        <i class="fas fa-comment-dots"></i>
-                        <span>Pronunciación</span>
-                    </button>
-                    <button id="sound-btn" class="flex-1 bg-blue-100 text-[#0D47A1] font-semibold py-3 rounded-lg hover:bg-blue-200 transition flex items-center justify-center space-x-2">
-                        <i class="fas fa-play"></i>
-                        <span>Sonido</span>
-                    </button>
-                </div>
-
-                <div class="flex space-x-4">
-                    <button id="btn-easy" class="w-1/2 py-3 rounded-lg font-bold transition text-green-800 bg-green-100 hover:bg-green-200" style="background-color: #C8E6C9; color: #2E7D32;">Fácil</button>
-                    <button id="btn-hard" class="w-1/2 py-3 rounded-lg font-bold transition text-red-800 bg-red-100 hover:bg-red-200" style="background-color: #FFCDD2; color: #C62828;">Difícil</button>
-                </div>
-            </div>`;
+                <div id="flashcard-container" class="card-style w-full max-w-md mx-auto p-8 rounded-2xl text-center">
+                    <img id="card-image" src="${word.imagen || `https://via.placeholder.com/400/200/e6f0ff/0d47a1?text=${word.ingles}`}" alt="Imagen de la palabra" class="rounded-lg mb-2 w-full object-cover h-48">
+                    <h1 id="card-english" class="text-5xl font-bold font-heading mb-1">${word.ingles}</h1>
+                    <p id="card-spanish" class="text-xl text-slate-500 opacity-75 mb-2">${word.espanol}</p>
+                    <p id="card-phonetic" class="text-lg font-mono text-[#FF7A00] mb-2 hidden">${word.fonetica || ''}</p>
+                    <div class="flex justify-center space-x-4 mb-4">
+                        <button id="pronounce-btn" class="flex-1 bg-blue-100 text-[#0D47A1] font-semibold py-3 rounded-lg hover:bg-blue-200 transition flex items-center justify-center space-x-2"><i class="fas fa-volume-up"></i><span>Sonido</span></button>
+                    </div>
+                    <div class="flex space-x-4">
+                        <button id="btn-easy" class="w-1/2 py-3 rounded-lg font-bold transition text-green-800 bg-green-100 hover:bg-green-200">Fácil</button>
+                        <button id="btn-hard" class="w-1/2 py-3 rounded-lg font-bold transition text-red-800 bg-red-100 hover:bg-red-200">Difícil</button>
+                    </div>
+                </div>`;
         }
-        
+
         async function renderSelectWordByImageExercise(correctWord, options) {
-            let optionsHTML = options.sort(() => Math.random() - 0.5).map(option => `<button class="option-button w-full text-lg" data-word="${option}">${option}</button>`).join('');
+            let optionsHTML = options.sort(() => Math.random() - 0.5).map(option => `<button class="option-button w-full text-lg border-2 border-slate-200 hover:bg-slate-100 py-3 rounded-lg transition" data-word="${option}">${option}</button>`).join('');
             appContainer.innerHTML = `
                 <div class="card-style w-full max-w-md mx-auto p-8 rounded-2xl text-center">
                     <h2 class="text-2xl font-bold font-heading mb-4">Selecciona la palabra correcta</h2>
@@ -170,8 +196,8 @@
                 const isCorrect = e.target.dataset.word === correctWord.ingles;
                 document.querySelectorAll('.option-button').forEach(btn => {
                     btn.disabled = true;
-                    if (btn.dataset.word === correctWord.ingles) btn.classList.add('correct');
-                    else if (btn === e.target) btn.classList.add('incorrect');
+                    if (btn.dataset.word === correctWord.ingles) btn.classList.add('bg-green-200', 'border-green-400');
+                    else if (btn === e.target) btn.classList.add('bg-red-200', 'border-red-400');
                 });
                 await updateWordProgress(correctWord.id, isCorrect);
                 setTimeout(advanceInQueue, 2000);
@@ -216,25 +242,38 @@
 
         function renderSentenceScrambleExercise(phraseData) {
             const words = phraseData.fraseingles.split(' ').sort(() => Math.random() - 0.5);
-            let wordButtonsHTML = words.map(word => `<span class="scramble-word">${word}</span>`).join('');
+            let wordButtonsHTML = words.map(word => `<span class="bg-slate-100 hover:bg-slate-200 cursor-pointer px-3 py-2 rounded-lg text-lg">${word}</span>`).join('');
+            
             appContainer.innerHTML = `
                 <div class="card-style w-full p-6 rounded-2xl">
                     <h2 class="text-xl font-bold font-heading mb-2 text-center">Organiza la frase</h2>
-                    <p class="text-center text-slate-500 mb-4">Traducción: "${phraseData.fraseespañol}"</p>
-                    <div id="answer-area" class="answer-area flex flex-wrap items-center mb-4"></div>
-                    <div id="word-bank" class="flex flex-wrap justify-center items-center mb-4">${wordButtonsHTML}</div>
+                    <div class="flex items-center justify-center space-x-2 text-slate-500 mb-4">
+                        <button id="play-scramble-audio" class="speak-btn text-slate-400 hover:text-blue-800">
+                           <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+                        </button>
+                        <p>Traducción: "${phraseData.fraseespañol}"</p>
+                    </div>
+                    <div id="answer-area" class="bg-slate-50 border border-slate-200 min-h-[60px] flex flex-wrap items-center gap-2 p-3 mb-4 rounded-lg"></div>
+                    <div id="word-bank" class="flex flex-wrap justify-center items-center gap-2 mb-4">${wordButtonsHTML}</div>
                     <button id="check-btn" class="w-full btn-primary py-3 rounded-lg font-bold">Comprobar</button>
                     <div id="feedback" class="mt-4 h-8 text-center font-bold"></div>
                 </div>`;
+            
+            if (phraseData.audio) {
+                const audio = new Audio(phraseData.audio);
+                document.getElementById('play-scramble-audio').addEventListener('click', () => audio.play());
+            }
+
             const wordBank = document.getElementById('word-bank'), answerArea = document.getElementById('answer-area');
             const moveWord = (e) => {
-                if(e.target.classList.contains('scramble-word')) {
+                if(e.target.tagName === 'SPAN') {
                     const destination = e.currentTarget.id === 'word-bank' ? answerArea : wordBank;
                     destination.appendChild(e.target);
                 }
             };
             wordBank.addEventListener('click', moveWord);
             answerArea.addEventListener('click', moveWord);
+            
             document.getElementById('check-btn').addEventListener('click', async () => {
                 const constructed = [...answerArea.children].map(el => el.textContent).join(' ');
                 const isCorrect = constructed === phraseData.fraseingles;
@@ -256,30 +295,392 @@
                     <button id="play-audio-btn" class="mb-6 bg-blue-500 text-white rounded-full h-20 w-20 flex items-center justify-center mx-auto text-3xl hover:bg-blue-600 transition"><i class="fas fa-volume-up"></i></button>
                     <input id="sentence-input" type="text" class="w-full border-2 border-gray-300 rounded-lg p-3 text-center text-xl" placeholder="Escribe la frase...">
                     <button id="check-btn" class="w-full btn-primary py-3 rounded-lg font-bold mt-4">Comprobar</button>
-                    <div id="feedback" class="mt-4 h-10"></div>
+                    <div id="feedback" class="mt-4"></div> 
                 </div>`;
+
             const audio = new Audio(audioData.audio);
             document.getElementById('play-audio-btn').addEventListener('click', () => audio.play());
+            
             document.getElementById('check-btn').addEventListener('click', async () => {
                 const input = document.getElementById('sentence-input'), feedback = document.getElementById('feedback');
                 const cleanInput = input.value.trim().replace(/[.,!?]/g, '').toLowerCase();
                 const cleanAnswer = audioData.fraseingles.replace(/[.,!?]/g, '').toLowerCase();
                 const isCorrect = cleanInput === cleanAnswer;
+                const translationHTML = `<div class="translation border-t border-slate-300 mt-2 pt-2 text-xs text-slate-500 italic">${audioData.fraseespañol}</div>`;
+
                 if (isCorrect) {
-                    feedback.innerHTML = `<p class="text-green-600 font-bold">¡Perfecto!</p>`;
+                    feedback.innerHTML = `<p class="text-green-600 font-bold">¡Perfecto!</p>${translationHTML}`;
                     await updateUserPoints(15);
                     document.getElementById('check-btn').disabled = true;
-                    setTimeout(advanceInSentenceQueue, 2000);
+                    setTimeout(advanceInSentenceQueue, 2500);
                 } else {
-                    feedback.innerHTML = `<p class="text-red-600 font-bold">Correcto: <span class="block mt-1">${audioData.fraseingles}</span></p>`;
+                    feedback.innerHTML = `
+                        <div class="text-center">
+                           <p class="text-red-600 font-bold">Respuesta correcta:</p>
+                           <p class="font-mono text-slate-800">${audioData.fraseingles}</p>
+                           ${translationHTML}
+                        </div>`;
                 }
             });
             audio.play();
         }
 
+        // --- FLUJO 4: CONVERSACIÓN (VERSIÓN ACTUALIZADA) ---
+
+        function getChatHTML() {
+            return `
+                <div class="container w-full max-w-2xl max-h-[80vh] flex flex-col bg-white rounded-2xl shadow-2xl">
+                    <div class="p-4 border-b border-slate-200">
+                        <h1 class="text-xl font-bold font-heading">Conversación con Lucía 🇬🇧</h1>
+                    </div>
+                    <div class="chat-container flex-1 flex flex-col p-4 overflow-hidden">
+                        <div id="chat-messages" class="chat-messages flex-1 space-y-4 overflow-y-auto pr-2"></div>
+                        <div id="suggestions-container" class="flex flex-wrap gap-2 py-3 justify-center"></div>
+                        <div id="error-container" class="my-2"></div>
+                        <div class="input-container mt-auto flex items-center space-x-3">
+                            <textarea id="message-input" class="flex-1 p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-orange-300 focus:outline-none transition resize-none" placeholder="Cargando..." rows="1" disabled></textarea>
+                            <button id="mic-button" class="mic-button bg-[#0D47A1] text-white p-3 rounded-full hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-900 transition disabled:opacity-50" aria-label="Grabar mensaje de voz" disabled>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="22"></line></svg>
+                            </button>
+                            <button id="send-button" class="send-button btn-primary text-white p-3 rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition disabled:opacity-50" aria-label="Enviar mensaje" disabled>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="next-lesson-container" class="hidden p-4 border-t border-slate-200 text-center">
+                        <p class="text-slate-600 mb-2">¡Gran práctica! Has completado la conversación.</p>
+                        <button id="next-lesson-btn" class="btn-primary font-bold py-3 px-6 rounded-lg hover:opacity-90">Siguiente Lección</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        async function renderFlow4_Conversation() {
+            appContainer.innerHTML = getChatHTML();
+            await initializeChatLogic();
+        }
+
+        async function initializeChatLogic() {
+            const messageInput = document.getElementById('message-input');
+            const sendButton = document.getElementById('send-button');
+            const chatMessages = document.getElementById('chat-messages');
+            const suggestionsContainer = document.getElementById('suggestions-container');
+            const errorContainer = document.getElementById('error-container');
+            const micButton = document.getElementById('mic-button');
+            const nextLessonContainer = document.getElementById('next-lesson-container');
+            const nextLessonBtn = document.getElementById('next-lesson-btn');
+
+            let conversationHistory = [];
+            let isLoading = false;
+            let userMessageCount = 0;
+            const MAX_MESSAGES = 3;
+            
+            // ==================================================================
+            // === INICIO: NUEVA LÓGICA DE RECONOCIMIENTO DE VOZ ===
+            // ==================================================================
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            let recognition;
+            let isRecording = false;
+
+            if (SpeechRecognition) {
+                recognition = new SpeechRecognition();
+                recognition.continuous = true;
+                recognition.lang = 'en-US';
+                recognition.interimResults = true;
+
+                recognition.onresult = (event) => {
+                    let final_transcript = '';
+                    let interim_transcript = '';
+                    for (let i = event.resultIndex; i < event.results.length; ++i) {
+                        if (event.results[i].isFinal) {
+                            final_transcript += event.results[i][0].transcript;
+                        } else {
+                            interim_transcript += event.results[i][0].transcript;
+                        }
+                    }
+                    messageInput.value = final_transcript + interim_transcript;
+                    if (final_transcript) {
+                        stopRecording();
+                        handleSendMessage();
+                    }
+                };
+
+                recognition.onerror = (event) => {
+                    showError(`Error de reconocimiento: ${event.error}`);
+                    stopRecording();
+                };
+                
+                recognition.onend = () => {
+                    if (isRecording) { // Si se detiene inesperadamente
+                       stopRecording();
+                    }
+                };
+
+            } else {
+                console.log("Reconocimiento de voz no soportado en este navegador.");
+                micButton.style.display = 'none';
+            }
+            
+            function startRecording() {
+                if (isLoading || isRecording || !recognition) return;
+                isRecording = true;
+                messageInput.value = '';
+                messageInput.placeholder = 'Escuchando...';
+                micButton.classList.add('is-recording');
+                recognition.start();
+            }
+
+            function stopRecording() {
+                if (!isRecording || !recognition) return;
+                isRecording = false;
+                messageInput.placeholder = 'Elige, escribe o habla...';
+                micButton.classList.remove('is-recording');
+                recognition.stop();
+            }
+
+            micButton.addEventListener('click', () => {
+                if (isRecording) {
+                    stopRecording();
+                } else {
+                    startRecording();
+                }
+            });
+
+            // ==================================================================
+            // === FIN: NUEVA LÓGICA DE RECONOCIMIENTO DE VOZ ===
+            // ==================================================================
+
+
+// --- SÍNTESIS DE VOZ (MEJORADO) ---
+
+// 1. Variable para guardar la voz que elegiremos
+let abulingoVoice = null;
+
+// 2. Función para cargar y seleccionar la mejor voz disponible
+function loadAndSetVoice() {
+    const voices = window.speechSynthesis.getVoices();
+    if (voices.length === 0) return; // Si no hay voces, no hacemos nada aún
+
+    // Buscamos la voz ideal en orden de preferencia
+    abulingoVoice = 
+        // Preferencia 1: Voz de alta calidad de Google
+        voices.find(voice => voice.name === 'Google UK English Female') ||
+        // Preferencia 2: Cualquier voz femenina británica
+        voices.find(voice => voice.lang === 'en-GB' && voice.name.includes('Female')) ||
+        // Preferencia 3: Cualquier voz británica si no hay femenina
+        voices.find(voice => voice.lang === 'en-GB');
+
+    console.log("Voz seleccionada:", abulingoVoice ? abulingoVoice.name : "Voz por defecto");
+}
+
+// 3. Esperamos a que el navegador cargue las voces
+window.speechSynthesis.onvoiceschanged = loadAndSetVoice;
+// También la llamamos una vez por si ya están cargadas
+loadAndSetVoice();
+
+// 4. Tu función 'speak' ahora usará la voz seleccionada
+function speak(text) {
+    if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        
+        // Asignamos la voz que encontramos
+        if (abulingoVoice) {
+            utterance.voice = abulingoVoice;
+        }
+        
+        // Mantenemos tus configuraciones de idioma y velocidad
+        utterance.lang = 'en-GB';
+        utterance.rate = 0.8; // Puedes ajustar esto como prefieras
+
+        window.speechSynthesis.speak(utterance);
+    }
+}
+            function showError(message) { 
+                errorContainer.innerHTML = `<div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg" role="alert"><p>${message}</p></div>`; 
+            }
+            function clearError() { errorContainer.innerHTML = ''; }
+
+            function appendMessage(data) {
+                const isUser = data.type === 'user';
+                const messageId = `msg-${Date.now()}`;
+                let messageHtml = '';
+
+                if (isUser) {
+                    const userAvatar = `<div class="avatar bg-green-500 w-10 h-10 rounded-full text-white flex items-center justify-center font-bold text-lg flex-shrink-0">T</div>`;
+                    messageHtml = `
+                        <div id="${messageId}" class="message flex items-end justify-end">
+                            <div class="mx-3">
+                                <div class="message-content bg-green-100 text-slate-800 p-3 rounded-2xl rounded-br-none max-w-md">
+                                    <div class="flex justify-between items-center mb-1">
+                                        <p class="font-semibold text-green-900">Tú</p>
+                                    </div>
+                                    <div class="prose prose-sm max-w-none">${marked.parse(data.reply, { gfm: true, breaks: true })}</div>
+                                </div>
+                            </div>
+                            ${userAvatar}
+                        </div>`;
+                } else { // AI message (Lucía)
+                    const aiAvatar = `<div class="avatar bg-[#0D47A1] w-10 h-10 rounded-full text-white flex items-center justify-center font-bold text-lg flex-shrink-0">L</div>`;
+                    const translationHtml = data.translation ? `<div class="translation border-t border-slate-300 mt-2 pt-2 text-xs text-slate-500 italic">${data.translation}</div>` : '';
+                    messageHtml = `
+                        <div id="${messageId}" class="message flex items-end justify-start">
+                            ${aiAvatar}
+                            <div class="mx-3">
+                                <div class="message-content bg-blue-100 text-slate-800 p-3 rounded-2xl rounded-bl-none max-w-md">
+                                    <div class="flex justify-between items-center mb-1">
+                                        <p class="font-semibold text-blue-900">Lucía</p>
+                                        <button class="speak-btn text-slate-400 hover:text-blue-800" data-text="${data.reply}">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+                                        </button>
+                                    </div>
+                                    <div class="prose prose-sm max-w-none">${marked.parse(data.reply, { gfm: true, breaks: true })}</div>
+                                    ${translationHtml}
+                                </div>
+                            </div>
+                        </div>`;
+                }
+                chatMessages.insertAdjacentHTML('beforeend', messageHtml);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
+
+            function renderSuggestions(suggestions) {
+                suggestionsContainer.innerHTML = '';
+                if (!suggestions || suggestions.length === 0) return;
+                suggestions.forEach( text => { 
+                    const button = document.createElement('button');
+                    button.textContent = text;
+                    button.className = 'bg-slate-100 text-slate-700 px-3 py-1.5 rounded-full text-sm hover:bg-slate-200 transition';
+                    button.onclick = () => { messageInput.value = text; handleSendMessage(); };
+                    suggestionsContainer.appendChild(button);
+                });
+            }
+
+            function toggleLoading(loading) {
+                isLoading = loading;
+                sendButton.disabled = loading;
+                messageInput.disabled = loading;
+                micButton.disabled = loading || isRecording;
+                if (loading) {
+                    renderSuggestions([]);
+                    const thinkingHtml = `<div id="thinking-indicator" class="message flex items-end justify-start">
+                        <div class="avatar bg-[#0D47A1] w-10 h-10 rounded-full flex-shrink-0"></div>
+                        <div class="mx-3 message-content bg-blue-100 p-3 rounded-2xl rounded-bl-none flex space-x-1.5">
+                           <div class="dot w-2 h-2 bg-slate-400 rounded-full"></div>
+                           <div class="dot w-2 h-2 bg-slate-400 rounded-full"></div>
+                           <div class="dot w-2 h-2 bg-slate-400 rounded-full"></div>
+                        </div>
+                    </div>`;
+                    chatMessages.insertAdjacentHTML('beforeend', thinkingHtml);
+                    chatMessages.scrollTop = chatMessages.scrollHeight;
+                } else {
+                    document.getElementById('thinking-indicator')?.remove();
+                }
+            }
+
+            async function handleSendMessage() {
+                const message = messageInput.value.trim();
+                if (!message || isLoading) return;
+                if (userMessageCount >= MAX_MESSAGES) {
+                    showError("Has alcanzado el límite de mensajes para esta conversación.");
+                    return;
+                }
+                clearError();
+                appendMessage({ type: 'user', reply: message });
+                conversationHistory.push({ role: "user", parts: [{ text: message }] });
+                userMessageCount++;
+                messageInput.value = '';
+                toggleLoading(true);
+
+                if (userMessageCount >= MAX_MESSAGES) {
+                    nextLessonContainer.classList.remove('hidden');
+                    messageInput.placeholder = "Conversación finalizada.";
+                    messageInput.disabled = true;
+                    sendButton.disabled = true;
+                    micButton.disabled = true;
+                    await updateUserPoints(50);
+                }
+
+                try {
+                    const response = await fetch(EDGE_FUNCTION_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
+                        body: JSON.stringify({ history: conversationHistory })
+                    });
+                    if (!response.ok) throw new Error((await response.json()).error || 'Error del servidor');
+                    const data = await response.json();
+                    appendMessage({ type: 'ai', ...data });
+                    conversationHistory.push({ role: "model", parts: [{ text: data.reply }] });
+                    if (userMessageCount < MAX_MESSAGES) renderSuggestions(data.suggestions);
+                    speak(data.reply);
+                } catch (error) { 
+                    showError(error.message); 
+                    appendMessage({ type: 'ai', reply: "I'm sorry, I encountered an error. Please try again.", translation: "Lo siento, encontré un error. Por favor, inténtalo de nuevo."});
+                } 
+                finally { toggleLoading(false); }
+            }
+
+            // Event Listeners
+            sendButton.addEventListener('click', handleSendMessage);
+            messageInput.addEventListener('keypress', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } });
+            nextLessonBtn.addEventListener('click', advanceToNextGroup);
+            chatMessages.addEventListener('click', (e) => {
+                const speakButton = e.target.closest('.speak-btn');
+                if (speakButton && speakButton.dataset.text) {
+                    speak(speakButton.dataset.text);
+                }
+            });
+
+            // Initial Conversation
+            toggleLoading(true);
+            const initialHistory = [{ role: 'user', parts: [{ text: `Hello, start a simple conversation with me. My name is ${userProfile?.full_name || 'there'}. I am a beginner English learner. Introduce yourself as Lucía.` }] }];
+            try {
+                const response = await fetch(EDGE_FUNCTION_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
+                    body: JSON.stringify({ history: initialHistory })
+                });
+                if (!response.ok) throw new Error((await response.json()).error || 'Error al iniciar');
+                const data = await response.json();
+                appendMessage({ type: 'ai', ...data });
+                conversationHistory.push({ role: "model", parts: [{ text: data.reply }] });
+                renderSuggestions(data.suggestions);
+                speak(data.reply);
+            } catch (error) { showError(error.message); } 
+            finally {
+                toggleLoading(false);
+                messageInput.disabled = false;
+                sendButton.disabled = false;
+                micButton.disabled = false;
+                messageInput.placeholder = "Elige, escribe o habla...";
+            }
+        }
+        
+        async function advanceToNextGroup() {
+            appContainer.innerHTML = `<h2 class="text-2xl font-bold text-center">¡Felicidades!</h2><p class="text-center">Cargando el siguiente grupo de lecciones...</p>`;
+            const currentGroup = userProfile.flujo.currentGroup;
+            const newFlow = userProfile.flujo;
+            if (newFlow.flowState[currentGroup] && newFlow.flowState[currentGroup].flow4_conversation) {
+               newFlow.flowState[currentGroup].flow4_conversation.status = "completed";
+            }
+            const currentGroupNumber = parseInt(currentGroup.replace('G', ''));
+            const nextGroup = `G${currentGroupNumber + 1}`;
+            newFlow.currentGroup = nextGroup;
+            newFlow.currentFlow = 1;
+            if (!newFlow.flowState[nextGroup]) {
+                newFlow.flowState[nextGroup] = JSON.parse(JSON.stringify(newFlow.flowState['G1']));
+                Object.keys(newFlow.flowState[nextGroup]).forEach(flowKey => {
+                     newFlow.flowState[nextGroup][flowKey].status = "not_started";
+                });
+            }
+            await updateUserFlowState(newFlow);
+            window.location.reload();
+        }
+
         // --- 5. FUNCIONES AUXILIARES ---
         async function getNextWordForReview() {
-            const now = new Date().toISOString(), group = userProfile.flujo.currentGroup;
+            const now = new Date().toISOString(); 
+            const group = userProfile.flujo.currentGroup;
             const { data: review } = await dbClient.from('user_word_progress').select(`srs_level, palabras!inner(*)`).eq('user_id', currentUser.id).eq('palabras.grupo', group).lte('next_review_at', now).order('next_review_at').limit(1).single();
             if (review) return { ...review.palabras, srs_level: review.srs_level };
             const { data: seen } = await dbClient.from('user_word_progress').select('word_id').eq('user_id', currentUser.id);
@@ -342,7 +743,6 @@
 
         function addFlashcardEventListeners() {
             document.getElementById('pronounce-btn').addEventListener('click', () => {
-                document.getElementById('card-phonetic').classList.toggle('hidden');
                 if (currentWord && currentWord.audio) new Audio(currentWord.audio).play();
             });
             const handleResponse = async (isEasy) => {
@@ -369,7 +769,8 @@
              const newPoints = (userProfile.points || 0) + pointsToAdd;
              await dbClient.from('profiles').update({ points: newPoints }).eq('id', currentUser.id);
              userProfile.points = newPoints;
-             document.getElementById('user-points').textContent = newPoints;
+             const pointsEl = document.getElementById('user-points');
+             if(pointsEl) pointsEl.textContent = newPoints;
         }
 
         // --- 6. EJECUCIÓN INICIAL ---
@@ -379,27 +780,30 @@
             currentUser = session.user;
             await loadUserProfile();
             if (userProfile) {
-                document.getElementById('user-name-nav').textContent = userProfile.full_name || 'Mi Perfil';
-                document.getElementById('user-name-dropdown').textContent = userProfile.full_name || 'Sin nombre';
-                document.getElementById('user-email-dropdown').textContent = currentUser.email;
-                document.getElementById('user-points').textContent = userProfile.points || 0;
-                document.getElementById('user-lingots').textContent = userProfile.lingots || '0.00';
+                setTimeout(() => {
+                    const userNameNav = document.getElementById('user-name-nav');
+                    const userNameDropdown = document.getElementById('user-name-dropdown');
+                    const userEmailDropdown = document.getElementById('user-email-dropdown');
+                    const userPoints = document.getElementById('user-points');
+                    const userLingots = document.getElementById('user-lingots');
+                    const logoutBtn = document.getElementById('logout-btn');
+
+                    if(userNameNav) userNameNav.textContent = userProfile.full_name || 'Mi Perfil';
+                    if(userNameDropdown) userNameDropdown.textContent = userProfile.full_name || 'Sin nombre';
+                    if(userEmailDropdown) userEmailDropdown.textContent = currentUser.email;
+                    if(userPoints) userPoints.textContent = userProfile.points || 0;
+                    if(userLingots) userLingots.textContent = userProfile.lingots || '0.00';
+                    if(logoutBtn) logoutBtn.addEventListener('click', async () => {
+                        await dbClient.auth.signOut();
+                        window.location.href = 'index.html';
+                    });
+                }, 500);
+
                 await iniciarFlujoDeAprendizaje();
             }
-            const menuButton = document.getElementById('menu-button'), mobileMenu = document.getElementById('mobile-menu');
-            const profileMenuButton = document.getElementById('profile-menu-button'), profileMenuDropdown = document.getElementById('profile-menu-dropdown');
-            menuButton.addEventListener('click', e => { e.stopPropagation(); mobileMenu.classList.toggle('hidden'); });
-            profileMenuButton.addEventListener('click', e => { e.stopPropagation(); profileMenuDropdown.classList.toggle('hidden'); });
-            document.addEventListener('click', e => {
-                if (!mobileMenu.contains(e.target) && !menuButton.contains(e.target)) mobileMenu.classList.add('hidden');
-                if (!profileMenuDropdown.contains(e.target) && !profileMenuButton.contains(e.target)) profileMenuDropdown.classList.add('hidden');
-            });
-            document.getElementById('logout-btn').addEventListener('click', async () => {
-                await dbClient.auth.signOut();
-                window.location.href = 'index.html';
-            });
         });
     </script>
+    
     <script src="js/igual1.js"></script> 
 </body>
 </html>

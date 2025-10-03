@@ -62,6 +62,22 @@ navBarra.innerHTML=`
         <a href="soporte.html" class="nav-link text-center">Soporte</a>
     </div>
 `
+// Añadir event listeners para togglear los modales
+const menuButton = document.getElementById('menu-button');
+const mobileMenu = document.getElementById('mobile-menu');
+if (menuButton && mobileMenu) {
+    menuButton.addEventListener('click', () => {
+        mobileMenu.classList.toggle('hidden');
+    });
+}
+
+const profileButton = document.getElementById('profile-menu-button');
+const profileDropdown = document.getElementById('profile-menu-dropdown');
+if (profileButton && profileDropdown) {
+    profileButton.addEventListener('click', () => {
+        profileDropdown.classList.toggle('hidden');
+    });
+}
 
 // Opcional: Cerrar menús al hacer clic fuera (mejora de UX)
 document.addEventListener('click', (event) => {

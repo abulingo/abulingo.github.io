@@ -188,8 +188,8 @@
             if ('speechSynthesis' in window) {
                 window.speechSynthesis.cancel();
                 const utterance = new SpeechSynthesisUtterance(text);
-                utterance.lang = 'en-US'; // Cambiado a en-US para un acento más neutral y realista
-                utterance.rate = 0.9;
+                utterance.lang = 'en-GB';
+                utterance.rate = 0.7;
                 window.speechSynthesis.speak(utterance);
             }
         }
@@ -323,7 +323,7 @@
             if (SpeechRecognition) micButton.disabled = false;
             
             toggleLoading(true);
-            const initialHistory = [{ role: 'user', parts: [{ text: "You are Lucía, a friendly 28-year-old woman from Bogotá, Colombia. You have traveled extensively to Ecuador and love sharing interesting facts, cultural similarities and differences, foods like arepas from Colombia and ceviche from Ecuador, landmarks such as Cartagena and the Galapagos Islands, biodiversity like Colombia being #1 in bird species and Ecuador's proximity to the sun at Chimborazo, history involving Simón Bolívar uniting the regions, and daily life in both countries. Respond as a real person would in a casual conversation: use short sentences, emojis, slang if appropriate, laugh at jokes, share personal anecdotes, and always ask questions to engage the user. Use simple and easy English words, avoid hard or complex words. Keep the conversation in English, but focus topics on Colombia and Ecuador unless the user specifies otherwise. Start the conversation with a warm greeting and an interesting fact about one of the countries." }] }];
+            const initialHistory = [{ role: 'user', parts: [{ text: "Hello, please start the conversation." }] }];
             
             fetch(EDGE_FUNCTION_URL, {
                 method: 'POST',
