@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Abulingo - Flashcards</title>
+    
+    <link rel="preconnect" href="https://zdybpplggppjrmxhfhik.supabase.co" crossorigin>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://cdn.tailwindcss.com">
+
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Work+Sans:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" media="print" onload="this.media='all'"></link>
+    <link rel="stylesheet" href="style.css">   
+    <link rel="icon" href="icono.png" type="image/x-icon">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <style>
+        body { background-color: #f8fafc; font-family: 'Work Sans', sans-serif; }
+        .card-style { background-color: white; box-shadow: 0 10px 25px -5px rgb(0 0 0 / 0.05), 0 8px 10px -6px rgb(0 0 0 / 0.05); will-change: transform; }
+        .btn-primary { background-color: #FF7A00; color: white; }
+        .font-heading { font-family: 'Space Grotesk', sans-serif; }
+        
+        /* Optimización de animaciones usando GPU */
+        #points-hud {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            background: white;
+            padding: 10px 24px;
+            border-radius: 9999px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            border: 2px solid #f1f5f9;
+            font-family: 'Space Grotesk', sans-serif;
+            font-weight: bold;
+            font-size: 1.25rem;
+            color: #475569;
+            margin-bottom: 2rem;
+            transition: transform 0.2s;
+            will-change: transform;
+        }
+
+        @keyframes floatUpFade {
+            0% { opacity: 0; transform: translateY(10px) scale(0.8); }
+            20% { opacity: 1; transform: translateY(0px) scale(1.2); }
+            100% { opacity: 0; transform: translateY(-50px) scale(1); }
+        }
+
+        .points-floater {
+            position: absolute;
+            font-weight: 900;
+            font-size: 1.5rem;
+            color: #FF7A00;
+            text-shadow: 0 2px 4px rgba(255, 255, 255, 0.8);
+            pointer-events: none;
+            z-index: 100;
+            animation: floatUpFade 1.5s ease-out forwards;
+            will-change: transform, opacity; /* Ayuda al navegador a optimizar */
+        }
+
+        @keyframes pulse-gold {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.4); color: #eab308; }
+            100% { transform: scale(1); }
+        }
+
+        .animate-score-pulse { animation: pulse-gold 0.4s ease-in-out; }
+        .star-icon { color: #fbbf24; font-size: 1.5rem; }
+        
+        /* Clases utilitarias para evitar reflow */
+        .min-card-h { min-height: 500px; }
+    </style>
+</head>
+<body class="min-h-screen">
+
+    <div id="navBarra"></div>
+    
+    <audio id="success-sound" src="https://assets.mixkit.co/sfx/preview/mixkit-arcade-game-jump-coin-216.mp3" preload="metadata"></audio>
+
+    <main class="pt-24 pb-12 flex flex-col items-center min-h-screen">
+        
+        <div class="w-full flex justify-center h-20"> <div id="points-hud" class="hidden">
+                <i class="fas fa-star star-icon" id="hud-star"></i>
+                <span id="user-points-display">0</span>
+            </div>
+        </div>
+
+        <div id="app-container" class="w-full max-w-2xl mx-auto px-4 min-card-h flex flex-col justify-center">
+            <div class="text-center">
+                <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mb-4"></div>
+                <h1 class="text-3xl font-bold font-heading">Cargando Flashcards...</h1>
+                <p class="text-slate-600">Sincronizando con la nube.</p>
+            </div>
+        </div>
+    </main>
+
+    <script type="module">
+        // --- 1. CONFIGURACIÓN ---
+        const SUPABASE_URL = 'https://zdybpplggppjrmxhfhik.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpkeWJwcGxnZ3BwanJteGhmaGlrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTkxODY0MTcsImV4cCI6MjA3NDc2MjQxN30._1LRLhgIsNnc48Tj431F7xRWwHma0WCkc613ztmpjtU';
+
+        const { createClient } = supabase;
+        const dbClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        // --- CACHÉ DOM (Optimización JS) ---
+        const DOM = {
+            appContainer: document.getElementById('app-container'),
+            pointsHud: document.getElementById('points-hud'),
+            pointsDisplay: document.getElementById('user-points-display'),
+            hudStar: document.getElementById('hud-star'),
+            audio: document.getElementById('success-sound'),
+            body: document.body
+        };
+
+        let currentUser = null;
+        let userProfile = null;
+        let currentWord = null;
+
+        const srsIntervals = [600000, 86400000, 259200000, 604800000, 1209600000, 2592000000]; // Pre-calculados en ms
+
+        // --- 2. LÓGICA OPTIMIZADA ---
+
+        async function updateWordProgress(wordId, wasCorrect) {
+            if (!currentUser) return;
+            
+            // Optimización: Fetch optimista o paralelo si fuera posible, aquí mantenemos la lógica segura
+            const { data: progress } = await dbClient.from('user_word_progress')
+                .select('srs_level')
+                .eq('user_id', currentUser.id)
+                .eq('word_id', wordId)
+                .maybeSingle(); // maybeSingle es más rápido que single si puede no existir
+            
+            let newSrsLevel = progress ? progress.srs_level : 0;
+            newSrsLevel = wasCorrect ? newSrsLevel + 1 : 0;
+            
+            const interval = srsIntervals[Math.min(newSrsLevel, srsIntervals.length - 1)];
+            const next_review_at = new Date(Date.now() + interval).toISOString();
+            
+            const { error } = await dbClient.from('user_word_progress').upsert({ 
+                user_id: currentUser.id, 
+                word_id: wordId, 
+                srs_level: newSrsLevel, 
+                next_review_at: next_review_at 
+            }, { onConflict: 'user_id, word_id' });
+            
+            if (wasCorrect) updateUserPoints(5); // No usamos await para no bloquear la UI
+        }
+
+        function updateUserPoints(pointsToAdd) {
+            if (!userProfile) return;
+            
+            const newPoints = (userProfile.points || 0) + pointsToAdd;
+            userProfile.points = newPoints;
+            
+            // 1. Actualizar UI Inmediatamente (Optimistic UI update)
+            DOM.pointsDisplay.textContent = newPoints;
+            
+            // 2. Reproducir sonido
+            if(DOM.audio) {
+                DOM.audio.currentTime = 0;
+                DOM.audio.volume = 0.5;
+                DOM.audio.play().catch(() => {});
+            }
+
+            // 3. Animaciones
+            requestAnimationFrame(() => {
+                // Flotante
+                const floatingEl = document.createElement('div');
+                floatingEl.textContent = `+${pointsToAdd}`;
+                floatingEl.className = 'points-floater';
+                
+                const rect = DOM.pointsHud.getBoundingClientRect();
+                const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+                
+                floatingEl.style.left = `${rect.left + rect.width/2}px`;
+                floatingEl.style.top = `${rect.top + scrollTop}px`;
+                
+                DOM.body.appendChild(floatingEl);
+                setTimeout(() => floatingEl.remove(), 1500);
+
+                // Pulso
+                DOM.pointsDisplay.classList.remove('animate-score-pulse');
+                DOM.hudStar.classList.remove('animate-score-pulse');
+                void DOM.pointsDisplay.offsetWidth; // Force reflow
+                DOM.pointsDisplay.classList.add('animate-score-pulse');
+                DOM.hudStar.classList.add('animate-score-pulse');
+            });
+
+            // 4. Guardar en DB en segundo plano
+            dbClient.from('profiles').update({ points: newPoints }).eq('id', currentUser.id).then();
+        }
+
+        async function renderFlow1_Flashcards(lastWordId = null) {
+    // Pasamos el lastWordId para que la búsqueda lo ignore
+    const word = await getNextWordForReview(lastWordId);
+    
+    if (word) {
+        currentWord = word;
+        // Usamos requestAnimationFrame para renderizado fluido
+        requestAnimationFrame(() => {
+            const container = document.getElementById('app-container');
+            container.innerHTML = getFlashcardHTML(word);
+            container.style.opacity = '1'; // Aseguramos que sea visible
+            addFlashcardEventListeners();
+        });
+    } else {
+        document.getElementById('app-container').innerHTML = getCompletionHTML();
+        document.getElementById('btn-reload').addEventListener('click', () => window.location.reload());
+    }
+}
+        // --- GENERACIÓN DE HTML (Template Strings) ---
+        // Placeholder SVG base64 muy ligero para evitar una petición HTTP extra a via.placeholder
+        const placeholderImg = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 200'%3E%3Crect width='400' height='200' fill='%23e6f0ff'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='20' fill='%230d47a1'%3EAbulingo%3C/text%3E%3C/svg%3E";
+
+        function getFlashcardHTML(word) {
+            const imgSrc = word.imagen || placeholderImg;
+            
+            return `
+                <div id="flashcard-container" class="card-style w-full max-w-md mx-auto p-8 rounded-2xl text-center transition-all duration-300">
+                    <img id="card-image" 
+                         src="${imgSrc}" 
+                         alt="${word.ingles}" 
+                         class="rounded-lg mb-4 w-full object-cover h-48 bg-slate-100"
+                         loading="eager" 
+                         fetchpriority="high">
+                    
+                    <h1 class="text-5xl font-bold font-heading mb-1 text-slate-800">${word.ingles}</h1>
+                    <p class="text-xl text-slate-500 opacity-75 mb-4">${word.espanol}</p>
+                    <p id="card-phonetic" class="text-lg font-mono text-[#FF7A00] mb-4 hidden">${word.fonetica || ''}</p>
+                    
+                    <div class="flex justify-center space-x-4 mb-6">
+                        <button id="pronounce-btn" class="flex-1 bg-blue-50 text-blue-700 font-semibold py-3 rounded-xl hover:bg-blue-100 transition duration-200 flex items-center justify-center space-x-2 touch-manipulation">
+                            <i class="fas fa-volume-up"></i><span>Sonido</span>
+                        </button>
+                        <button id="phonetic-btn" class="flex-1 bg-blue-50 text-blue-700 font-semibold py-3 rounded-xl hover:bg-blue-100 transition duration-200 flex items-center justify-center space-x-2 touch-manipulation">
+                            <i class="fas fa-language"></i><span>Fonética</span>
+                        </button>
+                    </div>
+                    
+                    <div class="flex space-x-4">
+                        <button id="btn-easy" class="w-1/2 py-4 rounded-xl font-bold transition duration-200 text-green-700 bg-green-50 hover:bg-green-100 border border-green-200 touch-manipulation transform active:scale-95">Fácil</button>
+                        <button id="btn-hard" class="w-1/2 py-4 rounded-xl font-bold transition duration-200 text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 touch-manipulation transform active:scale-95">Difícil</button>
+                    </div>
+                </div>`;
+        }
+
+        function getCompletionHTML() {
+            return `
+                <div class="text-center card-style w-full max-w-md mx-auto p-8 rounded-2xl animate-fade-in">
+                    <div class="mb-6 text-6xl animate-bounce">🎉</div>
+                    <h2 class="text-2xl font-bold font-heading mb-4">¡Estás al día!</h2>
+                    <p class="text-slate-600 mb-8">Has repasado todas las palabras de este grupo.</p>
+                    <button id="btn-reload" class="w-full btn-primary py-4 rounded-xl font-bold text-lg shadow-lg hover:opacity-90 transition transform hover:scale-105">
+                        <i class="fas fa-sync-alt ml-2"></i> Volver a comprobar
+                    </button>
+                </div>`;
+        }
+function addFlashcardEventListeners() {
+    // Eventos de sonido y fonética (sin cambios)
+    const btnPronounce = document.getElementById('pronounce-btn');
+    if(btnPronounce) btnPronounce.onclick = () => {
+        if (currentWord && currentWord.audio) new Audio(currentWord.audio).play();
+    };
+    
+    const btnPhonetic = document.getElementById('phonetic-btn');
+    if(btnPhonetic) btnPhonetic.onclick = () => {
+        document.getElementById('card-phonetic').classList.remove('hidden'); 
+    };
+    
+    // Lógica de respuesta OPTIMIZADA
+    const handleResponse = async (isEasy) => {
+        const currentId = currentWord.id; // Guardamos el ID antes de cambiar nada
+
+        // 1. FEEDBACK VISUAL INMEDIATO:
+        // Bloqueamos todos los botones para evitar doble clic
+        const allBtns = document.querySelectorAll('button');
+        allBtns.forEach(btn => btn.disabled = true);
+        
+        // Bajamos opacidad para indicar "cargando"
+        const cardContainer = document.getElementById('flashcard-container');
+        if(cardContainer) cardContainer.style.opacity = '0.4';
+
+        // 2. PROCESO EN PARALELO (Opcional, pero recomendado para velocidad)
+        // Lanzamos la actualización a la DB pero NO esperamos a que termine para pedir la siguiente carta
+        // Esto hace que la UI se sienta instantánea.
+        const updatePromise = updateWordProgress(currentId, isEasy);
+        
+        // 3. CARGAMOS LA SIGUIENTE
+        // Pasamos currentId para que renderFlow1 sepa que NO debe traer esa carta
+        await renderFlow1_Flashcards(currentId);
+        
+        // Nos aseguramos que la DB se actualice en background
+        await updatePromise;
+    };
+    
+    const btnEasy = document.getElementById('btn-easy');
+    const btnHard = document.getElementById('btn-hard');
+
+    if(btnEasy) btnEasy.onclick = () => handleResponse(true);
+    if(btnHard) btnHard.onclick = () => handleResponse(false);
+}
+        // --- 3. QUERIES DE DATOS (Optimizadas) ---
+        // Buscamos la función y la reemplazamos por esta versión mejorada:
+async function getNextWordForReview(excludeId = null) {
+    const now = new Date().toISOString(); 
+    const group = userProfile.flujo.currentGroup;
+    
+    // 1. Buscar repasos pendientes
+    let queryReview = dbClient.from('user_word_progress')
+        .select(`srs_level, palabras!inner(*)`)
+        .eq('user_id', currentUser.id)
+        .eq('palabras.grupo', group)
+        .lte('next_review_at', now)
+        .order('next_review_at')
+        .limit(1);
+
+    // FIX: Si tenemos un ID para excluir, lo quitamos de la búsqueda
+    if (excludeId) {
+        queryReview = queryReview.neq('word_id', excludeId);
+    }
+    
+    const { data: review } = await queryReview.maybeSingle();
+    
+    if (review) return { ...review.palabras, srs_level: review.srs_level };
+    
+    // 2. Si no hay repasos, buscar palabras nuevas
+    const { data: seen } = await dbClient.from('user_word_progress').select('word_id').eq('user_id', currentUser.id);
+    const seenIds = seen ? seen.map(w => w.word_id) : [];
+    
+    // Agregamos el excludeId a la lista de "vistos" localmente para esta consulta
+    if (excludeId && !seenIds.includes(excludeId)) {
+        seenIds.push(excludeId);
+    }
+    
+    let queryNew = dbClient.from('palabras').select('*').eq('grupo', group);
+    
+    if (seenIds.length > 0) {
+        // Usamos not.in para excluir todos los vistos + el actual
+        queryNew = queryNew.not('id', 'in', `(${seenIds.join(',')})`);
+    }
+    
+    const { data: newWord } = await queryNew.order('id').limit(1).maybeSingle();
+    
+    return newWord ? { ...newWord, srs_level: 0 } : null;
+}
+        async function initApp() {
+            // Verificar sesión
+            const { data: { session } } = await dbClient.auth.getSession();
+            if (!session) { window.location.href = 'index.html'; return; }
+            
+            currentUser = session.user;
+
+            // PARALELIZACIÓN: Cargar Perfil y Datos Iniciales al mismo tiempo
+            // No esperamos al perfil para cargar la UI si es posible, pero aquí lo necesitamos para el Grupo
+            const profilePromise = dbClient.from('profiles').select('*').eq('id', currentUser.id).single();
+            
+            const [profileResult] = await Promise.all([profilePromise]);
+            
+            if (profileResult.error) {
+                console.error("Error perfil", profileResult.error);
+                return;
+            }
+
+            userProfile = profileResult.data;
+
+            // Actualizar HUD inmediatamente
+            DOM.pointsHud.classList.remove('hidden');
+            DOM.pointsDisplay.textContent = userProfile.points || 0;
+            const userNameNav = document.getElementById('user-name-nav');
+            if(userNameNav) userNameNav.textContent = userProfile.full_name || 'Estudiante';
+
+            // Iniciar flujo
+            await renderFlow1_Flashcards();
+        }
+
+        // Ejecutar inmediatamente al cargar
+        initApp();
+
+    </script>
+    
+    <script src="js/igual1.js" defer></script> 
+</body>
+</html>
