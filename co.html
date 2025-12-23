@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Abulingo - Match Game</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+
+    <style>
+        body { background-color: #f0f9ff; font-family: 'Space Grotesk', sans-serif; }
+        .card-style { background-color: white; box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.1); }
+        
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+        .animate-shake { animation: shake 0.3s ease-in-out; }
+        
+        @keyframes pop {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        .animate-pop { animation: pop 0.2s ease-in-out; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-center p-4">
+
+    <div class="absolute top-6 right-6 bg-white px-6 py-2 rounded-full shadow-md border border-slate-100 flex items-center gap-2">
+        <i class="fas fa-star text-yellow-400"></i>
+        <span id="score-display" class="font-bold text-slate-700 text-xl">0</span>
+    </div>
+
+    <main id="app-container" class="w-full max-w-md">
+        <div class="text-center">
+            <h1 class="text-3xl font-bold text-slate-700 animate-pulse">Cargando palabras...</h1>
+        </div>
+    </main>
+
+    <script type="module">
+        // --- 1. CONFIGURACIÓN ---
+        const SUPABASE_URL = 'https://zdybpplggppjrmxhfhik.supabase.co';
+        // Tu clave anónima
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpkeWJwcGxnZ3BwanJteGhmaGlrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTkxODY0MTcsImV4cCI6MjA3NDc2MjQxN30._1LRLhgIsNnc48Tj431F7xRWwHma0WCkc613ztmpjtU';
+
+        const { createClient } = supabase;
+        const dbClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        let wordsCache = []; 
+        let currentScore = 0;
+        let isProcessing = false;
+
+        // --- 2. LÓGICA DEL JUEGO ---
+
+        async function initGame() {
+            // Traemos todas las columnas (*) así que 'espanol' ya viene incluido
+            const { data, error } = await dbClient.from('palabras').select('*').limit(50);
+
+            if (error || !data || data.length < 2) {
+                document.getElementById('app-container').innerHTML = `
+                    <div class="text-center p-6 bg-red-100 rounded-xl text-red-700">
+                        <p>Error: Se necesitan datos en la tabla 'palabras'.</p>
+                    </div>`;
+                return;
+            }
+            wordsCache = data;
+            renderRound();
+        }
+
+        function renderRound() {
+            const container = document.getElementById('app-container');
+            isProcessing = false;
+
+            // Selección de datos
+            const targetWord = wordsCache[Math.floor(Math.random() * wordsCache.length)];
+            const shouldMatch = Math.random() > 0.5;
+            
+            let imageToShow;
+            if (shouldMatch) {
+                imageToShow = targetWord.imagen;
+            } else {
+                const distractor = wordsCache.filter(w => w.id !== targetWord.id);
+                const randomDistractor = distractor[Math.floor(Math.random() * distractor.length)];
+                imageToShow = randomDistractor.imagen;
+            }
+
+            // Renderizado HTML
+            container.innerHTML = `
+                <div class="card-style w-full p-6 rounded-3xl text-center border border-slate-100">
+                    
+                    <div class="w-full h-64 bg-slate-50 rounded-2xl mb-6 overflow-hidden flex items-center justify-center border-2 border-slate-100 relative">
+                        <img src="${imageToShow}" class="w-full h-full object-contain p-2" alt="Puzzle Image">
+                    </div>
+
+                    <h2 class="text-sm text-slate-400 uppercase tracking-widest font-bold mb-1">¿Es esto...?</h2>
+                    
+                    <h1 class="text-5xl font-bold text-blue-600 mb-2">${targetWord.ingles}</h1>
+                    
+                    <p class="text-2xl text-slate-500 font-medium mb-8">
+                        ${targetWord.espanol}
+                    </p>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <button id="btn-no" class="py-4 px-6 rounded-xl bg-red-100 text-red-600 font-bold text-xl hover:bg-red-200 transition border-b-4 border-red-200 active:border-b-0 active:translate-y-1">
+                            <i class="fas fa-times mr-2"></i> NO
+                        </button>
+                        <button id="btn-yes" class="py-4 px-6 rounded-xl bg-green-100 text-green-600 font-bold text-xl hover:bg-green-200 transition border-b-4 border-green-200 active:border-b-0 active:translate-y-1">
+                            <i class="fas fa-check mr-2"></i> COINCIDE
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            // Listeners
+            document.getElementById('btn-yes').onclick = () => handleAnswer(true, shouldMatch, targetWord.ingles);
+            document.getElementById('btn-no').onclick = () => handleAnswer(false, shouldMatch, targetWord.ingles);
+        }
+
+        async function handleAnswer(userSaidYes, actuallyMatches, wordEnglish) {
+            if (isProcessing) return;
+            isProcessing = true;
+
+            const isCorrect = (userSaidYes === actuallyMatches);
+            const card = document.querySelector('.card-style');
+            const scoreDisplay = document.getElementById('score-display');
+            
+            const opcionTexto = userSaidYes ? "Coincide" : "No";
+
+            // Guardar en Supabase
+            dbClient.from('historial_juego').insert({
+                palabra: wordEnglish,
+                opcion_elegida: opcionTexto,
+                es_correcto: isCorrect
+            }).then(({ error }) => {
+                if(error) console.error("Error guardando historial:", error);
+            });
+
+            // Feedback Visual
+            if (isCorrect) {
+                card.classList.add('animate-pop', 'border-green-400', 'border-2');
+                card.style.backgroundColor = "#f0fdf4"; 
+                currentScore += 10;
+            } else {
+                card.classList.add('animate-shake', 'border-red-400', 'border-2');
+                card.style.backgroundColor = "#fef2f2"; 
+            }
+
+            scoreDisplay.innerText = currentScore;
+
+            setTimeout(() => {
+                renderRound();
+            }, 800);
+        }
+
+        document.addEventListener('DOMContentLoaded', initGame);
+
+    </script>
+</body>
+</html>
