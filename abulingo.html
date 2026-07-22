@@ -4,658 +4,1093 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Abulingo - Aprende Inglés</title>
-   
+
   <!-- Librerías -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Efecto Confeti -->
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
-  
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Work+Sans:wght@400;600;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-  <link rel="stylesheet" href="style.css">  
+  <link rel="stylesheet" href="style.css">
   <link rel="icon" href="icono.png" type="image/x-icon">
 
   <style>
-    /* Estilos Generales */
     .pt-20 { padding-top: 5rem !important; }
     body { background-color: #f0f4f8; font-family: 'Work Sans', sans-serif; overflow-x: hidden; }
     .font-heading { font-family: 'Space Grotesk', sans-serif; }
-    
-    /* --- Estilos Dopamina (Juicy Design) --- */
+
+    /* --- Diseño "Juicy" --- */
     .card-3d {
-      background: white; 
+      background: white;
       border-radius: 24px;
-      box-shadow: 0 10px 0 #cbd5e1, 0 10px 20px rgba(0,0,0,0.1); /* Sombra sólida para efecto 3D */
+      box-shadow: 0 10px 0 #cbd5e1, 0 10px 20px rgba(0,0,0,0.1);
       transition: transform 0.2s, box-shadow 0.2s;
       border: 2px solid #e2e8f0;
       position: relative;
       top: 0;
     }
-    
-    /* Botones que se hunden al hacer click */
-    .btn-juice {
-      transition: all 0.1s; 
-      border-bottom: 6px solid rgba(0,0,0,0.2);
-      transform: translateY(0);
-    }
-    .btn-juice:active { 
-      transform: translateY(6px); 
-      border-bottom-width: 0; 
-      box-shadow: inset 0 6px 10px rgba(0,0,0,0.2);
-    }
+    .btn-juice { transition: all 0.1s; border-bottom: 6px solid rgba(0,0,0,0.2); transform: translateY(0); }
+    .btn-juice:active { transform: translateY(6px); border-bottom-width: 0; box-shadow: inset 0 6px 10px rgba(0,0,0,0.2); }
 
-    /* Barra de Progreso */
-    .progress-track { background: #e2e8f0; height: 14px; border-radius: 99px; overflow: hidden; margin-top: 4px; }
+    .progress-track { background: #e2e8f0; height: 10px; border-radius: 99px; overflow: hidden; margin-top: 2px; }
     .progress-fill { background: linear-gradient(90deg, #FF7A00, #ffaa00); height: 100%; width: 0%; transition: width 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); }
 
-    /* Animaciones */
     @keyframes popIn { 0% { transform: scale(0.9); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
     .animate-pop { animation: popIn 0.4s ease-out forwards; }
-    
+
     @keyframes floatPoints { 0% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(-80px) scale(1.5); } }
     .floating-points { position: absolute; color: #fbbf24; font-weight: 900; font-size: 2.5rem; z-index: 100; animation: floatPoints 1s ease-out forwards; pointer-events: none; text-shadow: 0 4px 0 rgba(0,0,0,0.1); }
 
     .wrong-shake { animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both; }
     @keyframes shake { 10%, 90% { transform: translate3d(-2px, 0, 0); } 20%, 80% { transform: translate3d(4px, 0, 0); } 30%, 50%, 70% { transform: translate3d(-8px, 0, 0); } 40%, 60% { transform: translate3d(8px, 0, 0); } }
+
+    /* Modal genérico */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(15,23,42,0.55); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; padding: 1rem; z-index: 200; }
+
+    /* Barra de herramientas superior */
+    .tool-btn { transition: transform 0.15s; min-width: 44px; }
+    .tool-btn:active { transform: scale(0.90); }
   </style>
 </head>
 <body class="min-h-screen flex flex-col">
 
-  <!-- BARRA DE NAVEGACIÓN ORIGINAL -->
-  <div id="navBarra" class="z-50 relative"></div>
+  <!-- BARRA SUPERIOR: logo · herramientas · club · perfil -->
+  <header id="top-bar" class="fixed top-0 left-0 w-full bg-white/95 backdrop-blur border-b border-slate-200 z-50">
+    <div class="max-w-3xl mx-auto flex items-center gap-1 px-3 h-14">
+      <!-- Logo -->
+      <a href="abulingo.html" class="font-heading font-bold text-lg sm:text-2xl shrink-0 mr-1 leading-none">Abulingo<span style="color:#FF7A00;">.</span></a>
 
-  <!-- HUD DE DOPAMINA (Debajo del navbar) -->
-  <div class="w-full max-w-2xl mx-auto px-4 pt-24 pb-4 flex items-center justify-between gap-4">
-    <!-- Puntos -->
-    <div class="flex items-center gap-2 bg-white px-4 py-2 rounded-2xl shadow-sm border border-slate-200">
-      <i class="fas fa-star text-yellow-400 text-xl animate-pulse"></i>
-      <span id="user-points-display" class="font-black text-slate-700 text-xl">0</span>
+      <!-- Herramientas -->
+      <nav class="flex-1 flex items-center justify-around gap-0.5">
+        <button data-tool="gramatica" class="tool-btn flex flex-col items-center justify-center px-2 py-1 rounded-lg text-slate-500 hover:bg-slate-100">
+          <i class="fas fa-book text-base"></i><span class="hidden md:block text-[10px] font-bold leading-tight mt-0.5">Gramática</span>
+        </button>
+        <button data-tool="pronunciacion" class="tool-btn flex flex-col items-center justify-center px-2 py-1 rounded-lg text-slate-500 hover:bg-slate-100">
+          <i class="fas fa-microphone-lines text-base"></i><span class="hidden md:block text-[10px] font-bold leading-tight mt-0.5">Pronunciación</span>
+        </button>
+        <button data-tool="club" class="tool-btn flex flex-col items-center justify-center px-2 py-1 rounded-lg text-slate-500 hover:bg-slate-100">
+          <i class="fas fa-users text-base"></i><span class="hidden md:block text-[10px] font-bold leading-tight mt-0.5">Club</span>
+        </button>
+        <button data-tool="traductor" class="tool-btn flex flex-col items-center justify-center px-2 py-1 rounded-lg text-slate-500 hover:bg-slate-100">
+          <i class="fas fa-language text-base"></i><span class="hidden md:block text-[10px] font-bold leading-tight mt-0.5">Traductor</span>
+        </button>
+        <button data-tool="ia" class="tool-btn flex flex-col items-center justify-center px-2 py-1 rounded-lg text-white bg-gradient-to-br from-[#FF7A00] to-orange-600 shadow">
+          <i class="fas fa-robot text-base"></i><span class="hidden md:block text-[10px] font-bold leading-tight mt-0.5">Hablar IA</span>
+        </button>
+      </nav>
+
+      <!-- Perfil -->
+      <div class="relative shrink-0">
+        <button id="profile-menu-button" class="block rounded-full ring-2 ring-transparent hover:ring-[#FF7A00] transition">
+          <img id="user-avatar" src="icono.png" alt="Perfil" class="w-9 h-9 rounded-full object-cover bg-slate-100">
+        </button>
+        <div id="profile-menu-dropdown" class="hidden absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-xl border border-slate-200 z-50 overflow-hidden">
+          <div class="p-4 border-b">
+            <h3 id="user-name-dropdown" class="font-bold text-slate-800">Cargando...</h3>
+            <p id="user-email-dropdown" class="text-sm text-slate-500 truncate">...</p>
+          </div>
+          <div class="py-2 max-h-80 overflow-y-auto">
+            <div class="flex items-center px-4 py-2 text-slate-700"><i class="fas fa-star w-6 text-yellow-500"></i><span><span id="user-points" class="font-bold">0</span> Puntos</span></div>
+            <div class="flex items-center px-4 py-2 text-slate-700"><i class="fas fa-coins w-6 text-yellow-600"></i><span><span id="user-lingots" class="font-bold">0</span> Lingots</span></div>
+            <a href="#" class="flex items-center px-4 py-2 text-slate-700 hover:bg-slate-100"><i class="fas fa-globe w-6 text-slate-500"></i><span>Ranking Global</span></a>
+            <a href="#" class="flex items-center px-4 py-2 text-slate-700 hover:bg-slate-100"><i class="fas fa-people-group w-6 text-slate-500"></i><span>Ranking Equipo</span></a>
+            <a href="#" class="flex items-center px-4 py-2 text-slate-700 hover:bg-slate-100"><i class="fas fa-signal w-6 text-slate-500"></i><span>Nivel</span></a>
+            <a href="#" class="flex items-center px-4 py-2 text-slate-700 hover:bg-slate-100"><i class="fas fa-chart-line w-6 text-slate-500"></i><span>Progreso nivel</span></a>
+            <a href="#" class="flex items-center px-4 py-2 text-slate-700 hover:bg-slate-100"><i class="fas fa-layer-group w-6 text-slate-500"></i><span>Mazo</span></a>
+            <a href="soporte.html" class="flex items-center px-4 py-2 text-slate-700 hover:bg-slate-100"><i class="fas fa-headset w-6 text-slate-500"></i><span>Soporte</span></a>
+            <a href="#" class="flex items-center px-4 py-2 text-slate-700 hover:bg-slate-100"><i class="fas fa-key w-6 text-slate-500"></i><span>Cambiar Contraseña</span></a>
+          </div>
+          <div class="py-2 border-t"><button id="logout-btn" class="w-full text-left flex items-center px-4 py-2 text-red-600 hover:bg-red-50"><i class="fas fa-sign-out-alt w-6"></i><span>Cerrar Sesión</span></button></div>
+        </div>
+      </div>
     </div>
-    
-    <!-- Barra de Progreso de la Sesión -->
-    <div class="flex-1">
-      <div class="flex justify-between text-xs font-bold text-slate-400 mb-1">
+  </header>
+
+  <!-- HUD (compacto) -->
+  <div class="w-full max-w-2xl mx-auto px-3 pt-16 pb-2 flex items-center justify-between gap-2">
+    <div class="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-xl shadow-sm border border-slate-200">
+      <i class="fas fa-star text-yellow-400 text-base"></i>
+      <span id="user-points-display" class="font-black text-slate-700 text-base">0</span>
+    </div>
+
+    <button id="nivel-btn" class="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-xl shadow-sm border border-slate-200 hover:border-[#FF7A00] transition">
+      <span class="text-[10px] font-bold text-slate-400 uppercase">Nivel</span>
+      <span id="nivel-label" class="font-black text-[#FF7A00] text-sm">A1</span>
+      <i class="fas fa-chevron-down text-slate-400 text-[10px]"></i>
+    </button>
+
+    <div class="flex-1 min-w-[80px]">
+      <div class="flex justify-between text-[10px] font-bold text-slate-400 mb-0.5">
         <span>PROGRESO</span>
         <span id="progress-text">0%</span>
       </div>
-      <div class="progress-track">
-        <div id="main-progress" class="progress-fill"></div>
-      </div>
+      <div class="progress-track"><div id="main-progress" class="progress-fill"></div></div>
     </div>
   </div>
 
-  <!-- Efectos de Sonido (Precarga) -->
+  <!-- Efectos de Sonido -->
   <audio id="snd-correct" src="https://assets.mixkit.co/sfx/preview/mixkit-unlock-game-notification-253.mp3"></audio>
   <audio id="snd-wrong" src="https://assets.mixkit.co/sfx/preview/mixkit-wrong-answer-fail-notification-940.mp3"></audio>
   <audio id="snd-complete" src="https://assets.mixkit.co/sfx/preview/mixkit-winning-chimes-2015.mp3"></audio>
 
   <!-- Contenedor Principal -->
-  <main id="app-container" class="w-full max-w-lg mx-auto px-4 flex-1 flex flex-col justify-start pb-10">
+  <main id="app-container" class="w-full max-w-lg mx-auto px-4 flex-1 flex flex-col justify-start pb-8">
     <div class="text-center animate-pulse mt-10">
       <h1 class="text-3xl font-heading font-bold text-slate-400">Cargando experiencia...</h1>
       <i class="fas fa-circle-notch fa-spin text-4xl text-[#FF7A00] mt-4"></i>
     </div>
   </main>
 
+  <!-- Raíz de modales -->
+  <div id="modal-root"></div>
+
 <script type="module">
-    // --- 1. CONFIGURACIÓN ---
-    const SUPABASE_URL = 'https://zdybpplggppjrmxhfhik.supabase.co';
-    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpkeWJwcGxnZ3BwanJteGhmaGlrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTkxODY0MTcsImV4cCI6MjA3NDc2MjQxN30._1LRLhgIsNnc48Tj431F7xRWwHma0WCkc613ztmpjtU';
+  /* ============================================================
+     1. CONFIGURACIÓN Y ESTADO
+  ============================================================ */
+  const SUPABASE_URL = 'https://eylwewhqeaaqkgcxhgyv.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV5bHdld2hxZWFhcWtnY3hoZ3l2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQzMzAxODgsImV4cCI6MjA5OTkwNjE4OH0.Ji8huj-ny2VcMT5UQSjOuwUKz4k23quNS0fLk-gZr7A';
 
-    const { createClient } = supabase;
-    const dbClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  // Enlace para la conversión a Pro (mismo que usa la landing)
+  const PRO_UPGRADE_URL = 'https://wa.me/573163748711';
 
-    let currentUser = null, userProfile = null, currentWord = null;
-    let reviewQueue = []; 
-    
-    const appContainer = document.getElementById('app-container');
+  // Algoritmo de memorización espaciada (tipo SM-2 simplificado)
+  const SRS_INTERVALS_DAYS = [0.007, 1, 2, 4, 8, 15, 30, 60]; // días por nivel de SRS
+  const EASE_DEFAULT = 2.5, EASE_MIN = 1.3, EASE_MAX = 3.0;
+  const CEFR_ORDER = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
+  const NIVELES_FIJOS = ['A1', 'A2', 'B1', 'B2']; // siempre visibles en el selector
 
-    // --- 2. SISTEMA DE MEMORIA ESPACIADA (SRS) ---
-    async function updateSRS(wordId, action) {
-      // action: 'easy' (+1), 'hard' (-1), 'practice_correct' (+0.5), 'practice_wrong' (-0.5)
-      
-      const { data: progress } = await dbClient
-        .from('user_word_progress')
-        .select('*')
-        .eq('user_id', currentUser.id)
-        .eq('word_id', wordId)
-        .maybeSingle();
+  const ENCOURAGEMENTS = [
+    { icon: '🚀', title: '¡Vas muy bien!', msg: 'Tu memoria se está fortaleciendo. Sigue así.' },
+    { icon: '🔥', title: '¡Racha encendida!', msg: 'Cada acierto fija mejor las palabras en tu mente.' },
+    { icon: '💪', title: '¡Imparable!', msg: 'Estás aprendiendo de forma efectiva. ¡No pares!' },
+    { icon: '🌟', title: '¡Excelente trabajo!', msg: 'Vas por muy buen camino, sigue sumando.' }
+  ];
 
-      let currentEase = progress ? parseFloat(progress.ease_factor) : 2.5;
-      let srsLevel = progress ? progress.srs_level : 0;
-      
-      // Lógica solicitada: +/- 0.5 en práctica
-      let modifier = 0;
-      if (action === 'easy') modifier = 1;
-      else if (action === 'hard') modifier = -1;
-      else if (action === 'practice_correct') modifier = 0.5;
-      else if (action === 'practice_wrong') modifier = -0.5;
+  const { createClient } = supabase;
+  const dbClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-      let newEase = currentEase + modifier;
-      // Evitar que el factor baje demasiado (opcional, pero recomendado min 1.3)
-      if (newEase < 1.3) newEase = 1.3; 
+  let currentUser = null;
+  let userProfile = null;
+  let flujo = null; // atajo a userProfile.flujo
 
-      // Próxima revisión en 3 días
-      const nextReviewDate = new Date();
-      nextReviewDate.setDate(nextReviewDate.getDate() + 3);
+  let sessionStreak = 0;      // racha de aciertos de la sesión (influye en SRS y puntos)
+  let sessionCorrect = 0;     // aciertos totales de la sesión (para mensajes de ánimo)
+  let lastMilestone = 0;
 
-      const upsertData = {
-        user_id: currentUser.id,
-        word_id: wordId,
-        ease_factor: newEase,
-        srs_level: srsLevel + 1,
-        next_review_at: nextReviewDate.toISOString()
-      };
+  // Caché de palabras del grupo actual
+  let groupCache = { key: null, list: [], map: {} };
+  // Sesión de repaso SRS transitoria
+  let srsSession = null;
+  // Sesión de repaso inicial (flashcards)
+  let reviewList = [];
 
-      const { error } = await dbClient.from('user_word_progress').upsert(upsertData, { onConflict: 'user_id, word_id' });
-      
-      if (error) console.error("Error SRS:", error);
+  const appContainer = document.getElementById('app-container');
+  const toolsBar = document.getElementById('top-bar');
 
-      // Feedback visual
-      if (modifier > 0) {
-        let pts = (action === 'easy') ? 10 : 5;
-        triggerDopamine(true, pts);
-      } else {
-        triggerDopamine(false);
-      }
+  /* ============================================================
+     2. UTILIDADES GENERALES
+  ============================================================ */
+  const norm = (s) => (s || '').toString().trim().toLowerCase().replace(/[.,!?;:'"]/g, '');
+
+  function sortNiveles(arr) {
+    return [...arr].sort((a, b) => {
+      const ia = CEFR_ORDER.indexOf(a), ib = CEFR_ORDER.indexOf(b);
+      return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib) || String(a).localeCompare(String(b));
+    });
+  }
+  function sortGroups(arr) {
+    return [...arr].sort((a, b) => {
+      const na = parseInt(String(a).replace(/\D/g, '')), nb = parseInt(String(b).replace(/\D/g, ''));
+      if (!isNaN(na) && !isNaN(nb) && na !== nb) return na - nb;
+      return String(a).localeCompare(String(b));
+    });
+  }
+
+  function playSound(type) {
+    const id = type === 'correct' ? 'snd-correct' : (type === 'wrong' ? 'snd-wrong' : 'snd-complete');
+    const el = document.getElementById(id);
+    if (el) { el.currentTime = 0; el.play().catch(() => {}); }
+  }
+
+  // Reproduce el audio de la palabra; si no hay, usa síntesis de voz.
+  window.playWordAudio = (word) => {
+    if (word && word.audio) { new Audio(word.audio).play().catch(() => speak(word.ingles)); }
+    else if (word) { speak(word.ingles); }
+  };
+  window.playAudioUrl = (url) => { if (url) new Audio(url).play().catch(() => {}); };
+
+  // Síntesis de voz (Text-to-Speech) en inglés
+  let ttsVoices = [];
+  function loadVoices() { ttsVoices = window.speechSynthesis ? window.speechSynthesis.getVoices() : []; }
+  if (window.speechSynthesis) {
+    loadVoices();
+    window.speechSynthesis.onvoiceschanged = loadVoices;
+  }
+  function pickEnglishVoice() {
+    if (!ttsVoices.length) loadVoices();
+    return ttsVoices.find(v => /en[-_]US/i.test(v.lang)) || ttsVoices.find(v => /^en/i.test(v.lang)) || null;
+  }
+  function speak(text, onend) {
+    if (!window.speechSynthesis) { if (onend) onend(); return; }
+    const u = new SpeechSynthesisUtterance(text);
+    const v = pickEnglishVoice();
+    if (v) u.voice = v;
+    u.lang = 'en-US'; u.rate = 0.95;
+    if (onend) u.onend = onend;
+    window.speechSynthesis.speak(u);
+  }
+  function stopSpeaking() { if (window.speechSynthesis) window.speechSynthesis.cancel(); }
+
+  function triggerConfetti() {
+    if (window.confetti) confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 }, colors: ['#FF7A00', '#3b82f6', '#fbbf24'] });
+  }
+  function floatPoints(points) {
+    const float = document.createElement('div');
+    float.textContent = `+${points}`;
+    float.className = 'floating-points';
+    float.style.left = '50%'; float.style.top = '25%';
+    document.body.appendChild(float);
+    setTimeout(() => float.remove(), 1000);
+  }
+
+  function updateProgressBar(pct) {
+    document.getElementById('main-progress').style.width = `${Math.max(0, Math.min(100, pct))}%`;
+    document.getElementById('progress-text').textContent = `${Math.round(Math.max(0, Math.min(100, pct)))}%`;
+  }
+
+  /* ============================================================
+     3. MODALES
+  ============================================================ */
+  const modalRoot = document.getElementById('modal-root');
+
+  function closeModal() { modalRoot.innerHTML = ''; stopSpeaking(); }
+
+  // actions: [{ label, onClick, style }]
+  function showModal({ icon, title, body, actions = [], dismissable = true, size = 'md' }) {
+    const maxW = size === 'lg' ? 'max-w-lg' : 'max-w-sm';
+    const actionsHTML = actions.map((a, i) =>
+      `<button data-idx="${i}" class="modal-action w-full btn-juice ${a.style || 'bg-[#FF7A00] text-white'} font-bold py-3 rounded-xl text-lg">${a.label}</button>`
+    ).join('');
+
+    modalRoot.innerHTML = `
+      <div class="modal-overlay">
+        <div class="card-3d ${maxW} w-full p-7 text-center animate-pop relative">
+          ${dismissable ? '<button id="modal-close" class="absolute top-3 right-4 text-slate-300 hover:text-slate-500 text-2xl">&times;</button>' : ''}
+          ${icon ? `<div class="text-6xl mb-3">${icon}</div>` : ''}
+          ${title ? `<h2 class="text-2xl font-heading font-bold text-slate-800 mb-2">${title}</h2>` : ''}
+          <div class="text-slate-500 mb-6">${body || ''}</div>
+          <div class="space-y-3">${actionsHTML}</div>
+        </div>
+      </div>`;
+
+    if (dismissable) {
+      document.getElementById('modal-close').onclick = closeModal;
+      modalRoot.querySelector('.modal-overlay').addEventListener('click', (e) => {
+        if (e.target.classList.contains('modal-overlay')) closeModal();
+      });
+    }
+    actions.forEach((a, i) => {
+      const btn = modalRoot.querySelector(`.modal-action[data-idx="${i}"]`);
+      if (btn) btn.onclick = () => { if (a.onClick) a.onClick(); };
+    });
+  }
+
+  function showEncouragement(next) {
+    const e = ENCOURAGEMENTS[Math.floor(Math.random() * ENCOURAGEMENTS.length)];
+    playSound('complete'); triggerConfetti();
+    showModal({
+      icon: e.icon, title: e.title, body: e.msg, dismissable: false,
+      actions: [{ label: '¡Seguir! 💥', onClick: () => { closeModal(); next(); } }]
+    });
+  }
+
+  function showProModal() {
+    showModal({
+      icon: '🔒',
+      title: 'Función Pro',
+      body: 'Este espacio está reservado para los usuarios <b>Pro</b>. Mejora tu plan para desbloquear gramática guiada, análisis de pronunciación y traductor inteligente.',
+      actions: [
+        { label: 'Ver planes Pro ✨', onClick: () => window.open(PRO_UPGRADE_URL, '_blank') },
+        { label: 'Ahora no', style: 'bg-slate-100 text-slate-500', onClick: closeModal }
+      ]
+    });
+  }
+
+  /* ============================================================
+     4. PERSISTENCIA (flujo + puntos + SRS)
+  ============================================================ */
+  async function updateUserFlow() {
+    userProfile.flujo = flujo;
+    const { error } = await dbClient.from('profiles').update({ flujo }).eq('id', currentUser.id);
+    if (error) console.error('Error guardando flujo:', error.message);
+  }
+
+  async function addPoints(points) {
+    if (!points) return;
+    const newPts = (userProfile.points || 0) + points;
+    userProfile.points = newPts;
+    document.getElementById('user-points-display').textContent = newPts;
+    const dd = document.getElementById('user-points'); if (dd) dd.textContent = newPts;
+    floatPoints(points);
+    const { error } = await dbClient.from('profiles').update({ points: newPts }).eq('id', currentUser.id);
+    if (error) console.error('Error guardando puntos:', error.message);
+  }
+
+  /*
+    Núcleo del algoritmo de memorización espaciada.
+    Se guarda en flujo.srs (columna "flujo") y se replica en user_word_progress (durabilidad).
+    Los PUNTOS influyen en el SRS: una racha alta añade un pequeño bono de "ease",
+    lo que alarga el intervalo (repasas menos lo que ya dominas).
+  */
+  async function updateSRS(wordId, result) {
+    const key = String(wordId);
+    const s = flujo.srs[key] || { level: 0, ease: EASE_DEFAULT, reps: 0, lapses: 0, due: null };
+
+    let points = 0;
+
+    if (result === 'correct' || result === 'easy') {
+      sessionStreak++;
+      sessionCorrect++;
+      const streakBonus = Math.min(sessionStreak * 0.02, 0.12); // los puntos/racha influyen en el SRS
+      s.reps++;
+      s.ease = Math.min(EASE_MAX, s.ease + (result === 'easy' ? 0.15 : 0.08) + streakBonus);
+      s.level = Math.min(s.level + 1, SRS_INTERVALS_DAYS.length - 1);
+      points = (result === 'easy' ? 12 : 10) + Math.min(sessionStreak, 8); // bono por racha
+      playSound('correct'); triggerConfetti();
+    } else if (result === 'hard') {
+      s.reps++;
+      s.ease = Math.max(EASE_MIN, s.ease - 0.15);
+      // el nivel se mantiene
+      points = 3;
+    } else { // 'wrong'
+      sessionStreak = 0;
+      s.lapses++;
+      s.ease = Math.max(EASE_MIN, s.ease - 0.2);
+      s.level = 0; // vuelve a empezar el intervalo
+      points = 0;
+      playSound('wrong');
     }
 
-    // --- 3. LÓGICA DE FLUJO ---
+    const baseDays = SRS_INTERVALS_DAYS[s.level];
+    const days = Math.max(0.005, baseDays * (s.ease / EASE_DEFAULT));
+    s.due = new Date(Date.now() + days * 86400000).toISOString();
+    s.updated = new Date().toISOString();
 
-    async function determineSessionType() {
-      // 1. REPASO ESPACIADO (SRS)
-      const threeDaysAgo = new Date();
-      threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
-      
-      const { data: potentialReviews } = await dbClient
-        .from('user_word_progress')
-        .select(`word_id, ease_factor, created_at, palabras(*)`)
-        .lt('ease_factor', 5) 
-        .lt('created_at', threeDaysAgo.toISOString())
-        .limit(50); 
+    flujo.srs[key] = s;
 
-      if (potentialReviews && potentialReviews.length > 0) {
-        const shuffled = potentialReviews.sort(() => 0.5 - Math.random());
-        const selected = shuffled.slice(0, 12);
-        
-        // Extraer objeto palabras
-        reviewQueue = selected.map(item => item.palabras).filter(p => p !== null);
-        
-        if (reviewQueue.length > 0) {
-          renderReviewSession();
-          return;
-        }
-      }
+    // Guardado principal en la columna flujo
+    await updateUserFlow();
+    if (points) await addPoints(points);
 
-      // 2. FLUJO NORMAL (Nuevas -> Práctica)
-      await startNormalFlow();
+    // Réplica (no bloqueante) en la tabla dedicada
+    dbClient.from('user_word_progress').upsert({
+      user_id: currentUser.id,
+      word_id: wordId,
+      srs_level: s.level,
+      ease_factor: s.ease,
+      next_review_at: s.due
+    }, { onConflict: 'user_id, word_id' }).then(({ error }) => {
+      if (error) console.warn('user_word_progress (opcional):', error.message);
+    });
+  }
+
+  /* ============================================================
+     5. DATOS (palabras / niveles / grupos / repasos)
+  ============================================================ */
+  async function getNiveles() {
+    const { data, error } = await dbClient.from('palabras').select('nivel');
+    if (error) { console.error('[getNiveles] ❌ Error leyendo "palabras":', error.message, error); return []; }
+    const set = [...new Set((data || []).map(r => r.nivel).filter(Boolean))];
+    console.log('[getNiveles] filas leídas:', (data || []).length, '· niveles con contenido:', set);
+    return sortNiveles(set); // sin fallback: si está vacío, es vacío de verdad
+  }
+  async function getGroups(nivel) {
+    const { data, error } = await dbClient.from('palabras').select('grupo').eq('nivel', nivel);
+    if (error) { console.error(`[getGroups ${nivel}] ❌`, error.message, error); return []; }
+    const set = sortGroups([...new Set((data || []).map(r => r.grupo).filter(Boolean))]);
+    console.log(`[getGroups ${nivel}] grupos:`, set);
+    return set;
+  }
+  async function getGroupWords(nivel, group) {
+    const key = `${nivel}|${group}`;
+    if (groupCache.key === key && groupCache.list.length) return groupCache.list;
+    const { data, error } = await dbClient.from('palabras').select('*').eq('nivel', nivel).eq('grupo', group);
+    if (error) { console.error(`[getGroupWords ${key}] ❌`, error.message, error); return []; }
+    const list = data || [];
+    console.log(`[getGroupWords ${key}] palabras:`, list.length, list.map(w => w.ingles));
+    groupCache = { key, list, map: Object.fromEntries(list.map(w => [String(w.id), w])) };
+    return list;
+  }
+
+  // Sonda de diagnóstico: cuántas filas de "palabras" ve realmente el cliente.
+  async function probeContent() {
+    const { count, error } = await dbClient.from('palabras').select('id', { count: 'exact', head: true });
+    if (error) { console.error('[probeContent] ❌ No se pudo leer "palabras":', error.message, error); return { ok: false, count: 0 }; }
+    console.log('[probeContent] ✅ filas visibles en "palabras":', count);
+    return { ok: true, count: count || 0 };
+  }
+
+  // Palabras cuyo próximo repaso ya venció (SRS), limitadas al nivel actual.
+  async function getDueReviews(nivel) {
+    const now = Date.now();
+    const dueIds = Object.entries(flujo.srs)
+      .filter(([, v]) => v.due && new Date(v.due).getTime() <= now)
+      .map(([id]) => parseInt(id))
+      .filter(n => !isNaN(n));
+    if (!dueIds.length) return [];
+    const { data } = await dbClient.from('palabras').select('*').eq('nivel', nivel).in('id', dueIds);
+    const words = (data || []).sort(() => Math.random() - 0.5).slice(0, 12);
+    return words;
+  }
+
+  /* ============================================================
+     6. INICIALIZACIÓN DEL FLUJO (JSON columna "flujo")
+  ============================================================ */
+  function defaultGroupState() {
+    return { review: { done: false, index: 0 }, practice: { done: false, queue: [], index: 0 }, completed: false, correct: 0, wrong: 0 };
+  }
+  function defaultFlujo(nivel) {
+    return { version: 2, currentNivel: nivel, niveles: {}, srs: {}, stats: { totalCorrect: 0, totalWrong: 0, sessionsCompleted: 0 } };
+  }
+
+  async function ensureFlujo() {
+    const baseNivel = (userProfile.nivel) || 'A1';
+
+    // Migración: si viene el formato viejo (flowState) o no existe, se reinicia a v2.
+    if (!flujo || !flujo.version || flujo.version < 2 || flujo.flowState) {
+      const old = flujo || {};
+      flujo = defaultFlujo(baseNivel);
+      if (old.currentGroup) { /* se conserva el punto de partida como referencia */ }
+      // Importa el SRS previo desde user_word_progress para no perder el progreso.
+      const { data: prev } = await dbClient.from('user_word_progress').select('*').eq('user_id', currentUser.id);
+      (prev || []).forEach(p => {
+        flujo.srs[String(p.word_id)] = {
+          level: p.srs_level || 0,
+          ease: parseFloat(p.ease_factor) || EASE_DEFAULT,
+          reps: p.srs_level || 0, lapses: 0,
+          due: p.next_review_at || new Date().toISOString()
+        };
+      });
+      await updateUserFlow();
+    }
+    if (!flujo.currentNivel) flujo.currentNivel = baseNivel;
+    if (!flujo.srs) flujo.srs = {};
+    if (!flujo.stats) flujo.stats = { totalCorrect: 0, totalWrong: 0, sessionsCompleted: 0 };
+  }
+
+  async function ensureNivel(nivel) {
+    if (!flujo.niveles[nivel]) flujo.niveles[nivel] = { currentGroup: null, grupos: {} };
+    const n = flujo.niveles[nivel];
+    const groups = await getGroups(nivel); // solo grupos que realmente tienen palabras
+    if (!groups.length) { n.currentGroup = null; return n; } // nivel sin contenido
+
+    // Validar el grupo guardado contra los grupos reales. Si es inválido o no existe,
+    // elegimos el primer grupo aún no completado (o el primero disponible).
+    if (!n.currentGroup || !groups.includes(n.currentGroup)) {
+      const firstIncomplete = groups.find(g => !(n.grupos[g] && n.grupos[g].completed));
+      n.currentGroup = firstIncomplete || groups[0];
+    }
+    if (!n.grupos[n.currentGroup]) n.grupos[n.currentGroup] = defaultGroupState();
+    return n;
+  }
+
+  /* ============================================================
+     7. CONTROLADOR DE FLUJO ÚNICO
+     Prioridad: (1) repasos SRS vencidos  →  (2) repaso del grupo  →  (3) práctica  →  (4) siguiente grupo
+  ============================================================ */
+  async function runFlow() {
+    toolsBar.classList.remove('hidden');
+    console.groupCollapsed('%c[runFlow]', 'color:#FF7A00;font-weight:bold');
+    console.log('flujo actual:', JSON.parse(JSON.stringify(flujo)));
+
+    // Sonda: ¿el cliente puede leer la tabla "palabras"?
+    const probe = await probeContent();
+    if (probe.count === 0) {
+      console.warn('La consulta a "palabras" devolvió 0 filas. Causa más probable: falta la política RLS de SELECT en la tabla "palabras".');
+      console.groupEnd();
+      return renderMessage('🔒', 'No se pueden leer las palabras',
+        'La base de datos devolvió <b>0 palabras</b>. Si ya las cargaste, falta la política <b>RLS de SELECT</b> en la tabla <b>palabras</b>. Aplica el SQL de permisos y recarga.',
+        'Reintentar', () => window.location.reload());
     }
 
-    async function startNormalFlow() {
-      // Estructura por defecto si no existe
-      if (!userProfile.flujo || !userProfile.flujo.flowState) {
-          userProfile.flujo = { 
-              currentGroup: "G1", 
-              flowState: { "G1": { "flow1_flashcards": {"status": "not_started"}, "flow2_practice": {"status": "not_started", "queue": [], "currentIndex": 0} } } 
-          };
-      }
+    // Niveles que realmente tienen palabras cargadas.
+    const niveles = await getNiveles();
 
-      const group = userProfile.flujo.currentGroup || "G1";
-      // Asegurar que el grupo actual tenga estructura
-      if (!userProfile.flujo.flowState[group]) {
-         userProfile.flujo.flowState[group] = { 
-            "flow1_flashcards": {"status": "not_started"}, 
-            "flow2_practice": {"status": "not_started", "queue": [], "currentIndex": 0} 
-         };
-      }
-
-      const groupData = userProfile.flujo.flowState[group];
-
-      // ORDEN: Primero Flashcards -> Luego Práctica -> Luego Siguiente Nivel
-      if (groupData.flow1_flashcards.status !== 'completed') {
-        await renderFlow1_Flashcards();
-      } else if (groupData.flow2_practice.status !== 'completed') {
-        await renderFlow2_Practice();
-      } else {
-        await advanceToNextGroup();
-      }
+    // Si el nivel guardado no tiene contenido, saltamos al primero que sí lo tenga.
+    if (niveles.length && !niveles.includes(flujo.currentNivel)) {
+      console.log(`[runFlow] "${flujo.currentNivel}" sin contenido → cambio a "${niveles[0]}"`);
+      flujo.currentNivel = niveles[0];
+      await updateUserFlow();
     }
 
-    // --- 4. RENDERIZADO VISUAL ---
+    const nivel = flujo.currentNivel;
+    document.getElementById('nivel-label').textContent = nivel;
+    const n = await ensureNivel(nivel);
+    console.log(`[runFlow] nivel=${nivel} · currentGroup=${n.currentGroup}`);
 
-    // === SESIÓN SRS (Repaso) ===
-    let reviewIndex = 0;
-    function renderReviewSession() {
-      if (reviewIndex >= reviewQueue.length) {
-        showCompletionScreen("¡Repaso Terminado!", "Has fortalecido tu memoria.");
-        setTimeout(() => window.location.reload(), 3000);
-        return;
-      }
-      const word = reviewQueue[reviewIndex];
-      currentWord = word;
-      updateProgressBar((reviewIndex / reviewQueue.length) * 100);
-      appContainer.innerHTML = getFlashcardHTML(word, true);
-      addFlashcardListeners(true);
+    // Nivel sin grupos con palabras: ofrecer cambiar de nivel.
+    if (!n.currentGroup) {
+      console.groupEnd();
+      return renderMessage('📭', 'Nivel sin contenido',
+        `No hay palabras cargadas para el nivel <b>${nivel}</b>. Elige otro nivel o carga palabras para este.`,
+        'Elegir otro nivel', openNivelSelector);
     }
 
-    // === FLUJO 1: FLASHCARDS (Nuevas) ===
-    async function renderFlow1_Flashcards() {
-      const word = await getNextNewWord();
-      
-      if (!word) {
-        // Fin de palabras nuevas -> Marcar completado y saltar a práctica
-        console.log("No hay más palabras nuevas. Pasando a práctica...");
-        const newFlow = userProfile.flujo;
-        newFlow.flowState[newFlow.currentGroup].flow1_flashcards.status = "completed";
-        await updateUserFlow(newFlow);
-        await renderFlow2_Practice();
-        return;
-      }
+    // (1) Repasos espaciados vencidos
+    const due = await getDueReviews(nivel);
+    if (due.length) { console.log('[runFlow] repasos SRS vencidos:', due.length); console.groupEnd(); return startSrsReview(due); }
 
-      currentWord = word;
-      updateProgressBar(10); 
-      appContainer.innerHTML = getFlashcardHTML(word, false);
-      addFlashcardListeners(false);
+    // (2)/(3)/(4) Progresión por grupos
+    const group = n.currentGroup;
+    if (!n.grupos[group]) n.grupos[group] = defaultGroupState();
+    const g = n.grupos[group];
+
+    const words = await getGroupWords(nivel, group);
+    if (!words.length) {
+      console.groupEnd();
+      return renderMessage('📭', 'Grupo sin contenido',
+        `El grupo <b>${group}</b> del nivel <b>${nivel}</b> no tiene palabras.`,
+        'Elegir otro nivel', openNivelSelector);
     }
 
-    // HTML Común Flashcard
-// HTML Común Flashcard (ACTUALIZADO CON FONÉTICA)
-function getFlashcardHTML(word, isReview) {
-  const label = isReview 
-    ? `<div class="bg-purple-100 text-purple-600 px-4 py-1 rounded-full text-xs font-bold uppercase mb-4 inline-block tracking-widest shadow-sm">🧠 Repaso</div>`
-    : `<div class="bg-green-100 text-green-600 px-4 py-1 rounded-full text-xs font-bold uppercase mb-4 inline-block tracking-widest shadow-sm">✨ Nueva Palabra</div>`;
+    console.log(`[runFlow] estado grupo ${group}: review.done=${g.review.done} practice.done=${g.practice.done}`);
+    console.groupEnd();
 
-  // Aseguramos que haya algo que mostrar, si no hay fonética en la DB, mostramos un guion
-  const foneticaTexto = word.fonetica ? `/${word.fonetica}/` : '---';
+    if (!g.review.done) return renderReview(nivel, group, words);
+    if (!g.practice.done) return renderPractice(nivel, group);
+    return advanceGroup(nivel, group);
+  }
 
-  return `
-    <div class="card-3d p-6 md:p-8 text-center relative animate-pop mt-4">
-      ${label}
-      
-      <div class="w-full h-64 bg-slate-50 rounded-2xl mb-6 overflow-hidden flex items-center justify-center border border-slate-100 group cursor-pointer relative shadow-inner" onclick="playAudio('${word.audio}')">
-          <img src="${word.imagen}" class="h-full object-contain transition-transform duration-500 group-hover:scale-110">
+  /* ============================================================
+     8. PASO 1 — REPASO DEL GRUPO (flashcards de todas las palabras)
+  ============================================================ */
+  async function renderReview(nivel, group, words) {
+    const g = flujo.niveles[nivel].grupos[group];
+    reviewList = words;
+    const i = g.review.index || 0;
+
+    if (i >= reviewList.length) {
+      g.review.done = true;
+      await updateUserFlow();
+      await addPoints(5);
+      showEncouragement(() => runFlow());
+      return;
+    }
+
+    const word = reviewList[i];
+    updateProgressBar((i / reviewList.length) * 100);
+    appContainer.innerHTML = flashcardHTML(word, i + 1, reviewList.length);
+    bindFlashcard(word, async (result) => {
+      await updateSRS(word.id, result); // 'easy' | 'hard' (siembra el SRS)
+      g.review.index = i + 1;
+      await updateUserFlow();
+      renderReview(nivel, group, words);
+    });
+  }
+
+  function flashcardHTML(word, pos, total) {
+    const fon = word.fonetica ? `/${word.fonetica}/` : '—';
+    const img = word.imagen
+      ? `<img src="${word.imagen}" class="h-full object-contain transition-transform duration-500 group-hover:scale-110" alt="${word.espanol || ''}">`
+      : `<div class="text-slate-300 text-6xl"><i class="fas fa-image"></i></div>`;
+    return `
+      <div class="card-3d p-4 sm:p-6 text-center relative animate-pop mt-1">
+        <div class="flex items-center justify-between mb-2">
+          <span class="bg-green-100 text-green-600 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest">✨ Repaso</span>
+          <span class="text-xs font-bold text-slate-400">${pos} / ${total}</span>
+        </div>
+
+        <div class="w-full h-40 sm:h-52 bg-slate-50 rounded-2xl mb-4 overflow-hidden flex items-center justify-center border border-slate-100 group cursor-pointer relative shadow-inner" onclick="playWordAudio(${JSON.stringify(word).replace(/"/g, '&quot;')})">
+          ${img}
           <div class="absolute inset-0 flex items-center justify-center bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity">
             <i class="fas fa-volume-up text-5xl text-white drop-shadow-lg"></i>
           </div>
-      </div>
+        </div>
 
-      <h1 class="text-5xl font-black font-heading text-[#FF7A00] mb-2 tracking-tight">${word.ingles}</h1>
-      
-      <div class="h-10 mb-4 flex items-center justify-center">
-        <button id="btn-show-phonetic" class="text-slate-400 hover:text-slate-600 hover:bg-slate-100 text-xs font-bold border border-slate-200 rounded-full px-3 py-1 transition-all flex items-center gap-2">
+        <h1 class="text-4xl sm:text-5xl font-black font-heading text-[#FF7A00] mb-1 tracking-tight">${word.ingles}</h1>
+
+        <div class="h-9 mb-2 flex items-center justify-center">
+          <button id="btn-show-phonetic" class="text-slate-400 hover:text-slate-600 hover:bg-slate-100 text-xs font-bold border border-slate-200 rounded-full px-3 py-1 transition-all flex items-center gap-2">
             <i class="fas fa-eye"></i> Ver fonética
-        </button>
-        <span id="txt-phonetic" class="hidden text-slate-500 font-mono text-lg bg-slate-100 px-3 py-1 rounded-lg border border-slate-200 tracking-wide">
-            ${foneticaTexto}
-        </span>
-      </div>
-      <p class="text-2xl text-slate-500 font-medium mb-8 border-b-2 border-slate-100 pb-4 inline-block px-10">${word.espanol}</p>
-      
-      <div class="grid grid-cols-2 gap-4">
-        <button id="btn-hard" class="btn-juice bg-red-50 text-red-500 hover:bg-red-100 border-red-200 font-bold py-4 rounded-xl text-lg flex flex-col items-center gap-1">
-          <i class="fas fa-brain"></i> Difícil
-        </button>
-        <button id="btn-easy" class="btn-juice bg-green-50 text-green-600 hover:bg-green-100 border-green-200 font-bold py-4 rounded-xl text-lg flex flex-col items-center gap-1">
-          <i class="fas fa-check-circle"></i> Fácil
-        </button>
-      </div>
-    </div>
-  `;
-}
+          </button>
+          <span id="txt-phonetic" class="hidden text-slate-500 font-mono text-base sm:text-lg bg-slate-100 px-3 py-1 rounded-lg border border-slate-200 tracking-wide">${fon}</span>
+        </div>
+        <p class="text-xl sm:text-2xl text-slate-500 font-medium mb-4 border-b-2 border-slate-100 pb-3 inline-block px-8">${word.espanol}</p>
 
-    function addFlashcardListeners(isReview) {
-  setTimeout(() => playAudio(currentWord.audio), 400);
-  
-  // --- Lógica del botón de fonética ---
-  const btnPhonetic = document.getElementById('btn-show-phonetic');
-  const txtPhonetic = document.getElementById('txt-phonetic');
-  
-  if (btnPhonetic && txtPhonetic) {
-    btnPhonetic.onclick = (e) => {
-        e.stopPropagation(); // Evita que se disparen otros eventos si los hubiera
-        btnPhonetic.classList.add('hidden'); // Oculta el botón
-        txtPhonetic.classList.remove('hidden'); // Muestra el texto
-        txtPhonetic.classList.add('animate-pop'); // Pequeña animación de entrada
-    };
+        <div class="grid grid-cols-2 gap-3">
+          <button id="btn-hard" class="btn-juice bg-red-50 text-red-500 hover:bg-red-100 border-red-200 font-bold py-3 rounded-xl text-base sm:text-lg flex flex-col items-center gap-1">
+            <i class="fas fa-brain"></i> Difícil
+          </button>
+          <button id="btn-easy" class="btn-juice bg-green-50 text-green-600 hover:bg-green-100 border-green-200 font-bold py-3 rounded-xl text-base sm:text-lg flex flex-col items-center gap-1">
+            <i class="fas fa-check-circle"></i> Fácil
+          </button>
+        </div>
+      </div>`;
   }
-  // ------------------------------------
 
-  document.getElementById('btn-easy').onclick = async () => {
-    await updateSRS(currentWord.id, 'easy');
-    handleNextStep(isReview);
-  };
-  document.getElementById('btn-hard').onclick = async () => {
-    await updateSRS(currentWord.id, 'hard');
-    handleNextStep(isReview);
-  };
-}
+  function bindFlashcard(word, onRate) {
+    setTimeout(() => playWordAudio(word), 350);
+    const btnP = document.getElementById('btn-show-phonetic');
+    const txtP = document.getElementById('txt-phonetic');
+    if (btnP && txtP) btnP.onclick = (e) => { e.stopPropagation(); btnP.classList.add('hidden'); txtP.classList.remove('hidden'); txtP.classList.add('animate-pop'); };
+    document.getElementById('btn-easy').onclick = () => onRate('easy');
+    document.getElementById('btn-hard').onclick = () => onRate('hard');
+  }
 
-    function handleNextStep(isReview) {
-      if (isReview) {
-        reviewIndex++;
-        renderReviewSession();
+  /* ============================================================
+     9. PASO 2 — PRÁCTICA (audio→escribir  /  imagen→elegir)
+  ============================================================ */
+  async function buildPracticeQueue(nivel, group) {
+    const words = await getGroupWords(nivel, group);
+    const englishPool = words.map(w => w.ingles);
+
+    const queue = words.map(w => {
+      const canImage = !!w.imagen;
+      // Si no hay imagen, forzamos "escribir por audio" (el audio tiene fallback por voz).
+      const type = (canImage && Math.random() > 0.5) ? 'select_by_image' : 'write_by_audio';
+      return {
+        word_id: w.id,
+        type,
+        options: type === 'select_by_image' ? buildOptions(w.ingles, englishPool) : null
+      };
+    }).sort(() => Math.random() - 0.5);
+
+    const g = flujo.niveles[nivel].grupos[group];
+    g.practice = { done: false, queue, index: 0 };
+    await updateUserFlow();
+  }
+
+  function buildOptions(correct, pool) {
+    const distractors = pool.filter(x => x !== correct).sort(() => Math.random() - 0.5).slice(0, 3);
+    return [correct, ...distractors].sort(() => Math.random() - 0.5);
+  }
+
+  async function renderPractice(nivel, group) {
+    const g = flujo.niveles[nivel].grupos[group];
+
+    // Cargamos las palabras reales del grupo primero.
+    const words = await getGroupWords(nivel, group);
+    const validIds = new Set(words.map(w => String(w.id)));
+
+    // Construir la cola si no existe, o regenerarla si quedó obsoleta
+    // (p. ej. word_id que ya no pertenecen a este grupo).
+    const queueOk = g.practice.queue && g.practice.queue.length &&
+      g.practice.queue.every(ex => validIds.has(String(ex.word_id)));
+    if (!queueOk) {
+      console.warn(`[renderPractice] cola inválida/obsoleta en ${nivel}/${group} → regenerando`);
+      g.practice.index = 0;
+      await buildPracticeQueue(nivel, group);
+    }
+
+    const q = g.practice.queue;
+    const i = g.practice.index || 0;
+
+    if (i >= q.length) {
+      g.practice.done = true; g.completed = true;
+      flujo.stats.sessionsCompleted++;
+      await updateUserFlow();
+      return groupCompleteScreen(nivel, group, g);
+    }
+
+    const ex = q[i];
+    const word = groupCache.map[String(ex.word_id)];
+    if (!word) { g.practice.index = i + 1; await updateUserFlow(); return renderPractice(nivel, group); }
+
+    updateProgressBar((i / q.length) * 100);
+    console.log(`[practica] ${i + 1}/${q.length} · ${ex.type} · ${word.ingles}`);
+
+    const advance = async (isCorrect) => {
+      const gg = flujo.niveles[nivel].grupos[group];
+      if (isCorrect) gg.correct++; else gg.wrong++;
+      gg.practice.index = i + 1;
+      await updateSRS(word.id, isCorrect ? 'practice_correct' : 'practice_wrong');
+      await updateUserFlow();
+      // Mensaje de ánimo cada 5 aciertos
+      if (isCorrect && sessionCorrect > 0 && sessionCorrect % 5 === 0 && sessionCorrect !== lastMilestone) {
+        lastMilestone = sessionCorrect;
+        setTimeout(() => showEncouragement(() => renderPractice(nivel, group)), 900);
       } else {
-        renderFlow1_Flashcards();
+        setTimeout(() => renderPractice(nivel, group), isCorrect ? 1000 : 2000);
       }
-    }
+    };
 
-    // === FLUJO 2: PRÁCTICA (Implementación solicitada) ===
-    async function renderFlow2_Practice() {
-      const group = userProfile.flujo.currentGroup;
-      const flowData = userProfile.flujo.flowState[group].flow2_practice;
+    if (ex.type === 'select_by_image') renderSelectImage(word, ex.options, advance);
+    else renderWriteAudio(word, advance);
+  }
 
-      // Si no hay cola generada, la generamos
-      if (!flowData.queue || flowData.queue.length === 0) {
-        await generatePracticeQueue(group);
-        return; 
-      }
+  function renderSelectImage(word, options, advance) {
+    const btns = options.map(opt => `
+      <button class="option-btn btn-juice w-full bg-white border-2 border-slate-200 text-slate-600 font-bold text-base sm:text-lg py-3 rounded-xl hover:border-[#FF7A00] hover:text-[#FF7A00] transition mb-2" data-val="${opt}">${opt}</button>
+    `).join('');
 
-      const currentIndex = flowData.currentIndex || 0;
-      
-      // Verificar fin de práctica
-      if (currentIndex >= flowData.queue.length) {
-        const newFlow = userProfile.flujo;
-        newFlow.flowState[group].flow2_practice.status = "completed";
-        await updateUserFlow(newFlow);
-        await advanceToNextGroup();
-        return;
-      }
-
-      const exercise = flowData.queue[currentIndex];
-      
-      // Obtener datos frescos de la palabra
-      const { data: word } = await dbClient.from('palabras').select('*').eq('id', exercise.word_id).single();
-      currentWord = word;
-      updateProgressBar((currentIndex / flowData.queue.length) * 100);
-
-      // Renderizar según el tipo
-      if (exercise.type === 'select_word_by_image') {
-        renderSelectImage(word, exercise.options);
-      } else if (exercise.type === 'write_word_by_audio') {
-        renderWriteAudio(word);
-      }
-    }
-
-    // --- TIPO 1: IMAGEN -> SELECCIONAR PALABRA ---
-    function renderSelectImage(word, options) {
-      // Generar botones
-      let btnsHTML = options.map(opt => `
-        <button class="option-btn btn-juice w-full bg-white border-2 border-slate-200 text-slate-600 font-bold text-lg py-4 rounded-xl hover:border-[#FF7A00] hover:text-[#FF7A00] transition mb-3" data-val="${opt}">
-          ${opt}
-        </button>
-      `).join('');
-
-      appContainer.innerHTML = `
-        <div class="card-3d p-6 animate-pop text-center mt-4">
-          <div class="bg-blue-100 text-blue-600 px-3 py-1 rounded-full text-xs font-bold uppercase mb-4 inline-block">👁️ Identifica la imagen</div>
-          
-          <div class="w-48 h-48 mx-auto bg-slate-50 rounded-2xl border-4 border-white shadow-lg overflow-hidden mb-6 p-2">
-            <img src="${word.imagen}" class="w-full h-full object-contain">
-          </div>
-          
-          <div class="flex flex-col gap-1">
-            ${btnsHTML}
-          </div>
+    appContainer.innerHTML = `
+      <div class="card-3d p-4 sm:p-5 animate-pop text-center mt-1">
+        <div class="bg-blue-100 text-blue-600 px-3 py-1 rounded-full text-xs font-bold uppercase mb-3 inline-block">👁️ Identifica la imagen</div>
+        <div class="w-32 h-32 sm:w-40 sm:h-40 mx-auto bg-slate-50 rounded-2xl border-4 border-white shadow-lg overflow-hidden mb-4 p-2">
+          <img src="${word.imagen}" class="w-full h-full object-contain" alt="">
         </div>
-      `;
+        <div class="flex flex-col gap-1">${btns}</div>
+      </div>`;
 
-      // Lógica de selección
-      document.querySelectorAll('.option-btn').forEach(btn => {
-        btn.onclick = async (e) => {
-          // Desactivar todos los botones para evitar doble click
-          document.querySelectorAll('.option-btn').forEach(b => b.disabled = true);
-          
-          const val = e.target.dataset.val;
-          
-          if (val === word.ingles) {
-            // ACIERTO (+0.5)
-            e.target.className = "w-full bg-green-500 text-white font-bold text-lg py-4 rounded-xl shadow-lg border-none transform scale-105 transition mb-3";
-            e.target.innerHTML = `${val} <i class='fas fa-check ml-2'></i>`;
-            
-            playSound('correct');
-            await updateSRS(word.id, 'practice_correct');
-            setTimeout(nextPracticeIndex, 1000);
-          } else {
-            // ERROR (-0.5)
-            e.target.className = "w-full bg-red-500 text-white font-bold text-lg py-4 rounded-xl shadow-lg border-none wrong-shake mb-3";
-            e.target.innerHTML = `${val} <i class='fas fa-times ml-2'></i>`;
-            
-            // Mostrar la correcta
-            const correctBtn = Array.from(document.querySelectorAll('.option-btn')).find(b => b.dataset.val === word.ingles);
-            if(correctBtn) correctBtn.classList.add('bg-green-100', 'text-green-600', 'border-green-300');
-
-            playSound('wrong');
-            await updateSRS(word.id, 'practice_wrong');
-            setTimeout(nextPracticeIndex, 2000); // Dar más tiempo para ver el error
-          }
-        }
-      });
-    }
-
-    // --- TIPO 2: SONIDO -> ESCRIBIR PALABRA ---
-    function renderWriteAudio(word) {
-      appContainer.innerHTML = `
-        <div class="card-3d p-8 animate-pop text-center mt-4">
-          <div class="bg-pink-100 text-pink-600 px-3 py-1 rounded-full text-xs font-bold uppercase mb-6 inline-block">👂 Escucha y escribe</div>
-          
-          <button id="play-btn" class="w-24 h-24 bg-gradient-to-br from-[#FF7A00] to-orange-600 rounded-full shadow-xl shadow-orange-200 text-white text-3xl hover:scale-105 transition active:scale-95 mb-8 flex items-center justify-center mx-auto">
-            <i class="fas fa-volume-up"></i>
-          </button>
-          
-          <input type="text" id="input-word" class="w-full bg-slate-50 border-b-4 border-slate-200 text-center text-2xl font-bold text-slate-700 p-4 focus:outline-none focus:border-[#FF7A00] transition rounded-t-xl mb-6" placeholder="Escribe en inglés..." autocomplete="off">
-          
-          <button id="check-btn" class="w-full btn-juice bg-slate-800 text-white font-bold py-4 rounded-xl text-xl shadow-lg">
-            COMPROBAR
-          </button>
-          <div id="feedback-area" class="h-8 mt-4 text-lg"></div>
-        </div>
-      `;
-
-      const input = document.getElementById('input-word');
-      const checkBtn = document.getElementById('check-btn');
-      
-      // Reproducir sonido inicial
-      setTimeout(() => playAudio(word.audio), 300);
-      document.getElementById('play-btn').onclick = () => {
-         playAudio(word.audio);
-         input.focus();
-      };
-
-      const checkAnswer = async () => {
-        checkBtn.disabled = true;
-        const val = input.value.trim().toLowerCase();
-        const correct = word.ingles.toLowerCase();
-
-        if (val === correct) {
-           // ACIERTO (+0.5)
-           input.classList.add('text-green-600', 'border-green-500');
-           checkBtn.className = "w-full bg-green-500 text-white font-bold py-4 rounded-xl shadow-lg";
-           checkBtn.innerHTML = "¡EXCELENTE! <i class='fas fa-check'></i>";
-           
-           playSound('correct');
-           await updateSRS(word.id, 'practice_correct');
-           setTimeout(nextPracticeIndex, 1000);
+    document.querySelectorAll('.option-btn').forEach(btn => {
+      btn.onclick = (e) => {
+        document.querySelectorAll('.option-btn').forEach(b => b.disabled = true);
+        const val = e.currentTarget.dataset.val;
+        if (val === word.ingles) {
+          e.currentTarget.className = 'w-full bg-green-500 text-white font-bold text-lg py-4 rounded-xl shadow-lg border-none transform scale-105 transition mb-3';
+          e.currentTarget.innerHTML = `${val} <i class='fas fa-check ml-2'></i>`;
+          advance(true);
         } else {
-           // ERROR (-0.5)
-           input.classList.add('text-red-500', 'wrong-shake', 'border-red-500');
-           document.getElementById('feedback-area').innerHTML = `<span class="text-slate-400 text-sm">Correcto:</span> <span class="text-red-500 font-bold">${word.ingles}</span>`;
-           
-           playSound('wrong');
-           await updateSRS(word.id, 'practice_wrong');
-           setTimeout(nextPracticeIndex, 2500);
+          e.currentTarget.className = 'w-full bg-red-500 text-white font-bold text-lg py-4 rounded-xl shadow-lg border-none wrong-shake mb-3';
+          e.currentTarget.innerHTML = `${val} <i class='fas fa-times ml-2'></i>`;
+          const correctBtn = Array.from(document.querySelectorAll('.option-btn')).find(b => b.dataset.val === word.ingles);
+          if (correctBtn) correctBtn.classList.add('bg-green-100', 'text-green-600', 'border-green-300');
+          advance(false);
         }
       };
+    });
+  }
 
-      checkBtn.onclick = checkAnswer;
-      input.addEventListener('keypress', (e) => { if (e.key === 'Enter') checkAnswer(); });
-    }
+  function renderWriteAudio(word, advance) {
+    appContainer.innerHTML = `
+      <div class="card-3d p-5 sm:p-6 animate-pop text-center mt-1">
+        <div class="bg-pink-100 text-pink-600 px-3 py-1 rounded-full text-xs font-bold uppercase mb-4 inline-block">👂 Escucha y escribe</div>
+        <button id="play-btn" class="w-20 h-20 sm:w-24 sm:h-24 bg-gradient-to-br from-[#FF7A00] to-orange-600 rounded-full shadow-xl shadow-orange-200 text-white text-3xl hover:scale-105 transition active:scale-95 mb-5 flex items-center justify-center mx-auto">
+          <i class="fas fa-volume-up"></i>
+        </button>
+        <input type="text" id="input-word" class="w-full bg-slate-50 border-b-4 border-slate-200 text-center text-xl sm:text-2xl font-bold text-slate-700 p-3 focus:outline-none focus:border-[#FF7A00] transition rounded-t-xl mb-4" placeholder="Escribe en inglés..." autocomplete="off" autocapitalize="off" spellcheck="false">
+        <button id="check-btn" class="w-full btn-juice bg-slate-800 text-white font-bold py-3 rounded-xl text-lg sm:text-xl shadow-lg">COMPROBAR</button>
+        <div id="feedback-area" class="h-8 mt-3 text-lg"></div>
+      </div>`;
 
-    async function nextPracticeIndex() {
-      const group = userProfile.flujo.currentGroup;
-      userProfile.flujo.flowState[group].flow2_practice.currentIndex++;
-      await updateUserFlow(userProfile.flujo);
-      renderFlow2_Practice();
-    }
+    const input = document.getElementById('input-word');
+    const checkBtn = document.getElementById('check-btn');
+    setTimeout(() => playWordAudio(word), 300);
+    document.getElementById('play-btn').onclick = () => { playWordAudio(word); input.focus(); };
 
-    // --- GENERADOR DE COLA DE PRÁCTICA ---
-    async function generatePracticeQueue(group) {
-      // 1. Obtener TODAS las palabras del grupo
-      const { data: words } = await dbClient.from('palabras').select('*').eq('grupo', group);
-      
-      if (!words || words.length === 0) {
-          console.error("No hay palabras en este grupo");
-          return;
+    const check = () => {
+      checkBtn.disabled = true;
+      if (norm(input.value) === norm(word.ingles)) {
+        input.classList.add('text-green-600', 'border-green-500');
+        checkBtn.className = 'w-full bg-green-500 text-white font-bold py-4 rounded-xl shadow-lg';
+        checkBtn.innerHTML = "¡EXCELENTE! <i class='fas fa-check'></i>";
+        advance(true);
+      } else {
+        input.classList.add('text-red-500', 'wrong-shake', 'border-red-500');
+        document.getElementById('feedback-area').innerHTML = `<span class="text-slate-400 text-sm">Correcto:</span> <span class="text-red-500 font-bold">${word.ingles}</span>`;
+        advance(false);
       }
+    };
+    checkBtn.onclick = check;
+    input.addEventListener('keypress', (e) => { if (e.key === 'Enter') check(); });
+    input.focus();
+  }
 
-      // 2. Crear ejercicios mezclados
-      // Por cada palabra, creamos aleatoriamente un tipo de ejercicio (50% visual, 50% audio)
-      // O podemos crear ambos para reforzar. Haremos 1 ejercicio por palabra, aleatorio.
-      const queue = words.map(w => {
-        const type = Math.random() > 0.5 ? 'select_word_by_image' : 'write_word_by_audio';
-        return {
-          word_id: w.id,
-          type: type,
-          options: (type === 'select_word_by_image') ? generateOptions(w.ingles, words) : null
-        };
+  /* ============================================================
+     10. REPASO SRS (sesión de palabras vencidas)
+  ============================================================ */
+  function startSrsReview(words) {
+    srsSession = { queue: words, index: 0 };
+    renderMessage('🧠', '¡Toca repasar!', `Tienes <b>${words.length}</b> palabra(s) que tu memoria está a punto de olvidar. Vamos a reforzarlas.`, 'Empezar repaso', () => nextSrsReview());
+  }
+  async function nextSrsReview() {
+    if (!srsSession || srsSession.index >= srsSession.queue.length) {
+      srsSession = null;
+      playSound('complete'); triggerConfetti();
+      showModal({ icon: '🧠', title: '¡Repaso terminado!', body: 'Has fortalecido tu memoria a largo plazo.', dismissable: false, actions: [{ label: 'Continuar', onClick: () => { closeModal(); runFlow(); } }] });
+      return;
+    }
+    const word = srsSession.queue[srsSession.index];
+    updateProgressBar((srsSession.index / srsSession.queue.length) * 100);
+
+    const advance = async (isCorrect) => {
+      await updateSRS(word.id, isCorrect ? 'practice_correct' : 'practice_wrong');
+      srsSession.index++;
+      setTimeout(() => nextSrsReview(), isCorrect ? 1000 : 2000);
+    };
+
+    // Alternamos el tipo de ejercicio también en el repaso
+    if (word.imagen && Math.random() > 0.5) {
+      const pool = (groupCache.list.length ? groupCache.list : srsSession.queue).map(w => w.ingles);
+      renderSelectImage(word, buildOptions(word.ingles, pool.length >= 4 ? pool : [word.ingles, 'yes', 'no', 'time']), advance);
+    } else {
+      renderWriteAudio(word, advance);
+    }
+  }
+
+  /* ============================================================
+     11. AVANCE DE GRUPO / NIVEL
+  ============================================================ */
+  function groupCompleteScreen(nivel, group, g) {
+    playSound('complete'); triggerConfetti();
+    showModal({
+      icon: '🏆',
+      title: '¡Grupo completado!',
+      body: `Terminaste <b>${group}</b> del nivel <b>${nivel}</b>.<br><span class="text-green-600 font-bold">${g.correct} aciertos</span> · <span class="text-slate-400">${g.wrong} fallos</span>`,
+      dismissable: false,
+      actions: [{ label: 'Siguiente 👉', onClick: () => { closeModal(); advanceGroup(nivel, group); } }]
+    });
+  }
+
+  async function advanceGroup(nivel, group) {
+    const groups = await getGroups(nivel);
+    const idx = groups.indexOf(group);
+    const next = groups[idx + 1];
+
+    if (next) {
+      flujo.niveles[nivel].currentGroup = next;
+      if (!flujo.niveles[nivel].grupos[next]) flujo.niveles[nivel].grupos[next] = defaultGroupState();
+      groupCache = { key: null, list: [], map: {} };
+      await updateUserFlow();
+      runFlow();
+    } else {
+      // Nivel terminado
+      playSound('complete'); triggerConfetti();
+      showModal({
+        icon: '🎓',
+        title: `¡Nivel ${nivel} completado!`,
+        body: 'Dominaste todos los grupos de este nivel. ¿Subimos de nivel?',
+        dismissable: false,
+        actions: [
+          { label: 'Elegir nivel', onClick: () => { closeModal(); openNivelSelector(); } },
+          { label: 'Repasar lo aprendido', style: 'bg-slate-100 text-slate-500', onClick: () => { closeModal(); runFlow(); } }
+        ]
       });
+    }
+  }
 
-      // 3. Barajar el orden de las preguntas
-      const shuffledQueue = queue.sort(() => Math.random() - 0.5);
+  /* ============================================================
+     12. SELECTOR DE NIVEL
+  ============================================================ */
+  async function openNivelSelector() {
+    const conContenido = await getNiveles(); // niveles que sí tienen palabras
+    // Unimos los niveles fijos con cualquier otro detectado en la base de datos.
+    const niveles = sortNiveles([...new Set([...NIVELES_FIJOS, ...conContenido])]);
+    const current = flujo.currentNivel;
 
-      const newFlow = userProfile.flujo;
-      newFlow.flowState[group].flow2_practice = {
-        status: "in_progress",
-        queue: shuffledQueue,
-        currentIndex: 0
+    const body = `<div class="grid grid-cols-2 gap-3 mt-2">${niveles.map(n => {
+      const tiene = conContenido.includes(n);
+      const activo = n === current;
+      return `<button class="nivel-opt btn-juice ${activo ? 'bg-[#FF7A00] text-white' : (tiene ? 'bg-slate-100 text-slate-700' : 'bg-slate-50 text-slate-400')} font-black text-lg py-4 rounded-xl flex flex-col items-center gap-1" data-nivel="${n}">
+        <span>${n}</span>
+        <span class="text-[10px] font-bold uppercase ${activo ? 'text-white/80' : (tiene ? 'text-green-500' : 'text-slate-300')}">${tiene ? 'Disponible' : 'Sin contenido'}</span>
+      </button>`;
+    }).join('')}</div>`;
+
+    showModal({ icon: '🎯', title: '¿Qué nivel quieres estudiar?', body, size: 'md' });
+
+    modalRoot.querySelectorAll('.nivel-opt').forEach(btn => {
+      btn.onclick = async () => {
+        const nivel = btn.dataset.nivel;
+        console.log('[nivel] seleccionado:', nivel);
+        flujo.currentNivel = nivel;
+        await ensureNivel(nivel);
+        await updateUserFlow();
+        await dbClient.from('profiles').update({ nivel }).eq('id', currentUser.id);
+        userProfile.nivel = nivel;
+        groupCache = { key: null, list: [], map: {} };
+        closeModal();
+        runFlow();
       };
-      
-      await updateUserFlow(newFlow);
-      await renderFlow2_Practice();
-    }
+    });
+  }
 
-    // Generar distractores (una correcta, 3 incorrectas)
-    function generateOptions(correctWord, allWords) {
-      // Filtrar para no elegir la misma palabra
-      const distractors = allWords
-          .filter(w => w.ingles !== correctWord)
-          .sort(() => Math.random() - 0.5)
-          .slice(0, 3)
-          .map(w => w.ingles);
-      
-      // Combinar y mezclar
-      return [correctWord, ...distractors].sort(() => Math.random() - 0.5);
-    }
+  /* ============================================================
+     13. CONVERSACIÓN CON IA (Edge Function + DeepSeek + Voz)
+  ============================================================ */
+  async function openAiDialogue() {
+    const nivel = flujo.currentNivel;
+    const group = flujo.niveles[nivel]?.currentGroup;
+    const words = await getGroupWords(nivel, group);
 
-    // --- HELPER: Obtener nueva palabra ---
-    async function getNextNewWord() {
-      const group = userProfile.flujo.currentGroup || 'G1';
-      
-      // Obtener IDs ya vistos
-      const { data: seen } = await dbClient.from('user_word_progress').select('word_id').eq('user_id', currentUser.id);
-      const seenIds = seen ? seen.map(s => s.word_id) : [];
-      
-      let query = dbClient.from('palabras').select('*').eq('grupo', group);
-      
-      // Filtrar las que ya están en progreso
-      if (seenIds.length > 0) {
-          query = query.not('id', 'in', `(${seenIds.join(',')})`);
+    // Palabras "estudiadas" del grupo: las que ya tienen registro SRS. Si no hay, usa las del grupo.
+    const studied = words.filter(w => flujo.srs[String(w.id)]).map(w => w.ingles);
+    const wordList = (studied.length ? studied : words.map(w => w.ingles)).slice(0, 12);
+
+    if (!wordList.length) { showModal({ icon: '🤖', title: 'Sin palabras aún', body: 'Estudia algunas palabras del grupo para generar una conversación.', actions: [{ label: 'Entendido', onClick: closeModal }] }); return; }
+
+    showModal({
+      icon: '🤖', title: 'Conversación con IA', size: 'lg', dismissable: true,
+      body: `<div id="ai-body"><p class="text-slate-500">Generando un diálogo con tus palabras...</p>
+              <div class="w-10 h-10 border-4 border-[#FF7A00] border-t-transparent rounded-full animate-spin mx-auto my-6"></div></div>`,
+      actions: [{ label: 'Cerrar', style: 'bg-slate-100 text-slate-500', onClick: closeModal }]
+    });
+
+    try {
+      console.log('[IA] invocando generar-dialogo con:', { words: wordList, nivel, grupo: group });
+      const { data, error } = await dbClient.functions.invoke('generar-dialogo', {
+        body: { words: wordList, nivel, grupo: group }
+      });
+      console.log('[IA] respuesta cruda →', { data, error });
+
+      // Si la función respondió con código != 2xx, invoke deja el detalle en error.context (un Response).
+      if (error) {
+        let detalle = error.message || 'Error desconocido';
+        try {
+          if (error.context && typeof error.context.json === 'function') {
+            const body = await error.context.json();
+            console.error('[IA] cuerpo del error de la función:', body);
+            detalle = body.detail || body.error || detalle;
+          }
+        } catch (e2) { console.warn('[IA] no se pudo leer error.context:', e2); }
+        return aiError(detalle);
       }
-      
-      const { data } = await query.limit(1).maybeSingle();
-      return data;
+
+      // La respuesta puede llegar como objeto o como texto JSON.
+      let payload = data;
+      if (typeof payload === 'string') { try { payload = JSON.parse(payload); } catch { /* se maneja abajo */ } }
+      if (payload && payload.error) return aiError(payload.detail || payload.error);
+
+      const lines = Array.isArray(payload?.lines) ? payload.lines : [];
+      const title = payload?.title || 'Práctica de conversación';
+      console.log('[IA] líneas recibidas:', lines.length);
+
+      if (!lines.length) return aiError('La IA devolvió una respuesta vacía. Intenta de nuevo.');
+
+      renderAiDialogue(title, lines);
+    } catch (err) {
+      console.error('[IA] excepción invocando la función:', err);
+      aiError(err?.message || String(err));
     }
+  }
 
-    async function advanceToNextGroup() {
-      showCompletionScreen("¡Nivel Completado!", "Desbloqueando siguiente grupo...");
-      
-      const currG = userProfile.flujo.currentGroup;
-      // Extraer número de G1, G2, etc.
-      const num = parseInt(currG.replace('G','')) + 1;
-      const nextG = `G${num}`;
-      
-      const newFlow = userProfile.flujo;
-      newFlow.currentGroup = nextG;
-      
-      // Inicializar estructura del nuevo grupo
-      if (!newFlow.flowState[nextG]) {
-        newFlow.flowState[nextG] = {
-          flow1_flashcards: { status: "not_started" },
-          flow2_practice: { status: "not_started", queue: [], currentIndex: 0 }
-        };
-      }
-      
-      await updateUserFlow(newFlow);
-      setTimeout(() => window.location.reload(), 2000);
-    }
+  function aiError(detalle) {
+    const body = document.getElementById('ai-body');
+    if (!body) return;
+    body.innerHTML = `
+      <p class="text-red-500 font-bold mb-2">No se pudo generar el diálogo.</p>
+      <p class="text-slate-500 text-sm mb-3">${detalle}</p>
+      <button id="ai-retry" class="btn-juice bg-[#FF7A00] text-white font-bold py-2 px-6 rounded-xl"><i class="fas fa-rotate-right mr-2"></i>Reintentar</button>`;
+    const r = document.getElementById('ai-retry');
+    if (r) r.onclick = openAiDialogue;
+  }
 
-    // --- UTILIDADES ---
+  function renderAiDialogue(title, lines) {
+    const body = document.getElementById('ai-body');
+    if (!body) return;
+    const rows = lines.map((l, i) => `
+      <div class="text-left mb-3 p-3 rounded-xl ${i % 2 === 0 ? 'bg-orange-50' : 'bg-blue-50'}">
+        <div class="text-xs font-bold uppercase ${i % 2 === 0 ? 'text-[#FF7A00]' : 'text-blue-500'} mb-1">${l.speaker || (i % 2 === 0 ? 'A' : 'B')}</div>
+        <div class="font-bold text-slate-800">${l.en || ''}</div>
+        ${l.es ? `<div class="text-sm text-slate-400">${l.es}</div>` : ''}
+      </div>`).join('');
 
-    function triggerDopamine(success, points) {
-      if(success) {
-        confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 }, colors: ['#FF7A00', '#3b82f6'] });
-        if(points) {
-            const float = document.createElement('div');
-            float.textContent = `+${points}`;
-            float.className = 'floating-points';
-            float.style.left = '50%'; float.style.top = '20%';
-            document.body.appendChild(float);
-            setTimeout(() => float.remove(), 1000);
-            updatePoints(points);
-        }
-      }
-    }
+    body.innerHTML = `
+      <h3 class="font-heading font-bold text-slate-700 mb-3">${title}</h3>
+      <div class="max-h-64 overflow-y-auto pr-1">${rows}</div>
+      <div class="flex gap-3 mt-4">
+        <button id="ai-play" class="flex-1 btn-juice bg-[#FF7A00] text-white font-bold py-3 rounded-xl"><i class="fas fa-play mr-2"></i>Escuchar</button>
+        <button id="ai-stop" class="btn-juice bg-slate-100 text-slate-500 font-bold px-5 py-3 rounded-xl"><i class="fas fa-stop"></i></button>
+      </div>`;
 
-    async function updatePoints(pts) {
-      const newPts = (userProfile.points || 0) + pts;
-      userProfile.points = newPts;
-      document.getElementById('user-points-display').textContent = newPts;
-      await dbClient.from('profiles').update({ points: newPts }).eq('id', currentUser.id);
-    }
+    const enLines = lines.map(l => l.en).filter(Boolean);
+    document.getElementById('ai-play').onclick = () => speakSequence(enLines);
+    document.getElementById('ai-stop').onclick = () => stopSpeaking();
+  }
 
-    function updateProgressBar(percentage) {
-      document.getElementById('main-progress').style.width = `${percentage}%`;
-      document.getElementById('progress-text').textContent = `${Math.round(percentage)}%`;
-    }
+  function speakSequence(texts, i = 0) {
+    if (i === 0) stopSpeaking();
+    if (i >= texts.length) return;
+    speak(texts[i], () => speakSequence(texts, i + 1));
+  }
 
-    function playSound(type) {
-      const id = type === 'correct' ? 'snd-correct' : (type === 'wrong' ? 'snd-wrong' : 'snd-complete');
-      const el = document.getElementById(id);
-      if(el) { el.currentTime = 0; el.play().catch(e => {}); }
-    }
+  /* ============================================================
+     14. PANTALLAS AUXILIARES
+  ============================================================ */
+  function renderMessage(icon, title, html, actionLabel, onAction) {
+    appContainer.innerHTML = `
+      <div class="card-3d p-10 text-center animate-pop mt-6">
+        <div class="text-6xl mb-4">${icon}</div>
+        <h1 class="text-2xl font-heading font-bold text-slate-800 mb-2">${title}</h1>
+        <p class="text-slate-500 mb-6">${html}</p>
+        ${actionLabel ? `<button id="msg-action" class="btn-juice bg-[#FF7A00] text-white font-bold py-3 px-8 rounded-xl text-lg">${actionLabel}</button>` : ''}
+      </div>`;
+    if (actionLabel && onAction) document.getElementById('msg-action').onclick = onAction;
+  }
 
-    function showCompletionScreen(title, sub) {
-      playSound('complete');
-      appContainer.innerHTML = `
-        <div class="card-3d p-10 text-center animate-pop mt-10">
-          <div class="text-6xl mb-4">🏆</div>
-          <h1 class="text-3xl font-heading font-bold text-slate-800 mb-2">${title}</h1>
-          <p class="text-slate-500 mb-8">${sub}</p>
-          <div class="w-12 h-12 border-4 border-[#FF7A00] border-t-transparent rounded-full animate-spin mx-auto"></div>
-        </div>
-      `;
-    }
+  /* ============================================================
+     15. BARRA SUPERIOR (Pro + IA + Club + Perfil)
+  ============================================================ */
+  document.querySelectorAll('#top-bar button[data-tool]').forEach(btn => {
+    btn.onclick = () => {
+      const tool = btn.dataset.tool;
+      if (tool === 'ia') openAiDialogue();
+      else showProModal(); // gramática / pronunciación / club / traductor
+    };
+  });
+  document.getElementById('nivel-btn').onclick = openNivelSelector;
 
-    window.playAudio = (url) => { if(url) new Audio(url).play().catch(e=>{}); }
+  // Menú de perfil (dropdown)
+  const profileBtn = document.getElementById('profile-menu-button');
+  const profileDropdown = document.getElementById('profile-menu-dropdown');
+  profileBtn.onclick = (e) => { e.stopPropagation(); profileDropdown.classList.toggle('hidden'); };
+  document.addEventListener('click', (e) => {
+    if (!profileDropdown.contains(e.target) && !profileBtn.contains(e.target)) profileDropdown.classList.add('hidden');
+  });
+  document.getElementById('logout-btn').onclick = async () => {
+    await dbClient.auth.signOut();
+    window.location.href = 'index.html';
+  };
 
-    async function updateUserFlow(flow) {
-      userProfile.flujo = flow;
-      await dbClient.from('profiles').update({ flujo: flow }).eq('id', currentUser.id);
-    }
+  // Rellena los datos del menú de perfil
+  function fillProfileMenu() {
+    const nombre = (userProfile.full_name || 'Mi Perfil');
+    document.getElementById('user-name-dropdown').textContent = nombre;
+    document.getElementById('user-email-dropdown').textContent = currentUser.email || '';
+    document.getElementById('user-points').textContent = userProfile.points || 0;
+    document.getElementById('user-lingots').textContent = userProfile.lingots || 0;
+  }
 
-    document.addEventListener('DOMContentLoaded', async () => {
+  /* ============================================================
+     16. ARRANQUE
+  ============================================================ */
+  document.addEventListener('DOMContentLoaded', async () => {
+    try {
       const { data: { session } } = await dbClient.auth.getSession();
       if (!session) { window.location.href = 'index.html'; return; }
       currentUser = session.user;
-      
-      const { data } = await dbClient.from('profiles').select('*').eq('id', currentUser.id).single();
-      userProfile = data;
-      document.getElementById('user-points-display').textContent = userProfile.points || 0;
 
-      await determineSessionType();
-    });
-  </script>
-  <script src="js/igual1.js"></script>
+      let { data: profile } = await dbClient.from('profiles').select('*').eq('id', currentUser.id).maybeSingle();
+
+      // Auto-reparación: si el perfil no existe todavía, lo creamos con los datos del registro.
+      if (!profile) {
+        const meta = currentUser.user_metadata || {};
+        const { data: creado, error: upErr } = await dbClient
+          .from('profiles')
+          .upsert({
+            id: currentUser.id,
+            full_name: meta.full_name || null,
+            phone: meta.phone || null,
+            english_group: meta.english_group || null,
+            nivel: meta.nivel || 'A1',
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'id' })
+          .select().single();
+
+        if (upErr || !creado) {
+          console.error('No se pudo crear/leer el perfil:', upErr);
+          renderMessage('⚠️', 'Perfil no encontrado',
+            'No pudimos crear tu perfil automáticamente. Probablemente faltan las políticas RLS de la tabla <b>profiles</b>. Aplica el SQL de configuración y vuelve a intentar.');
+          return;
+        }
+        profile = creado;
+      }
+
+      userProfile = profile;
+      flujo = userProfile.flujo;
+      document.getElementById('user-points-display').textContent = userProfile.points || 0;
+      fillProfileMenu();
+
+      await ensureFlujo();
+      await runFlow();
+    } catch (e) {
+      console.error(e);
+      renderMessage('😵', 'Algo salió mal', 'Ocurrió un error al cargar tu sesión. Recarga la página.');
+    }
+  });
+</script>
 </body>
 </html>
