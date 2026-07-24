@@ -49,6 +49,15 @@
     /* Modal genérico */
     .modal-overlay { position: fixed; inset: 0; background: rgba(15,23,42,0.55); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; padding: 1rem; z-index: 200; }
 
+    /* Toast (avisos rápidos de recompensa) */
+    .toast {
+      position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(20px);
+      background: #1e293b; color: #fff; font-weight: 700; padding: 10px 18px; border-radius: 14px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.25); z-index: 300; opacity: 0;
+      transition: opacity .25s, transform .25s; pointer-events: none; max-width: 90vw; text-align: center;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
     /* Barra de herramientas superior */
     .tool-btn { transition: transform 0.15s; min-width: 44px; }
     .tool-btn:active { transform: scale(0.90); }
@@ -115,6 +124,11 @@
       <span id="user-points-display" class="font-black text-slate-700 text-base">0</span>
     </div>
 
+    <div class="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-xl shadow-sm border border-slate-200" title="Días seguidos aprendiendo">
+      <i class="fas fa-fire text-orange-500 text-base"></i>
+      <span id="streak-days" class="font-black text-slate-700 text-base">0</span>
+    </div>
+
     <button id="nivel-btn" class="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-xl shadow-sm border border-slate-200 hover:border-[#FF7A00] transition">
       <span class="text-[10px] font-bold text-slate-400 uppercase">Nivel</span>
       <span id="nivel-label" class="font-black text-[#FF7A00] text-sm">A1</span>
@@ -159,6 +173,10 @@
   // Algoritmo de memorización espaciada (tipo SM-2 simplificado)
   const SRS_INTERVALS_DAYS = [0.007, 1, 2, 4, 8, 15, 30, 60]; // días por nivel de SRS
   const EASE_DEFAULT = 2.5, EASE_MIN = 1.3, EASE_MAX = 3.0;
+  const GRADUATED_LEVEL = SRS_INTERVALS_DAYS.length - 1; // al llegar aquí la palabra se considera dominada
+  const SRS_SESSION_MAX = 30;   // máximo de palabras por sesión de "¡Toca repasar!"
+  const DAILY_NEW_LIMIT = 50;   // máximo de palabras NUEVAS por día (evita saturar el cerebro)
+  const DAILY_GOAL_POINTS = 60; // meta diaria de puntos → recompensa (1 lingot)
   const CEFR_ORDER = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
   const NIVELES_FIJOS = ['A1', 'A2', 'B1', 'B2']; // siempre visibles en el selector
 
@@ -194,6 +212,44 @@
      2. UTILIDADES GENERALES
   ============================================================ */
   const norm = (s) => (s || '').toString().trim().toLowerCase().replace(/[.,!?;:'"]/g, '');
+  const todayStr = () => new Date().toISOString().slice(0, 10);
+  const escapeHTML = (s) => (s || '').toString()
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+  // Estado diario (límite de palabras nuevas + meta de puntos). Se reinicia cada día.
+  function ensureDaily() {
+    if (!flujo.daily || flujo.daily.date !== todayStr()) {
+      flujo.daily = { date: todayStr(), newWords: 0, reviewed: 0, points: 0, goalShown: false };
+    }
+    if (!flujo.racha) flujo.racha = { days: 0, last: null, best: 0 };
+  }
+
+  // Racha de días consecutivos: se enciende con la primera actividad del día.
+  function touchStreak() {
+    ensureDaily();
+    const hoy = todayStr();
+    if (flujo.racha.last === hoy) return;
+    const ayer = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    flujo.racha.days = (flujo.racha.last === ayer) ? (flujo.racha.days || 0) + 1 : 1;
+    flujo.racha.last = hoy;
+    flujo.racha.best = Math.max(flujo.racha.best || 0, flujo.racha.days);
+    updateStreakUI();
+    if (flujo.racha.days > 1) showToast(`🔥 ¡Racha de ${flujo.racha.days} días! No la rompas.`);
+  }
+  function updateStreakUI() {
+    const el = document.getElementById('streak-days');
+    if (el && flujo && flujo.racha) el.textContent = flujo.racha.days || 0;
+  }
+
+  let toastTimer = null;
+  function showToast(msg, ms = 2600) {
+    let t = document.getElementById('app-toast');
+    if (!t) { t = document.createElement('div'); t.id = 'app-toast'; t.className = 'toast'; document.body.appendChild(t); }
+    t.innerHTML = msg;
+    requestAnimationFrame(() => t.classList.add('show'));
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), ms);
+  }
 
   function sortNiveles(arr) {
     return [...arr].sort((a, b) => {
@@ -249,7 +305,7 @@
   }
   function floatPoints(points) {
     const float = document.createElement('div');
-    float.textContent = `+${points}`;
+    float.textContent = sessionStreak >= 3 ? `+${points} 🔥x${sessionStreak}` : `+${points}`;
     float.className = 'floating-points';
     float.style.left = '50%'; float.style.top = '25%';
     document.body.appendChild(float);
@@ -335,6 +391,21 @@
     document.getElementById('user-points-display').textContent = newPts;
     const dd = document.getElementById('user-points'); if (dd) dd.textContent = newPts;
     floatPoints(points);
+
+    // Meta diaria: al alcanzarla se gana 1 lingot (recompensa fija diaria).
+    ensureDaily();
+    flujo.daily.points = (flujo.daily.points || 0) + points;
+    if (!flujo.daily.goalShown && flujo.daily.points >= DAILY_GOAL_POINTS) {
+      flujo.daily.goalShown = true;
+      const lingots = (parseFloat(userProfile.lingots) || 0) + 1;
+      userProfile.lingots = lingots;
+      const dl = document.getElementById('user-lingots'); if (dl) dl.textContent = lingots;
+      dbClient.from('profiles').update({ lingots }).eq('id', currentUser.id).then(() => {});
+      updateUserFlow();
+      triggerConfetti();
+      showToast(`🎯 ¡Meta diaria cumplida! <span class="text-yellow-400">+1 💎 Lingot</span>`, 3500);
+    }
+
     const { error } = await dbClient.from('profiles').update({ points: newPts }).eq('id', currentUser.id);
     if (error) console.error('Error guardando puntos:', error.message);
   }
@@ -345,53 +416,102 @@
     Los PUNTOS influyen en el SRS: una racha alta añade un pequeño bono de "ease",
     lo que alarga el intervalo (repasas menos lo que ya dominas).
   */
-  async function updateSRS(wordId, result) {
+  /*
+    result: 'easy' | 'hard'  (tarjeta ✨ Repaso)  ·  'practice_correct' | 'practice_wrong' (ejercicios)
+    opts.type: 'flashcard' | 'select_by_image' | 'write_by_audio'
+
+    Regla de DOMINIO INMEDIATO: si la palabra se marcó "Fácil" en su primer repaso
+    Y el primer intento de "Identifica la imagen" Y de "Escucha y escribe" fueron
+    correctos (sin ningún fallo), se marca learned=true y NUNCA vuelve a "¡Toca repasar!".
+    Las demás palabras siguen el ciclo SRS hasta graduarse en el intervalo máximo.
+  */
+  async function updateSRS(wordId, result, opts = {}) {
+    ensureDaily();
     const key = String(wordId);
-    const s = flujo.srs[key] || { level: 0, ease: EASE_DEFAULT, reps: 0, lapses: 0, due: null };
+    const isNew = !flujo.srs[key];
+    const s = flujo.srs[key] || { level: 0, ease: EASE_DEFAULT, reps: 0, lapses: 0, due: null, learned: false, easyFirst: false, first: {} };
+    if (!s.first) s.first = {};
+    if (isNew) flujo.daily.newWords = (flujo.daily.newWords || 0) + 1; // cuenta para el límite diario
+
+    const ok = (result === 'easy' || result === 'correct' || result === 'practice_correct');
+    const hard = (result === 'hard');
+    const type = opts.type || null;
+
+    // Registro del PRIMER intento por tipo (antes de tocar reps/lapses)
+    if (type === 'flashcard' && s.reps === 0 && s.lapses === 0 && !s.easyFirst) {
+      s.easyFirst = (result === 'easy');
+    }
+    if ((type === 'select_by_image' || type === 'write_by_audio') && s.first[type] === undefined) {
+      s.first[type] = ok;
+    }
 
     let points = 0;
 
-    if (result === 'correct' || result === 'easy') {
+    if (ok) {
       sessionStreak++;
       sessionCorrect++;
-      const streakBonus = Math.min(sessionStreak * 0.02, 0.12); // los puntos/racha influyen en el SRS
+      flujo.stats.totalCorrect = (flujo.stats.totalCorrect || 0) + 1;
+      const streakBonus = Math.min(sessionStreak * 0.02, 0.12); // la racha alarga el intervalo
       s.reps++;
       s.ease = Math.min(EASE_MAX, s.ease + (result === 'easy' ? 0.15 : 0.08) + streakBonus);
       s.level = Math.min(s.level + 1, SRS_INTERVALS_DAYS.length - 1);
       points = (result === 'easy' ? 12 : 10) + Math.min(sessionStreak, 8); // bono por racha
+      if (Math.random() < 0.08) { points += 5; setTimeout(() => showToast('🎁 ¡Bonus sorpresa! +5 puntos extra'), 400); }
       playSound('correct'); triggerConfetti();
-    } else if (result === 'hard') {
+    } else if (hard) {
       s.reps++;
       s.ease = Math.max(EASE_MIN, s.ease - 0.15);
       // el nivel se mantiene
       points = 3;
-    } else { // 'wrong'
+    } else { // fallo
       sessionStreak = 0;
+      flujo.stats.totalWrong = (flujo.stats.totalWrong || 0) + 1;
       s.lapses++;
       s.ease = Math.max(EASE_MIN, s.ease - 0.2);
-      s.level = 0; // vuelve a empezar el intervalo
+      s.level = Math.max(0, s.level - 2); // retrocede 2 niveles (no castiga hasta cero: mejor experiencia)
       points = 0;
       playSound('wrong');
     }
 
-    const baseDays = SRS_INTERVALS_DAYS[s.level];
-    const days = Math.max(0.005, baseDays * (s.ease / EASE_DEFAULT));
-    s.due = new Date(Date.now() + days * 86400000).toISOString();
+    // ¿Dominio inmediato? Fácil a la primera + ambos ejercicios bien al primer intento + cero fallos.
+    const word = groupCache.map[key];
+    const requiereImagen = word ? !!word.imagen : true;
+    const imagenOk = !requiereImagen || s.first.select_by_image === true;
+    const audioOk = s.first.write_by_audio === true;
+    if (!s.learned && s.easyFirst && imagenOk && audioOk && s.lapses === 0) {
+      s.learned = true;
+      setTimeout(() => showToast('🏅 ¡Palabra dominada a la primera! No volverá a repaso.'), 600);
+    }
+    // Graduación normal: alcanzó el intervalo máximo del SRS.
+    if (!s.learned && s.level >= GRADUATED_LEVEL) {
+      s.learned = true;
+      setTimeout(() => showToast('🎓 ¡Palabra graduada! Ya vive en tu memoria a largo plazo.'), 600);
+    }
+
+    if (s.learned) {
+      s.due = null; // dominada: fuera de "¡Toca repasar!" para siempre
+    } else {
+      const baseDays = SRS_INTERVALS_DAYS[s.level];
+      const days = Math.max(0.005, baseDays * (s.ease / EASE_DEFAULT));
+      s.due = new Date(Date.now() + days * 86400000).toISOString();
+    }
     s.updated = new Date().toISOString();
 
     flujo.srs[key] = s;
+    touchStreak();
 
     // Guardado principal en la columna flujo
     await updateUserFlow();
     if (points) await addPoints(points);
 
-    // Réplica (no bloqueante) en la tabla dedicada
+    // Réplica (no bloqueante) en la tabla dedicada. next_review_at es NOT NULL:
+    // para palabras dominadas se guarda una fecha lejana.
     dbClient.from('user_word_progress').upsert({
       user_id: currentUser.id,
       word_id: wordId,
       srs_level: s.level,
       ease_factor: s.ease,
-      next_review_at: s.due
+      next_review_at: s.due || '2099-12-31T00:00:00.000Z'
     }, { onConflict: 'user_id, word_id' }).then(({ error }) => {
       if (error) console.warn('user_word_progress (opcional):', error.message);
     });
@@ -401,23 +521,49 @@
      5. DATOS (palabras / niveles / grupos / repasos)
   ============================================================ */
   async function getNiveles() {
-    const { data, error } = await dbClient.from('palabras').select('nivel');
-    if (error) { console.error('[getNiveles] ❌ Error leyendo "palabras":', error.message, error); return []; }
-    const set = [...new Set((data || []).map(r => r.nivel).filter(Boolean))];
-    console.log('[getNiveles] filas leídas:', (data || []).length, '· niveles con contenido:', set);
-    return sortNiveles(set); // sin fallback: si está vacío, es vacío de verdad
+    /*
+      ARREGLO "Sin contenido": la consulta anterior traía TODAS las filas de "palabras"
+      y PostgREST corta en 1000, así que los niveles cuyas filas quedaban fuera del corte
+      (p. ej. A1/A2) aparecían como vacíos. Ahora se cuenta por nivel con head:true
+      (sin traer filas) y con fallback insensible a mayúsculas/minúsculas.
+    */
+    const candidatos = [...new Set([...NIVELES_FIJOS, ...CEFR_ORDER])];
+    const conContenido = [];
+    await Promise.all(candidatos.map(async (n) => {
+      let { count, error } = await dbClient.from('palabras').select('id', { count: 'exact', head: true }).eq('nivel', n);
+      if ((error || !count)) {
+        // fallback: 'a1', 'A1 ', etc.
+        const r2 = await dbClient.from('palabras').select('id', { count: 'exact', head: true }).ilike('nivel', n);
+        count = r2.count; error = r2.error;
+      }
+      if (!error && (count || 0) > 0) conContenido.push(n);
+    }));
+    // Complemento: detectar niveles con nombres fuera del estándar CEFR (dentro del primer bloque de filas).
+    const { data } = await dbClient.from('palabras').select('nivel').range(0, 999);
+    (data || []).forEach(r => {
+      const v = (r.nivel || '').trim();
+      if (v && !conContenido.some(c => c.toLowerCase() === v.toLowerCase())) conContenido.push(v);
+    });
+    console.log('[getNiveles] niveles con contenido:', conContenido);
+    return sortNiveles(conContenido);
   }
   async function getGroups(nivel) {
-    const { data, error } = await dbClient.from('palabras').select('grupo').eq('nivel', nivel);
+    let { data, error } = await dbClient.from('palabras').select('grupo').eq('nivel', nivel).range(0, 9999);
+    if (!error && !(data || []).length) {
+      ({ data, error } = await dbClient.from('palabras').select('grupo').ilike('nivel', nivel).range(0, 9999));
+    }
     if (error) { console.error(`[getGroups ${nivel}] ❌`, error.message, error); return []; }
-    const set = sortGroups([...new Set((data || []).map(r => r.grupo).filter(Boolean))]);
+    const set = sortGroups([...new Set((data || []).map(r => (r.grupo || '').trim()).filter(Boolean))]);
     console.log(`[getGroups ${nivel}] grupos:`, set);
     return set;
   }
   async function getGroupWords(nivel, group) {
     const key = `${nivel}|${group}`;
     if (groupCache.key === key && groupCache.list.length) return groupCache.list;
-    const { data, error } = await dbClient.from('palabras').select('*').eq('nivel', nivel).eq('grupo', group);
+    let { data, error } = await dbClient.from('palabras').select('*').eq('nivel', nivel).eq('grupo', group).range(0, 9999);
+    if (!error && !(data || []).length) {
+      ({ data, error } = await dbClient.from('palabras').select('*').ilike('nivel', nivel).ilike('grupo', group).range(0, 9999));
+    }
     if (error) { console.error(`[getGroupWords ${key}] ❌`, error.message, error); return []; }
     const list = data || [];
     console.log(`[getGroupWords ${key}] palabras:`, list.length, list.map(w => w.ingles));
@@ -434,16 +580,27 @@
   }
 
   // Palabras cuyo próximo repaso ya venció (SRS), limitadas al nivel actual.
+  // Excluye las dominadas (learned), prioriza las más difíciles/vencidas y
+  // limita la sesión a SRS_SESSION_MAX (30) palabras.
   async function getDueReviews(nivel) {
     const now = Date.now();
     const dueIds = Object.entries(flujo.srs)
-      .filter(([, v]) => v.due && new Date(v.due).getTime() <= now)
+      .filter(([, v]) => !v.learned && v.due && new Date(v.due).getTime() <= now)
+      .sort((a, b) => {
+        const la = a[1].lapses || 0, lb = b[1].lapses || 0;
+        if (lb !== la) return lb - la; // primero las que más cuestan
+        return new Date(a[1].due) - new Date(b[1].due); // luego las más vencidas
+      })
       .map(([id]) => parseInt(id))
-      .filter(n => !isNaN(n));
+      .filter(n => !isNaN(n))
+      .slice(0, SRS_SESSION_MAX);
     if (!dueIds.length) return [];
-    const { data } = await dbClient.from('palabras').select('*').eq('nivel', nivel).in('id', dueIds);
-    const words = (data || []).sort(() => Math.random() - 0.5).slice(0, 12);
-    return words;
+    let { data } = await dbClient.from('palabras').select('*').eq('nivel', nivel).in('id', dueIds);
+    if (!(data || []).length) {
+      ({ data } = await dbClient.from('palabras').select('*').ilike('nivel', nivel).in('id', dueIds));
+    }
+    const orden = new Map(dueIds.map((id, i) => [id, i]));
+    return (data || []).sort((a, b) => (orden.get(a.id) ?? 99) - (orden.get(b.id) ?? 99)).slice(0, SRS_SESSION_MAX);
   }
 
   /* ============================================================
@@ -453,7 +610,15 @@
     return { review: { done: false, index: 0 }, practice: { done: false, queue: [], index: 0 }, completed: false, correct: 0, wrong: 0 };
   }
   function defaultFlujo(nivel) {
-    return { version: 2, currentNivel: nivel, niveles: {}, srs: {}, stats: { totalCorrect: 0, totalWrong: 0, sessionsCompleted: 0 } };
+    return {
+      version: 3,
+      currentNivel: nivel,
+      niveles: {},
+      srs: {},
+      stats: { totalCorrect: 0, totalWrong: 0, sessionsCompleted: 0 },
+      daily: { date: todayStr(), newWords: 0, reviewed: 0, points: 0, goalShown: false },
+      racha: { days: 0, last: null, best: 0 }
+    };
   }
 
   async function ensureFlujo() {
@@ -479,6 +644,16 @@
     if (!flujo.currentNivel) flujo.currentNivel = baseNivel;
     if (!flujo.srs) flujo.srs = {};
     if (!flujo.stats) flujo.stats = { totalCorrect: 0, totalWrong: 0, sessionsCompleted: 0 };
+    // Migración suave v2 → v3 (sin perder progreso): agrega estado diario, racha y campos SRS nuevos.
+    ensureDaily();
+    Object.values(flujo.srs).forEach(s => {
+      if (s.learned === undefined) s.learned = false;
+      if (!s.first) s.first = {};
+      if (s.easyFirst === undefined) s.easyFirst = false;
+      // Palabras que ya alcanzaron el intervalo máximo se gradúan.
+      if (!s.learned && (s.level || 0) >= GRADUATED_LEVEL) { s.learned = true; s.due = null; }
+    });
+    if (flujo.version < 3) { flujo.version = 3; await updateUserFlow(); }
   }
 
   async function ensureNivel(nivel) {
@@ -581,10 +756,25 @@
     }
 
     const word = reviewList[i];
+
+    // Límite diario: máximo DAILY_NEW_LIMIT palabras NUEVAS por día para no saturar el cerebro.
+    ensureDaily();
+    const esNueva = !flujo.srs[String(word.id)];
+    if (esNueva && flujo.daily.newWords >= DAILY_NEW_LIMIT) {
+      updateProgressBar(100);
+      return renderMessage('🧠', '¡Cerebro a tope por hoy!',
+        `Ya aprendiste <b>${DAILY_NEW_LIMIT} palabras nuevas</b> hoy: el máximo ideal para que tu memoria las fije bien.<br>Vuelve mañana por más, o refuerza lo aprendido con un repaso.`,
+        'Repasar lo aprendido 🧠', async () => {
+          const due = await getDueReviews(nivel);
+          if (due.length) startSrsReview(due);
+          else renderMessage('😴', 'Todo al día', 'No tienes repasos pendientes. ¡Descansa, mañana seguimos! 🌙');
+        });
+    }
+
     updateProgressBar((i / reviewList.length) * 100);
     appContainer.innerHTML = flashcardHTML(word, i + 1, reviewList.length);
     bindFlashcard(word, async (result) => {
-      await updateSRS(word.id, result); // 'easy' | 'hard' (siembra el SRS)
+      await updateSRS(word.id, result, { type: 'flashcard' }); // 'easy' | 'hard' (siembra el SRS)
       g.review.index = i + 1;
       await updateUserFlow();
       renderReview(nivel, group, words);
@@ -610,7 +800,12 @@
           </div>
         </div>
 
-        <h1 class="text-4xl sm:text-5xl font-black font-heading text-[#FF7A00] mb-1 tracking-tight">${word.ingles}</h1>
+        <div class="flex items-center justify-center gap-3 mb-1">
+          <h1 class="text-4xl sm:text-5xl font-black font-heading text-[#FF7A00] tracking-tight">${word.ingles}</h1>
+          <button id="btn-word-audio" title="Escuchar pronunciación" class="w-11 h-11 sm:w-12 sm:h-12 shrink-0 rounded-full bg-gradient-to-br from-[#FF7A00] to-orange-600 text-white text-lg shadow-lg shadow-orange-200 hover:scale-110 active:scale-95 transition flex items-center justify-center">
+            <i class="fas fa-volume-up"></i>
+          </button>
+        </div>
 
         <div class="h-9 mb-2 flex items-center justify-center">
           <button id="btn-show-phonetic" class="text-slate-400 hover:text-slate-600 hover:bg-slate-100 text-xs font-bold border border-slate-200 rounded-full px-3 py-1 transition-all flex items-center gap-2">
@@ -633,6 +828,8 @@
 
   function bindFlashcard(word, onRate) {
     setTimeout(() => playWordAudio(word), 350);
+    const btnAudio = document.getElementById('btn-word-audio');
+    if (btnAudio) btnAudio.onclick = (e) => { e.stopPropagation(); playWordAudio(word); };
     const btnP = document.getElementById('btn-show-phonetic');
     const txtP = document.getElementById('txt-phonetic');
     if (btnP && txtP) btnP.onclick = (e) => { e.stopPropagation(); btnP.classList.add('hidden'); txtP.classList.remove('hidden'); txtP.classList.add('animate-pop'); };
@@ -706,7 +903,7 @@
       const gg = flujo.niveles[nivel].grupos[group];
       if (isCorrect) gg.correct++; else gg.wrong++;
       gg.practice.index = i + 1;
-      await updateSRS(word.id, isCorrect ? 'practice_correct' : 'practice_wrong');
+      await updateSRS(word.id, isCorrect ? 'practice_correct' : 'practice_wrong', { type: ex.type });
       await updateUserFlow();
       // Mensaje de ánimo cada 5 aciertos
       if (isCorrect && sessionCorrect > 0 && sessionCorrect % 5 === 0 && sessionCorrect !== lastMilestone) {
@@ -793,31 +990,54 @@
      10. REPASO SRS (sesión de palabras vencidas)
   ============================================================ */
   function startSrsReview(words) {
-    srsSession = { queue: words, index: 0 };
-    renderMessage('🧠', '¡Toca repasar!', `Tienes <b>${words.length}</b> palabra(s) que tu memoria está a punto de olvidar. Vamos a reforzarlas.`, 'Empezar repaso', () => nextSrsReview());
+    srsSession = { queue: words.slice(0, SRS_SESSION_MAX), index: 0, aciertos: 0 };
+    renderMessage('🧠', '¡Toca repasar!',
+      `Tienes <b>${srsSession.queue.length}</b> palabra(s) que tu memoria está a punto de olvidar. Vamos a reforzarlas.<br><span class="text-xs text-slate-400">(máximo ${SRS_SESSION_MAX} por sesión para no saturarte)</span>`,
+      'Empezar repaso', () => nextSrsReview());
   }
   async function nextSrsReview() {
     if (!srsSession || srsSession.index >= srsSession.queue.length) {
+      const aciertos = srsSession ? srsSession.aciertos : 0;
+      const total = srsSession ? srsSession.queue.length : 0;
       srsSession = null;
+      flujo.stats.sessionsCompleted = (flujo.stats.sessionsCompleted || 0) + 1;
+      await updateUserFlow();
       playSound('complete'); triggerConfetti();
-      showModal({ icon: '🧠', title: '¡Repaso terminado!', body: 'Has fortalecido tu memoria a largo plazo.', dismissable: false, actions: [{ label: 'Continuar', onClick: () => { closeModal(); runFlow(); } }] });
+      showModal({
+        icon: '🧠', title: '¡Repaso terminado!',
+        body: `Has fortalecido tu memoria a largo plazo.<br><span class="text-green-600 font-bold">${aciertos}/${total} aciertos</span>`,
+        dismissable: false,
+        actions: [{ label: 'Continuar', onClick: () => { closeModal(); runFlow(); } }]
+      });
       return;
     }
     const word = srsSession.queue[srsSession.index];
     updateProgressBar((srsSession.index / srsSession.queue.length) * 100);
 
-    const advance = async (isCorrect) => {
-      await updateSRS(word.id, isCorrect ? 'practice_correct' : 'practice_wrong');
+    const s = flujo.srs[String(word.id)] || {};
+    const esDebil = (s.lapses || 0) >= 3 || (s.level || 0) === 0; // le cuesta: mejor volver a estudiarla
+
+    const avanzar = async (result, type, fueBien) => {
+      await updateSRS(word.id, result, { type });
+      ensureDaily();
+      flujo.daily.reviewed = (flujo.daily.reviewed || 0) + 1;
+      if (fueBien) srsSession.aciertos++;
       srsSession.index++;
-      setTimeout(() => nextSrsReview(), isCorrect ? 1000 : 2000);
+      setTimeout(() => nextSrsReview(), fueBien ? 1000 : 2000);
     };
 
-    // Alternamos el tipo de ejercicio también en el repaso
-    if (word.imagen && Math.random() > 0.5) {
+    // Mezcla de formatos: tarjeta ✨ Repaso, imagen o dictado.
+    const r = Math.random();
+    if (esDebil || r < 0.34) {
+      // Tarjeta ✨ Repaso (flashcard) también dentro de "¡Toca repasar!"
+      appContainer.innerHTML = flashcardHTML(word, srsSession.index + 1, srsSession.queue.length);
+      bindFlashcard(word, (res) => avanzar(res, 'flashcard', res === 'easy'));
+    } else if (word.imagen && r < 0.67) {
       const pool = (groupCache.list.length ? groupCache.list : srsSession.queue).map(w => w.ingles);
-      renderSelectImage(word, buildOptions(word.ingles, pool.length >= 4 ? pool : [word.ingles, 'yes', 'no', 'time']), advance);
+      renderSelectImage(word, buildOptions(word.ingles, pool.length >= 4 ? pool : [word.ingles, 'yes', 'no', 'time']),
+        (ok) => avanzar(ok ? 'practice_correct' : 'practice_wrong', 'select_by_image', ok));
     } else {
-      renderWriteAudio(word, advance);
+      renderWriteAudio(word, (ok) => avanzar(ok ? 'practice_correct' : 'practice_wrong', 'write_by_audio', ok));
     }
   }
 
@@ -826,10 +1046,15 @@
   ============================================================ */
   function groupCompleteScreen(nivel, group, g) {
     playSound('complete'); triggerConfetti();
+    // Cofre de recompensa: +1 lingot por completar el grupo.
+    const lingots = (parseFloat(userProfile.lingots) || 0) + 1;
+    userProfile.lingots = lingots;
+    const dl = document.getElementById('user-lingots'); if (dl) dl.textContent = lingots;
+    dbClient.from('profiles').update({ lingots }).eq('id', currentUser.id).then(() => {});
     showModal({
       icon: '🏆',
       title: '¡Grupo completado!',
-      body: `Terminaste <b>${group}</b> del nivel <b>${nivel}</b>.<br><span class="text-green-600 font-bold">${g.correct} aciertos</span> · <span class="text-slate-400">${g.wrong} fallos</span>`,
+      body: `Terminaste <b>${group}</b> del nivel <b>${nivel}</b>.<br><span class="text-green-600 font-bold">${g.correct} aciertos</span> · <span class="text-slate-400">${g.wrong} fallos</span><br><span class="text-yellow-600 font-bold text-lg">🎁 +1 💎 Lingot</span>`,
       dismissable: false,
       actions: [{ label: 'Siguiente 👉', onClick: () => { closeModal(); advanceGroup(nivel, group); } }]
     });
@@ -901,95 +1126,135 @@
   /* ============================================================
      13. CONVERSACIÓN CON IA (Edge Function + DeepSeek + Voz)
   ============================================================ */
+  /*
+    HABLAR IA — Chat conversacional.
+    La persona chatea con "Abu" (tutor de inglés). Cada mensaje se envía a la Edge
+    Function "generar-dialogo" con mode:"chat" y el historial reciente; la IA responde
+    en inglés (adaptado al nivel) con traducción al español y corrige errores con tacto.
+    Requiere actualizar la Edge Function con el archivo index.ts incluido junto a esta página.
+  */
+  let aiChat = []; // historial [{role:'user'|'assistant', content}]
+
   async function openAiDialogue() {
     const nivel = flujo.currentNivel;
-    const group = flujo.niveles[nivel]?.currentGroup;
-    const words = await getGroupWords(nivel, group);
-
-    // Palabras "estudiadas" del grupo: las que ya tienen registro SRS. Si no hay, usa las del grupo.
-    const studied = words.filter(w => flujo.srs[String(w.id)]).map(w => w.ingles);
-    const wordList = (studied.length ? studied : words.map(w => w.ingles)).slice(0, 12);
-
-    if (!wordList.length) { showModal({ icon: '🤖', title: 'Sin palabras aún', body: 'Estudia algunas palabras del grupo para generar una conversación.', actions: [{ label: 'Entendido', onClick: closeModal }] }); return; }
+    aiChat = [];
 
     showModal({
-      icon: '🤖', title: 'Conversación con IA', size: 'lg', dismissable: true,
-      body: `<div id="ai-body"><p class="text-slate-500">Generando un diálogo con tus palabras...</p>
-              <div class="w-10 h-10 border-4 border-[#FF7A00] border-t-transparent rounded-full animate-spin mx-auto my-6"></div></div>`,
-      actions: [{ label: 'Cerrar', style: 'bg-slate-100 text-slate-500', onClick: closeModal }]
+      icon: '🤖', title: 'Chat con Abu (IA)', size: 'lg', dismissable: true,
+      body: `
+        <div class="text-left">
+          <p class="text-xs text-slate-400 mb-2 text-center">Escríbele en inglés. Abu te corrige con cariño y te traduce todo. 💬</p>
+          <div id="ai-messages" class="max-h-72 overflow-y-auto pr-1 space-y-2 mb-3 min-h-[120px]"></div>
+          <div class="flex gap-2">
+            <input id="ai-input" type="text" placeholder="Escribe en inglés..." autocomplete="off" autocapitalize="off" spellcheck="false"
+              class="flex-1 min-w-0 bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:border-[#FF7A00] text-slate-700 font-medium">
+            <button id="ai-send" class="btn-juice bg-[#FF7A00] text-white font-bold px-4 py-2 rounded-xl shrink-0"><i class="fas fa-paper-plane"></i></button>
+          </div>
+          <div class="flex items-center justify-between mt-2">
+            <label class="flex items-center gap-2 text-xs text-slate-400 font-bold cursor-pointer">
+              <input id="ai-tts" type="checkbox" checked class="accent-[#FF7A00]"> Leer respuestas en voz alta
+            </label>
+            <button id="ai-stop" class="text-slate-400 hover:text-slate-600 text-xs font-bold"><i class="fas fa-stop mr-1"></i>Silenciar voz</button>
+          </div>
+        </div>`,
+      actions: []
     });
 
-    try {
-      console.log('[IA] invocando generar-dialogo con:', { words: wordList, nivel, grupo: group });
-      const { data, error } = await dbClient.functions.invoke('generar-dialogo', {
-        body: { words: wordList, nivel, grupo: group }
-      });
-      console.log('[IA] respuesta cruda →', { data, error });
+    bindChat(nivel);
 
-      // Si la función respondió con código != 2xx, invoke deja el detalle en error.context (un Response).
-      if (error) {
-        let detalle = error.message || 'Error desconocido';
-        try {
-          if (error.context && typeof error.context.json === 'function') {
-            const body = await error.context.json();
-            console.error('[IA] cuerpo del error de la función:', body);
-            detalle = body.detail || body.error || detalle;
-          }
-        } catch (e2) { console.warn('[IA] no se pudo leer error.context:', e2); }
-        return aiError(detalle);
+    // Saludo inicial de Abu (local, sin llamar a la IA)
+    const saludo = {
+      en: `Hi! I'm Abu 🤖 Let's practice your English (${nivel} level). How are you today?`,
+      es: `¡Hola! Soy Abu. Practiquemos tu inglés (nivel ${nivel}). ¿Cómo estás hoy?`
+    };
+    addChatBubble('ai', saludo);
+    aiChat.push({ role: 'assistant', content: saludo.en });
+    if (document.getElementById('ai-tts')?.checked) speak(saludo.en);
+  }
+
+  function addChatBubble(role, msg) {
+    const box = document.getElementById('ai-messages');
+    if (!box) return null;
+    const div = document.createElement('div');
+    div.className = role === 'user' ? 'flex justify-end' : 'flex justify-start';
+    div.innerHTML = role === 'user'
+      ? `<div class="bg-[#FF7A00] text-white rounded-2xl rounded-br-sm px-4 py-2 max-w-[85%] font-medium">${escapeHTML(msg.en)}</div>`
+      : `<div class="bg-slate-100 text-slate-800 rounded-2xl rounded-bl-sm px-4 py-2 max-w-[85%]">
+           <div class="font-medium">${escapeHTML(msg.en)}</div>
+           ${msg.es ? `<div class="text-xs text-slate-400 mt-1">${escapeHTML(msg.es)}</div>` : ''}
+         </div>`;
+    box.appendChild(div);
+    box.scrollTop = box.scrollHeight;
+    return div;
+  }
+
+  function bindChat(nivel) {
+    const input = document.getElementById('ai-input');
+    const send = document.getElementById('ai-send');
+    const stopBtn = document.getElementById('ai-stop');
+    if (!input || !send) return;
+    if (stopBtn) stopBtn.onclick = stopSpeaking;
+
+    const enviar = async () => {
+      const text = (input.value || '').trim();
+      if (!text || send.disabled) return;
+      input.value = '';
+      addChatBubble('user', { en: text });
+      aiChat.push({ role: 'user', content: text });
+
+      const box = document.getElementById('ai-messages');
+      const typing = document.createElement('div');
+      typing.className = 'flex justify-start';
+      typing.innerHTML = `<div class="bg-slate-100 text-slate-400 rounded-2xl rounded-bl-sm px-4 py-2 text-sm"><i class="fas fa-circle-notch fa-spin mr-1"></i> Abu está escribiendo...</div>`;
+      if (box) { box.appendChild(typing); box.scrollTop = box.scrollHeight; }
+      send.disabled = true;
+
+      try {
+        console.log('[IA chat] enviando', aiChat.length, 'mensajes · nivel', nivel);
+        const { data, error } = await dbClient.functions.invoke('generar-dialogo', {
+          body: { mode: 'chat', nivel, messages: aiChat.slice(-12) }
+        });
+
+        if (error) {
+          let detalle = error.message || 'Error desconocido';
+          try {
+            if (error.context && typeof error.context.json === 'function') {
+              const b = await error.context.json();
+              console.error('[IA chat] error de la función:', b);
+              detalle = b.detail || b.error || detalle;
+            }
+          } catch (e2) { console.warn('[IA chat] no se pudo leer error.context:', e2); }
+          throw new Error(detalle);
+        }
+
+        let payload = data;
+        if (typeof payload === 'string') { try { payload = JSON.parse(payload); } catch { /* abajo */ } }
+        if (payload && payload.error) throw new Error(payload.detail || payload.error);
+
+        const reply = payload?.reply || payload || {};
+        const en = reply.en || reply.text || '';
+        if (!en) throw new Error('La IA devolvió una respuesta vacía. Intenta de nuevo.');
+
+        typing.remove();
+        addChatBubble('ai', { en, es: reply.es || '' });
+        aiChat.push({ role: 'assistant', content: en });
+        if (document.getElementById('ai-tts')?.checked) speak(en);
+      } catch (err) {
+        console.error('[IA chat] excepción:', err);
+        typing.remove();
+        const errDiv = addChatBubble('ai', { en: '⚠️ I could not reply. Tap to retry.', es: String(err?.message || err) });
+        if (errDiv) { errDiv.style.cursor = 'pointer'; errDiv.onclick = () => { errDiv.remove(); aiChat.pop(); input.value = text; enviar(); }; }
+      } finally {
+        send.disabled = false;
+        input.focus();
       }
+    };
 
-      // La respuesta puede llegar como objeto o como texto JSON.
-      let payload = data;
-      if (typeof payload === 'string') { try { payload = JSON.parse(payload); } catch { /* se maneja abajo */ } }
-      if (payload && payload.error) return aiError(payload.detail || payload.error);
-
-      const lines = Array.isArray(payload?.lines) ? payload.lines : [];
-      const title = payload?.title || 'Práctica de conversación';
-      console.log('[IA] líneas recibidas:', lines.length);
-
-      if (!lines.length) return aiError('La IA devolvió una respuesta vacía. Intenta de nuevo.');
-
-      renderAiDialogue(title, lines);
-    } catch (err) {
-      console.error('[IA] excepción invocando la función:', err);
-      aiError(err?.message || String(err));
-    }
+    send.onclick = enviar;
+    input.addEventListener('keypress', (e) => { if (e.key === 'Enter') enviar(); });
+    setTimeout(() => input.focus(), 100);
   }
 
-  function aiError(detalle) {
-    const body = document.getElementById('ai-body');
-    if (!body) return;
-    body.innerHTML = `
-      <p class="text-red-500 font-bold mb-2">No se pudo generar el diálogo.</p>
-      <p class="text-slate-500 text-sm mb-3">${detalle}</p>
-      <button id="ai-retry" class="btn-juice bg-[#FF7A00] text-white font-bold py-2 px-6 rounded-xl"><i class="fas fa-rotate-right mr-2"></i>Reintentar</button>`;
-    const r = document.getElementById('ai-retry');
-    if (r) r.onclick = openAiDialogue;
-  }
-
-  function renderAiDialogue(title, lines) {
-    const body = document.getElementById('ai-body');
-    if (!body) return;
-    const rows = lines.map((l, i) => `
-      <div class="text-left mb-3 p-3 rounded-xl ${i % 2 === 0 ? 'bg-orange-50' : 'bg-blue-50'}">
-        <div class="text-xs font-bold uppercase ${i % 2 === 0 ? 'text-[#FF7A00]' : 'text-blue-500'} mb-1">${l.speaker || (i % 2 === 0 ? 'A' : 'B')}</div>
-        <div class="font-bold text-slate-800">${l.en || ''}</div>
-        ${l.es ? `<div class="text-sm text-slate-400">${l.es}</div>` : ''}
-      </div>`).join('');
-
-    body.innerHTML = `
-      <h3 class="font-heading font-bold text-slate-700 mb-3">${title}</h3>
-      <div class="max-h-64 overflow-y-auto pr-1">${rows}</div>
-      <div class="flex gap-3 mt-4">
-        <button id="ai-play" class="flex-1 btn-juice bg-[#FF7A00] text-white font-bold py-3 rounded-xl"><i class="fas fa-play mr-2"></i>Escuchar</button>
-        <button id="ai-stop" class="btn-juice bg-slate-100 text-slate-500 font-bold px-5 py-3 rounded-xl"><i class="fas fa-stop"></i></button>
-      </div>`;
-
-    const enLines = lines.map(l => l.en).filter(Boolean);
-    document.getElementById('ai-play').onclick = () => speakSequence(enLines);
-    document.getElementById('ai-stop').onclick = () => stopSpeaking();
-  }
 
   function speakSequence(texts, i = 0) {
     if (i === 0) stopSpeaking();
@@ -1085,6 +1350,7 @@
       fillProfileMenu();
 
       await ensureFlujo();
+      updateStreakUI();
       await runFlow();
     } catch (e) {
       console.error(e);
