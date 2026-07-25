@@ -148,15 +148,15 @@
   </header>
 
   <!-- HUD (compacto) -->
-  <div class="w-full max-w-2xl mx-auto px-3 pt-16 pb-2 flex flex-wrap items-center justify-between gap-2 gap-y-2">
+ <div class="w-full max-w-2xl mx-auto px-3 pt-16 pb-2 flex items-center justify-between gap-2">
     <div class="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-xl shadow-sm border border-slate-200">
       <i class="fas fa-star text-yellow-400 text-base"></i>
-      <span id="user-points-display" class="font-black text-slate-700 text-base">0</span>
+      <span id="user-points-display" class="font-black text-slate-700 text-base">6310</span>
     </div>
 
     <div class="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-xl shadow-sm border border-slate-200" title="Días seguidos aprendiendo">
       <i class="fas fa-fire text-orange-500 text-base"></i>
-      <span id="streak-days" class="font-black text-slate-700 text-base">0</span>
+      <span id="streak-days" class="font-black text-slate-700 text-base">2</span>
     </div>
 
     <button id="nivel-btn" class="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-xl shadow-sm border border-slate-200 hover:border-[#FF7A00] transition">
@@ -165,14 +165,7 @@
       <i class="fas fa-chevron-down text-slate-400 text-[10px]"></i>
     </button>
 
-    <!-- M = MAZO: estudia las palabras que cargaste en tu mazo -->
-    <button id="mazo-btn" title="Estudiar mi mazo" class="relative flex items-center gap-1 bg-white px-2.5 py-1.5 rounded-xl shadow-sm border border-slate-200 hover:border-[#FF7A00] transition">
-      <i class="fas fa-layer-group text-slate-400 text-[11px]"></i>
-      <span class="font-black text-slate-600 text-sm leading-none">M</span>
-      <span id="mazo-badge" class="hidden absolute -top-1.5 -right-1.5 min-w-[17px] h-[17px] px-1 rounded-full bg-[#FF7A00] text-white text-[9px] font-black items-center justify-center shadow">0</span>
-    </button>
-
-    <div class="flex-1 min-w-[110px]">
+    <div class="flex-1 min-w-[80px]">
       <div class="flex justify-between text-[10px] font-bold text-slate-400 mb-0.5">
         <span>PROGRESO</span>
         <span id="progress-text">0%</span>
@@ -198,6 +191,13 @@
   <div id="modal-root"></div>
 
 <script type="module">
+function openAbuChat() {
+    const nivel = flujo?.currentNivel || 'A1';
+    const group = flujo?.niveles?.[nivel]?.currentGroup || null;
+    
+    // Llama directamente a la función que renderiza el chat de Abu en el app-container
+    startChatPractice(nivel, group, false);
+}
   /* ============================================================
      1. CONFIGURACIÓN Y ESTADO
   ============================================================ */
@@ -1311,6 +1311,23 @@
      acabas de estudiar. Nunca se presenta como una IA: es Abu.
      Respuestas: Edge Function "generar-dialogo" (mode:"chat").
   ============================================================ */
+  function chatPracticeIntro(nivel, group) {
+  showModal({
+    icon: '💬',
+    title: '¡Hora de hablar!',
+    body: 'Es momento de poner en práctica lo que aprendiste. Conversa con Abu e intenta usar las palabras de este grupo.',
+    dismissable: false,
+    actions: [
+      { 
+        label: 'Empezar a chatear 👉', 
+        onClick: () => {
+          // Llama a la función principal del chat pasando 'true' para que cuente el progreso
+          startChatPractice(nivel, group, true); 
+        } 
+      }
+    ]
+  });
+}
   const CHAT_TIMEOUT_MS = 20000;   // con "thinking" desactivado la respuesta llega en 1-3 s
   let aiChat = [];                 // historial [{role:'user'|'assistant', content}]
   let chatWords = [];              // palabras objetivo de esta charla
@@ -2354,7 +2371,7 @@
     };
   });
   document.getElementById('nivel-btn').onclick = openNivelSelector;
-  document.getElementById('mazo-btn').onclick = abrirMazoRapido;
+  //document.getElementById('mazo-btn').onclick = abrirMazoRapido;
 
   // Menú de perfil (dropdown)
   const profileBtn = document.getElementById('profile-menu-button');
