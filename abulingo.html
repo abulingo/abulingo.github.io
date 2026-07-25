@@ -13,7 +13,7 @@
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Work+Sans:wght@400;600;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
   <link rel="stylesheet" href="style.css">
   <link rel="icon" href="icono.png" type="image/x-icon">
 
@@ -62,6 +62,26 @@
     /* Barra de herramientas superior */
     .tool-btn { transition: transform 0.15s; min-width: 44px; }
     .tool-btn:active { transform: scale(0.90); }
+
+    /* Pista "toca aquí" del menú de perfil */
+    @keyframes hintBounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+    .menu-hint { animation: hintBounce 1.3s ease-in-out infinite; }
+
+    /* Chat con Abu */
+    .chat-scroll { scrollbar-width: thin; scroll-behavior: smooth; }
+    .no-bar { -ms-overflow-style: none; scrollbar-width: none; }
+    .no-bar::-webkit-scrollbar { display: none; }
+    @keyframes tipIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+    .quick-reply { animation: tipIn .25s ease-out both; }
+    .word-chip { transition: all .25s cubic-bezier(0.34, 1.56, 0.64, 1); }
+    .word-chip.used {
+      background: #dcfce7 !important; color: #16a34a !important;
+      border-color: #86efac !important; transform: scale(1.06);
+      box-shadow: 0 2px 8px rgba(22,163,74,.18);
+    }
+    .word-chip.used::after { content: " ✓"; font-weight: 900; }
+    @keyframes bubbleIn { from { opacity: 0; transform: translateY(8px) scale(.97); } to { opacity: 1; transform: none; } }
+    #ai-messages > div { animation: bubbleIn .22s ease-out both; }
   </style>
 </head>
 <body class="min-h-screen flex flex-col">
@@ -86,16 +106,27 @@
         <button data-tool="traductor" class="tool-btn flex flex-col items-center justify-center px-2 py-1 rounded-lg text-slate-500 hover:bg-slate-100">
           <i class="fas fa-language text-base"></i><span class="hidden md:block text-[10px] font-bold leading-tight mt-0.5">Traductor</span>
         </button>
-        <button data-tool="ia" class="tool-btn flex flex-col items-center justify-center px-2 py-1 rounded-lg text-white bg-gradient-to-br from-[#FF7A00] to-orange-600 shadow">
-          <i class="fas fa-robot text-base"></i><span class="hidden md:block text-[10px] font-bold leading-tight mt-0.5">Hablar IA</span>
+        <button data-tool="ia" title="Habla con Abu" class="tool-btn flex flex-col items-center justify-center px-2 py-1 rounded-lg text-white bg-gradient-to-br from-[#FF7A00] to-orange-600 shadow">
+          <i class="fas fa-comment-dots text-base"></i><span class="hidden md:block text-[10px] font-bold leading-tight mt-0.5">Hablar</span>
         </button>
       </nav>
 
       <!-- Perfil -->
       <div class="relative shrink-0">
-        <button id="profile-menu-button" class="block rounded-full ring-2 ring-transparent hover:ring-[#FF7A00] transition">
+        <button id="profile-menu-button" title="Perfil, rankings, progreso y mazo" class="relative block rounded-full ring-2 ring-transparent hover:ring-[#FF7A00] transition">
           <img id="user-avatar" src="icono.png" alt="Perfil" class="w-9 h-9 rounded-full object-cover bg-slate-100">
+          <!-- Indicador permanente: aquí se abre un menú -->
+          <span id="profile-caret" class="menu-hint absolute -bottom-0.5 -right-0.5 w-[17px] h-[17px] rounded-full bg-[#FF7A00] text-white flex items-center justify-center shadow ring-2 ring-white">
+            <i class="fas fa-chevron-down text-[8px]"></i>
+          </span>
         </button>
+        <!-- Globo de ayuda: se muestra la primera vez y desaparece al abrir el menú -->
+        <div id="profile-hint" class="hidden absolute top-full right-0 mt-2 z-50 w-max max-w-[72vw]">
+          <div class="relative bg-slate-800 text-white text-[11px] font-bold px-3 py-2 rounded-xl shadow-lg animate-pop">
+            <span class="absolute -top-1 right-4 w-2 h-2 bg-slate-800 rotate-45"></span>
+            👆 Toca tu foto: perfil, rankings, progreso y tu mazo
+          </div>
+        </div>
         <div id="profile-menu-dropdown" class="hidden absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-xl border border-slate-200 z-50 overflow-hidden">
           <div class="p-4 border-b">
             <h3 id="user-name-dropdown" class="font-bold text-slate-800">Cargando...</h3>
@@ -104,11 +135,11 @@
           <div class="py-2 max-h-80 overflow-y-auto">
             <div class="flex items-center px-4 py-2 text-slate-700"><i class="fas fa-star w-6 text-yellow-500"></i><span><span id="user-points" class="font-bold">0</span> Puntos</span></div>
             <div class="flex items-center px-4 py-2 text-slate-700"><i class="fas fa-coins w-6 text-yellow-600"></i><span><span id="user-lingots" class="font-bold">0</span> Lingots</span></div>
-            <button data-menu="ranking-global" class="w-full text-left flex items-center px-4 py-2 text-slate-700 hover:bg-slate-100"><i class="fas fa-globe w-6 text-slate-500"></i><span>Ranking Global</span></button>
-            <button data-menu="ranking-equipo" class="w-full text-left flex items-center px-4 py-2 text-slate-700 hover:bg-slate-100"><i class="fas fa-people-group w-6 text-slate-500"></i><span>Ranking Equipo</span></button>
-            <button data-menu="progreso-nivel" class="w-full text-left flex items-center px-4 py-2 text-slate-700 hover:bg-slate-100"><i class="fas fa-chart-line w-6 text-slate-500"></i><span>Progreso nivel</span></button>
-            <button data-menu="mazo" class="w-full text-left flex items-center px-4 py-2 text-slate-700 hover:bg-slate-100"><i class="fas fa-layer-group w-6 text-slate-500"></i><span>Mazo</span></button>
-            <button data-menu="soporte" class="w-full text-left flex items-center px-4 py-2 text-slate-700 hover:bg-slate-100"><i class="fas fa-headset w-6 text-slate-500"></i><span>Soporte</span></button>
+            <button data-menu="ranking-global" class="w-full text-left flex items-center px-4 py-2 text-slate-700 hover:bg-slate-100"><i class="fas fa-globe fa-fw w-6 text-slate-500"></i><span>Ranking Global</span></button>
+            <button data-menu="ranking-equipo" class="w-full text-left flex items-center px-4 py-2 text-slate-700 hover:bg-slate-100"><i class="fas fa-users fa-fw w-6 text-slate-500"></i><span>Ranking Equipo</span></button>
+            <button data-menu="progreso-nivel" class="w-full text-left flex items-center px-4 py-2 text-slate-700 hover:bg-slate-100"><i class="fas fa-chart-line fa-fw w-6 text-slate-500"></i><span>Progreso nivel</span></button>
+            <button data-menu="mazo" class="w-full text-left flex items-center px-4 py-2 text-slate-700 hover:bg-slate-100"><i class="fas fa-layer-group fa-fw w-6 text-slate-500"></i><span>Mazo</span><span id="mazo-menu-count" class="ml-auto text-[10px] font-black text-[#FF7A00]"></span></button>
+            <button data-menu="soporte" class="w-full text-left flex items-center px-4 py-2 text-slate-700 hover:bg-slate-100"><i class="fas fa-headset fa-fw w-6 text-slate-500"></i><span>Soporte</span></button>
           </div>
           <div class="py-2 border-t"><button id="logout-btn" class="w-full text-left flex items-center px-4 py-2 text-red-600 hover:bg-red-50"><i class="fas fa-sign-out-alt w-6"></i><span>Cerrar Sesión</span></button></div>
         </div>
@@ -117,7 +148,7 @@
   </header>
 
   <!-- HUD (compacto) -->
-  <div class="w-full max-w-2xl mx-auto px-3 pt-16 pb-2 flex items-center justify-between gap-2">
+  <div class="w-full max-w-2xl mx-auto px-3 pt-16 pb-2 flex flex-wrap items-center justify-between gap-2 gap-y-2">
     <div class="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-xl shadow-sm border border-slate-200">
       <i class="fas fa-star text-yellow-400 text-base"></i>
       <span id="user-points-display" class="font-black text-slate-700 text-base">0</span>
@@ -134,7 +165,14 @@
       <i class="fas fa-chevron-down text-slate-400 text-[10px]"></i>
     </button>
 
-    <div class="flex-1 min-w-[80px]">
+    <!-- M = MAZO: estudia las palabras que cargaste en tu mazo -->
+    <button id="mazo-btn" title="Estudiar mi mazo" class="relative flex items-center gap-1 bg-white px-2.5 py-1.5 rounded-xl shadow-sm border border-slate-200 hover:border-[#FF7A00] transition">
+      <i class="fas fa-layer-group text-slate-400 text-[11px]"></i>
+      <span class="font-black text-slate-600 text-sm leading-none">M</span>
+      <span id="mazo-badge" class="hidden absolute -top-1.5 -right-1.5 min-w-[17px] h-[17px] px-1 rounded-full bg-[#FF7A00] text-white text-[9px] font-black items-center justify-center shadow">0</span>
+    </button>
+
+    <div class="flex-1 min-w-[110px]">
       <div class="flex justify-between text-[10px] font-bold text-slate-400 mb-0.5">
         <span>PROGRESO</span>
         <span id="progress-text">0%</span>
@@ -174,7 +212,20 @@
   const EASE_DEFAULT = 2.5, EASE_MIN = 1.3, EASE_MAX = 3.0;
   const GRADUATED_LEVEL = SRS_INTERVALS_DAYS.length - 1; // al llegar aquí la palabra se considera dominada
   const SRS_SESSION_MAX = 30;   // máximo de palabras por sesión de "¡Toca repasar!"
-  const DAILY_NEW_LIMIT = 50;   // máximo de palabras NUEVAS por día (evita saturar el cerebro)
+
+  /* ╔══════════════════════════════════════════════════════════════╗
+     ║  LÍMITE DE PALABRAS NUEVAS  —  EDITA SOLO ESTAS DOS LÍNEAS   ║
+     ╠══════════════════════════════════════════════════════════════╣
+     ║ NEW_WORDS_PER_TANDA  = palabras NUEVAS por tanda.            ║
+     ║ NEW_WORDS_COOLDOWN_H = horas de espera al agotar la tanda    ║
+     ║                        (12 = medio día). Pasado ese tiempo   ║
+     ║                        el contador se reinicia solo.         ║
+     ║ Los REPASOS nunca se bloquean: sólo las palabras nuevas.     ║
+     ╚══════════════════════════════════════════════════════════════╝ */
+  const NEW_WORDS_PER_TANDA  = 120;
+  const NEW_WORDS_COOLDOWN_H = 12;
+
+  const CHAT_GOAL = 15;         // mensajes que debes enviar para completar la charla con Abu
   const DAILY_GOAL_POINTS = 60; // meta diaria de puntos → recompensa (1 lingot)
   const CEFR_ORDER = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
   const NIVELES_FIJOS = ['A1', 'A2', 'B1', 'B2']; // siempre visibles en el selector
@@ -215,12 +266,52 @@
   const escapeHTML = (s) => (s || '').toString()
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-  // Estado diario (límite de palabras nuevas + meta de puntos). Se reinicia cada día.
+  /*
+    Estado diario. Dos relojes distintos:
+      · La META DE PUNTOS y los contadores del día se reinician a medianoche.
+      · Las PALABRAS NUEVAS van por TANDAS: al agotar NEW_WORDS_PER_TANDA se
+        bloquean NEW_WORDS_COOLDOWN_H horas (medio día) y luego se reinician
+        solas, sin esperar a mañana.
+  */
   function ensureDaily() {
-    if (!flujo.daily || flujo.daily.date !== todayStr()) {
-      flujo.daily = { date: todayStr(), newWords: 0, reviewed: 0, points: 0, goalShown: false };
+    if (!flujo.daily) flujo.daily = { date: todayStr(), newWords: 0, reviewed: 0, points: 0, goalShown: false, unlockAt: null };
+    if (flujo.daily.unlockAt === undefined) flujo.daily.unlockAt = null;
+
+    // Reinicio de medianoche (meta de puntos y estadísticas del día)
+    if (flujo.daily.date !== todayStr()) {
+      flujo.daily.date = todayStr();
+      flujo.daily.points = 0;
+      flujo.daily.reviewed = 0;
+      flujo.daily.goalShown = false;
+    }
+    // Fin del descanso: se libera una tanda nueva de palabras
+    if (flujo.daily.unlockAt && Date.now() >= new Date(flujo.daily.unlockAt).getTime()) {
+      flujo.daily.unlockAt = null;
+      flujo.daily.newWords = 0;
     }
     if (!flujo.racha) flujo.racha = { days: 0, last: null, best: 0 };
+  }
+
+  // ¿Se agotó la tanda de palabras nuevas? Si acaba de agotarse, arranca el reloj.
+  function newWordsLocked() {
+    ensureDaily();
+    if (flujo.daily.unlockAt) return true;
+    if ((flujo.daily.newWords || 0) >= NEW_WORDS_PER_TANDA) {
+      flujo.daily.unlockAt = new Date(Date.now() + NEW_WORDS_COOLDOWN_H * 3600000).toISOString();
+      updateUserFlow();
+      return true;
+    }
+    return false;
+  }
+  function newWordsLeft() { ensureDaily(); return Math.max(0, NEW_WORDS_PER_TANDA - (flujo.daily.newWords || 0)); }
+
+  // "3 h 25 min" a partir de milisegundos
+  function fmtEspera(ms) {
+    const min = Math.max(1, Math.round(ms / 60000));
+    const h = Math.floor(min / 60), m = min % 60;
+    if (h && m) return `${h} h ${m} min`;
+    if (h) return `${h} h`;
+    return `${m} min`;
   }
 
   // Racha de días consecutivos: se enciende con la primera actividad del día.
@@ -649,7 +740,12 @@
      6. INICIALIZACIÓN DEL FLUJO (JSON columna "flujo")
   ============================================================ */
   function defaultGroupState() {
-    return { review: { done: false, index: 0 }, practice: { done: false, queue: [], index: 0 }, completed: false, correct: 0, wrong: 0 };
+    return {
+      review: { done: false, index: 0 },
+      practice: { done: false, queue: [], index: 0 },
+      chat: { done: false, count: 0 },   // 💬 última práctica: hablar con Abu
+      completed: false, correct: 0, wrong: 0
+    };
   }
   function defaultFlujo(nivel) {
     return {
@@ -658,7 +754,7 @@
       niveles: {},
       srs: {},
       stats: { totalCorrect: 0, totalWrong: 0, sessionsCompleted: 0 },
-      daily: { date: todayStr(), newWords: 0, reviewed: 0, points: 0, goalShown: false },
+      daily: { date: todayStr(), newWords: 0, reviewed: 0, points: 0, goalShown: false, unlockAt: null },
       racha: { days: 0, last: null, best: 0 }
     };
   }
@@ -711,6 +807,12 @@
       n.currentGroup = firstIncomplete || groups[0];
     }
     if (!n.grupos[n.currentGroup]) n.grupos[n.currentGroup] = defaultGroupState();
+
+    // Migración: grupos creados antes de existir la práctica de conversación.
+    // Los que ya estaban completados NO tienen que repetir la charla.
+    Object.values(n.grupos).forEach(g => {
+      if (!g.chat) g.chat = g.completed ? { done: true, count: CHAT_GOAL } : { done: false, count: 0 };
+    });
     return n;
   }
 
@@ -778,7 +880,49 @@
 
     if (!g.review.done) return renderReview(nivel, group, words);
     if (!g.practice.done) return renderPractice(nivel, group);
+    if (!g.chat || !g.chat.done) return chatPracticeIntro(nivel, group); // 💬 hablar con Abu
     return advanceGroup(nivel, group);
+  }
+
+  /* ------------------------------------------------------------
+     Descanso entre tandas de palabras nuevas.
+     Dice la hora exacta a la que se habilitan más palabras y va
+     descontando el tiempo en vivo. Los repasos siguen disponibles.
+  ------------------------------------------------------------ */
+  let pauseTimer = null;
+  function renderNewWordsPause(nivel) {
+    ensureDaily();
+    const unlockMs = flujo.daily.unlockAt ? new Date(flujo.daily.unlockAt).getTime() : Date.now();
+    const hora = new Date(unlockMs).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' });
+    const manana = new Date(unlockMs).toDateString() !== new Date().toDateString();
+
+    renderMessage('🌙', 'Seguiremos más tarde',
+      `Ya estudiaste <b>${NEW_WORDS_PER_TANDA} palabras nuevas</b> en esta tanda: es el máximo que tu memoria fija bien de una sola vez.<br>
+       <span class="block mt-3 text-slate-600">Se habilitan más palabras <b class="text-[#FF7A00]">a las ${hora}${manana ? ' de mañana' : ''}</b></span>
+       <span id="pause-countdown" class="block mt-1 text-sm font-bold text-slate-400">faltan ${fmtEspera(unlockMs - Date.now())}</span>
+       <span class="block mt-3 text-xs text-slate-400">Mientras tanto puedes repasar lo aprendido: los repasos no tienen límite. 🧠</span>`,
+      'Repasar lo aprendido 🧠', async () => {
+        const due = await getDueReviews(nivel);
+        if (due.length) return startSrsReview(due);
+        renderMessage('😴', 'Todo al día',
+          `No tienes repasos pendientes. Descansa: a las <b>${hora}</b> te esperan palabras nuevas. 🌙`);
+      });
+
+    // Cuenta atrás en vivo + recarga automática cuando se cumple el tiempo
+    clearInterval(pauseTimer);
+    pauseTimer = setInterval(() => {
+      const el = document.getElementById('pause-countdown');
+      if (!el) { clearInterval(pauseTimer); return; }
+      const resta = unlockMs - Date.now();
+      if (resta <= 0) {
+        clearInterval(pauseTimer);
+        showToast('🎉 ¡Ya puedes estudiar palabras nuevas!');
+        ensureDaily();
+        runFlow();
+        return;
+      }
+      el.textContent = `faltan ${fmtEspera(resta)}`;
+    }, 20000);
   }
 
   /* ============================================================
@@ -799,18 +943,11 @@
 
     const word = reviewList[i];
 
-    // Límite diario: máximo DAILY_NEW_LIMIT palabras NUEVAS por día para no saturar el cerebro.
-    ensureDaily();
+    // Límite por tanda: NEW_WORDS_PER_TANDA palabras NUEVAS y descanso de medio día.
     const esNueva = !flujo.srs[String(word.id)];
-    if (esNueva && flujo.daily.newWords >= DAILY_NEW_LIMIT) {
+    if (esNueva && newWordsLocked()) {
       updateProgressBar(100);
-      return renderMessage('🧠', '¡Cerebro a tope por hoy!',
-        `Ya aprendiste <b>${DAILY_NEW_LIMIT} palabras nuevas</b> hoy: el máximo ideal para que tu memoria las fije bien.<br>Vuelve mañana por más, o refuerza lo aprendido con un repaso.`,
-        'Repasar lo aprendido 🧠', async () => {
-          const due = await getDueReviews(nivel);
-          if (due.length) startSrsReview(due);
-          else renderMessage('😴', 'Todo al día', 'No tienes repasos pendientes. ¡Descansa, mañana seguimos! 🌙');
-        });
+      return renderNewWordsPause(nivel);
     }
 
     updateProgressBar((i / reviewList.length) * 100);
@@ -841,7 +978,7 @@
 
         <div class="relative flex items-center justify-center mb-1 min-h-[3.25rem] -mx-4 sm:-mx-6">
           <h1 class="text-4xl sm:text-5xl font-black font-heading text-[#FF7A00] tracking-tight text-center px-14">${word.ingles}</h1>
-          <button id="btn-word-audio" title="Escuchar pronunciación" class="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 w-11 h-11 sm:w-12 sm:h-12 shrink-0 rounded-full bg-gradient-to-br from-[#FF7A00] to-orange-600 text-white text-lg shadow-lg shadow-orange-200 hover:scale-110 active:scale-95 transition flex items-center justify-center">
+          <button id="btn-word-audio" title="Escuchar pronunciación" class="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 w-11 h-11 sm:w-12 sm:h-12 shrink-0 rounded-full bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-400 hover:text-slate-600 text-base transition flex items-center justify-center">
             <i class="fas fa-volume-up"></i>
           </button>
         </div>
@@ -926,10 +1063,10 @@
     const i = g.practice.index || 0;
 
     if (i >= q.length) {
-      g.practice.done = true; g.completed = true;
-      flujo.stats.sessionsCompleted++;
+      g.practice.done = true;
       await updateUserFlow();
-      return groupCompleteScreen(nivel, group, g);
+      // Falta la última práctica: usar estas palabras hablando con Abu.
+      return showEncouragement(() => runFlow());
     }
 
     const ex = q[i];
@@ -1166,21 +1303,21 @@
   }
 
   /* ============================================================
-     13. CONVERSACIÓN CON IA (Edge Function + DeepSeek + Voz)
+     13. HABLAR CON ABU — práctica de conversación (última misión)
+     ------------------------------------------------------------
+     Es una práctica más, como las tarjetas o los ejercicios: hay que
+     enviar CHAT_GOAL mensajes para completarla y cerrar el grupo.
+     Abu contesta corto, corrige al instante y usa las palabras que
+     acabas de estudiar. Nunca se presenta como una IA: es Abu.
+     Respuestas: Edge Function "generar-dialogo" (mode:"chat").
   ============================================================ */
-  /*
-    HABLAR IA — Chat conversacional.
-    La persona chatea con "Abu" (tutor de inglés). Cada mensaje se envía a la Edge
-    Function "generar-dialogo" con mode:"chat" y el historial reciente; la IA responde
-    en inglés (adaptado al nivel) con traducción al español y corrige errores con tacto.
-    Requiere actualizar la Edge Function con el archivo index.ts incluido junto a esta página.
-  */
-  let aiChat = [];   // historial [{role:'user'|'assistant', content}]
-  let chatWords = []; // últimas palabras estudiadas: la IA las usa en la conversación
-  const CHAT_TIMEOUT_MS = 60000; // hasta 60 s de espera para la respuesta de la IA
+  const CHAT_TIMEOUT_MS = 20000;   // con "thinking" desactivado la respuesta llega en 1-3 s
+  let aiChat = [];                 // historial [{role:'user'|'assistant', content}]
+  let chatWords = [];              // palabras objetivo de esta charla
+  let chatSession = null;          // { nivel, group, counts, count, goal, used:Set, streak }
 
   // Últimas N palabras estudiadas (con registro SRS), ordenadas por fecha de estudio.
-  async function getStudiedWords(max = 30) {
+  async function getStudiedWords(max = 10) {
     const ids = Object.entries(flujo.srs)
       .sort((a, b) => new Date(b[1].updated || 0) - new Date(a[1].updated || 0))
       .slice(0, max)
@@ -1188,161 +1325,338 @@
       .filter(n => !isNaN(n));
     if (!ids.length) return [];
     const { data, error } = await dbClient.from('palabras').select('id, ingles').in('id', ids);
-    if (error) { console.warn('[chat] no se pudieron leer palabras estudiadas:', error.message); return []; }
+    if (error) { console.warn('[Abu] no se pudieron leer palabras estudiadas:', error.message); return []; }
     const porId = new Map((data || []).map(w => [w.id, w.ingles]));
     return ids.map(id => porId.get(id)).filter(Boolean);
   }
 
-  // Llamada directa a la Edge Function con timeout largo (functions.invoke no permite configurarlo).
-  async function callChatFunction(body) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), CHAT_TIMEOUT_MS);
-    try {
-      const { data: { session } } = await dbClient.auth.getSession();
-      const resp = await fetch(`${SUPABASE_URL}/functions/v1/generar-dialogo`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': SUPABASE_ANON_KEY,
-          'Authorization': `Bearer ${session?.access_token || SUPABASE_ANON_KEY}`
-        },
-        body: JSON.stringify(body),
-        signal: controller.signal
-      });
-      let payload = null;
-      try { payload = await resp.json(); } catch { /* respuesta no JSON */ }
-      if (!resp.ok) throw new Error(payload?.detail || payload?.error || `Error ${resp.status} de la función`);
-      return payload;
-    } catch (err) {
-      if (err?.name === 'AbortError') throw new Error('La IA tardó demasiado en responder (60 s). Intenta de nuevo.');
-      throw err;
-    } finally {
-      clearTimeout(timer);
+  // Palabras objetivo: las del grupo que se acaba de practicar; si no hay, las últimas estudiadas.
+  async function getChatWords(nivel, group, max = 10) {
+    let list = [];
+    if (nivel && group) {
+      const words = await getGroupWords(nivel, group);
+      list = words.map(w => w.ingles).filter(Boolean);
     }
+    if (!list.length) list = await getStudiedWords(max);
+    return [...new Set(list.map(w => String(w).trim()).filter(Boolean))].slice(0, max);
   }
 
-  async function openAiDialogue() {
-    const nivel = flujo.currentNivel;
-    aiChat = [];
-    chatWords = await getStudiedWords(30);
-    console.log('[chat] palabras estudiadas para la conversación:', chatWords);
+  /*
+    Llamada a la Edge Function. Reintenta una vez y, si aun así falla,
+    devuelve null para que la charla continúe con una respuesta local
+    (nunca se corta la práctica con "no pude responder").
+  */
+  async function callChatFunction(body, reintentos = 1) {
+    for (let intento = 0; intento <= reintentos; intento++) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), CHAT_TIMEOUT_MS);
+      try {
+        const { data: { session } } = await dbClient.auth.getSession();
+        const resp = await fetch(`${SUPABASE_URL}/functions/v1/generar-dialogo`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${session?.access_token || SUPABASE_ANON_KEY}`
+          },
+          body: JSON.stringify(body),
+          signal: controller.signal
+        });
+        let payload = null;
+        try { payload = await resp.json(); } catch { /* respuesta no JSON */ }
+        if (!resp.ok || payload?.error) throw new Error(payload?.detail || payload?.error || `Error ${resp.status}`);
+        const en = (payload?.reply?.en || '').trim();
+        if (!en) throw new Error('respuesta vacía');
+        return payload.reply;
+      } catch (err) {
+        console.warn(`[Abu] intento ${intento + 1}:`, err?.name === 'AbortError' ? 'tardó demasiado' : (err?.message || err));
+        if (intento < reintentos) await new Promise(r => setTimeout(r, 500));
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+    return null;
+  }
 
-    showModal({
-      icon: '🤖', title: 'Chat con Abu (IA)', size: 'lg', dismissable: true,
-      body: `
-        <div class="text-left">
-          <p class="text-xs text-slate-400 mb-2 text-center">Escríbele en inglés. Abu te corrige con cariño y te traduce todo. 💬</p>
-          <div id="ai-messages" class="max-h-72 overflow-y-auto pr-1 space-y-2 mb-3 min-h-[120px]"></div>
-          <div class="flex gap-2">
-            <input id="ai-input" type="text" placeholder="Escribe en inglés..." autocomplete="off" autocapitalize="off" spellcheck="false"
-              class="flex-1 min-w-0 bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:border-[#FF7A00] text-slate-700 font-medium">
-            <button id="ai-send" class="btn-juice bg-[#FF7A00] text-white font-bold px-4 py-2 rounded-xl shrink-0"><i class="fas fa-paper-plane"></i></button>
-          </div>
-          <div class="flex items-center justify-between mt-2">
-            <label class="flex items-center gap-2 text-xs text-slate-400 font-bold cursor-pointer">
-              <input id="ai-tts" type="checkbox" checked class="accent-[#FF7A00]"> Leer respuestas en voz alta
-            </label>
-            <button id="ai-stop" class="text-slate-400 hover:text-slate-600 text-xs font-bold"><i class="fas fa-stop mr-1"></i>Silenciar voz</button>
-          </div>
-        </div>`,
-      actions: []
+  // Respuesta local de respaldo: mantiene la charla viva si la red falla.
+  function abuFallback() {
+    const noUsadas = chatWords.filter(w => !chatSession?.used.has(norm(w)));
+    const w = (noUsadas[0] || chatWords[Math.floor(Math.random() * chatWords.length)] || 'English');
+    const opciones = [
+      { en: `Nice! Can you use "${w}" in a sentence?`, es: `¡Bien! ¿Puedes usar "${w}" en una frase?` },
+      { en: `Cool! Tell me more. Why?`, es: `¡Genial! Cuéntame más. ¿Por qué?` },
+      { en: `Great! And do you like "${w}"?`, es: `¡Muy bien! ¿Y te gusta "${w}"?` },
+      { en: `I like that! What do you do after that?`, es: `¡Me gusta! ¿Y qué haces después?` }
+    ];
+    return opciones[Math.floor(Math.random() * opciones.length)];
+  }
+
+  /*
+    Respuestas sugeridas. Lo ideal viene de Abu (campo "tips"), pero si no
+    llega se arman aquí leyendo qué tipo de pregunta hizo: así siempre hay
+    algo que responder aunque falle la red.
+  */
+  function sugerenciasLocales(textoAbu) {
+    const t = (textoAbu || '').toLowerCase();
+    const libre = chatWords.filter(w => !chatSession?.used.has(norm(w)))[0];
+    let base;
+    // Las preguntas con wh- mandan sobre las de sí/no: "Why do you...?" no se
+    // responde con "Yes, I do", aunque contenga "do you".
+    if (/how are you|how do you feel|how is it going/.test(t))  base = ["I'm good! 😄", "A little tired.", "Great, thanks!"];
+    else if (/\bwhy\b/.test(t))                            base = ['Because I like it.', "I don't know 😅", "It's fun!"];
+    else if (/\bwhere\b/.test(t))                          base = ['At home.', 'In my city.', 'At school.'];
+    else if (/\bwhen|what time\b/.test(t))                 base = ['Every day.', 'On weekends.', 'In the morning.'];
+    else if (/\bhow (many|much|often|long)\b/.test(t))     base = ['Two or three.', 'A lot!', 'Not much.'];
+    else if (/\bhow\b/.test(t))                            base = ['With my phone.', "It's easy!", "It's hard 😅"];
+    else if (/\bwho\b/.test(t))                            base = ['My family.', 'My best friend.', 'My teacher.'];
+    else if (/\bwhich\b/.test(t))                          base = ['The first one.', 'Both! 😄', "I'm not sure 🤔"];
+    else if (/\bwhat.*(like|favou?rite|prefer)\b/.test(t)) base = ['I like it a lot.', 'Not really.', 'My favourite! 🔥'];
+    else if (/\bwhat\b/.test(t))                           base = ['I like it.', "I'm not sure 🤔", 'Tell me more.'];
+    else if (/\b(do|did|does|are|is|was|can|have|had|would|will) you\b/.test(t)) base = ['Yes, I do! 😄', "No, I don't.", 'Sometimes.'];
+    else                                                    base = ['Yes! 😄', 'Really?', 'Tell me more.'];
+    // Una sugerencia siempre empuja a usar una palabra del grupo
+    if (libre) base = [...base.slice(0, 2), `What about "${libre}"?`];
+    return base;
+  }
+
+  function pintarSugerencias(tips) {
+    const cont = document.getElementById('chat-quick');
+    if (!cont) return;
+    const lista = (Array.isArray(tips) ? tips : [])
+      .map(t => String(t || '').trim()).filter(Boolean).slice(0, 3);
+    const finales = lista.length >= 2 ? lista : sugerenciasLocales(tips);
+    cont.innerHTML = finales.map(r =>
+      `<button class="quick-reply shrink-0 text-[11px] font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-500 hover:bg-orange-50 hover:text-[#FF7A00] transition" data-txt="${escapeHTML(r)}">${escapeHTML(r)}</button>`
+    ).join('');
+    const input = document.getElementById('ai-input');
+    cont.querySelectorAll('.quick-reply').forEach(b => {
+      b.onclick = () => { if (input) { input.value = b.dataset.txt || ''; input.focus(); } };
     });
+  }
 
-    bindChat(nivel);
+  /* ---------- Pantalla de la charla ---------- */
+  async function startChatPractice(nivel, group, cuenta) {
+    closeModal();
+    stopSpeaking();
+    const g = (group && flujo.niveles[nivel]?.grupos?.[group]) || null;
+    chatWords = await getChatWords(nivel, group, 10);
+    aiChat = [];
+    chatSession = {
+      nivel, group, counts: !!cuenta, goal: CHAT_GOAL,
+      count: (cuenta && g?.chat?.count) ? g.chat.count : 0,
+      used: new Set(), streak: 0
+    };
 
-    // Saludo inicial de Abu (local, sin llamar a la IA)
-    const muestra = chatWords.slice(0, 3).join(', ');
+    const chips = chatWords.map(w =>
+      `<span class="word-chip shrink-0 text-[11px] font-bold px-2 py-1 rounded-full bg-white border border-slate-200 text-slate-500" data-word="${escapeHTML(norm(w))}">${escapeHTML(w)}</span>`
+    ).join('');
+
+    appContainer.innerHTML = `
+      <div class="card-3d p-3 sm:p-4 animate-pop mt-1">
+
+        <div class="flex items-center gap-2 mb-1.5">
+          <span class="bg-purple-100 text-purple-600 px-2.5 py-1 rounded-full text-[11px] font-bold uppercase shrink-0">💬 Abu</span>
+          <div class="flex-1 progress-track" style="margin-top:0"><div id="chat-bar" class="progress-fill" style="width:${(chatSession.count / CHAT_GOAL) * 100}%"></div></div>
+          <span class="text-[11px] font-black text-slate-400 shrink-0"><span id="chat-count" class="text-[#FF7A00]">${chatSession.count}</span>/${CHAT_GOAL}</span>
+          <button id="chat-exit" title="Salir" class="shrink-0 w-6 h-6 rounded-full text-slate-300 hover:text-slate-500 hover:bg-slate-100 transition text-sm">&times;</button>
+        </div>
+
+        ${chips ? `
+        <div class="flex items-center gap-2 mb-2">
+          <div id="chat-chips" class="no-bar flex-1 flex gap-1.5 overflow-x-auto whitespace-nowrap py-0.5">${chips}</div>
+          <span class="text-[10px] font-bold text-slate-400 shrink-0"><span id="chat-usadas">0</span>/${chatWords.length}</span>
+        </div>` : ''}
+
+        <div id="ai-messages" class="chat-scroll h-[46vh] min-h-[220px] overflow-y-auto p-2 space-y-2 mb-2 bg-slate-50 rounded-xl border border-slate-100"></div>
+
+        <div id="chat-quick" class="no-bar flex gap-1.5 overflow-x-auto whitespace-nowrap mb-2 min-h-[26px]"></div>
+
+        <div class="flex gap-2">
+          <input id="ai-input" type="text" placeholder="Escribe en inglés..." autocomplete="off" autocapitalize="sentences" spellcheck="false" enterkeyhint="send"
+            class="flex-1 min-w-0 bg-white border-2 border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-[#FF7A00] text-slate-700 font-medium">
+          <button id="ai-send" class="btn-juice bg-[#FF7A00] text-white font-bold px-4 py-2 rounded-xl shrink-0"><i class="fas fa-paper-plane"></i></button>
+        </div>
+      </div>`;
+
+    bindChatPractice();
+    pintarProgresoChat();
+
+    // Saludo de Abu (local: no gasta tokens y aparece al instante)
+    const muestra = chatWords.slice(0, 2).join(', ');
     const saludo = chatWords.length
-      ? {
-          en: `Hi! I'm Abu 🤖 Let's practice with the words you studied, like "${muestra}". How are you today?`,
-          es: `¡Hola! Soy Abu. Practiquemos con las palabras que estudiaste, como "${muestra}". ¿Cómo estás hoy?`
-        }
-      : {
-          en: `Hi! I'm Abu 🤖 Let's practice your English (${nivel} level). How are you today?`,
-          es: `¡Hola! Soy Abu. Practiquemos tu inglés (nivel ${nivel}). ¿Cómo estás hoy?`
-        };
+      ? { en: `Hey! I'm Abu 👋 Let's talk about "${muestra}". How are you today?`,
+          es: `¡Hey! Soy Abu 👋 Hablemos de "${muestra}". ¿Cómo estás hoy?` }
+      : { en: `Hey! I'm Abu 👋 How are you today?`,
+          es: `¡Hey! Soy Abu 👋 ¿Cómo estás hoy?` };
     addChatBubble('ai', saludo);
     aiChat.push({ role: 'assistant', content: saludo.en });
-    if (document.getElementById('ai-tts')?.checked) speak(saludo.en);
+    pintarSugerencias(saludo.en);   // sugerencias acordes al saludo
+    speak(saludo.en);
   }
 
   function addChatBubble(role, msg) {
     const box = document.getElementById('ai-messages');
     if (!box) return null;
     const div = document.createElement('div');
-    div.className = role === 'user' ? 'flex justify-end' : 'flex justify-start';
-    div.innerHTML = role === 'user'
-      ? `<div class="bg-[#FF7A00] text-white rounded-2xl rounded-br-sm px-4 py-2 max-w-[85%] font-medium">${escapeHTML(msg.en)}</div>`
-      : `<div class="bg-slate-100 text-slate-800 rounded-2xl rounded-bl-sm px-4 py-2 max-w-[85%]">
-           <div class="font-medium">${escapeHTML(msg.en)}</div>
-           ${msg.es ? `<div class="text-xs text-slate-400 mt-1">${escapeHTML(msg.es)}</div>` : ''}
-         </div>`;
+    if (role === 'user') {
+      div.className = 'flex justify-end';
+      div.innerHTML = `<div class="bg-[#FF7A00] text-white rounded-2xl rounded-br-sm px-3.5 py-2 max-w-[85%] font-medium">${escapeHTML(msg.en)}</div>`;
+    } else {
+      div.className = 'flex justify-start items-end gap-1.5';
+      div.innerHTML = `
+        <div class="bg-white border border-slate-200 text-slate-800 rounded-2xl rounded-bl-sm px-3.5 py-2 max-w-[78%] shadow-sm">
+          <div class="font-medium leading-snug">${escapeHTML(msg.en)}</div>
+          ${msg.es ? `<div class="text-xs text-slate-400 mt-0.5 leading-snug">${escapeHTML(msg.es)}</div>` : ''}
+          ${msg.fix ? `<div class="mt-1.5 text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1 leading-snug">✏️ ${escapeHTML(msg.fix)}</div>` : ''}
+        </div>
+        <button data-say="${encodeURIComponent(msg.en || '')}" title="Escuchar otra vez"
+          class="say-btn shrink-0 w-8 h-8 rounded-full bg-white border border-slate-200 text-slate-400 hover:text-[#FF7A00] hover:border-[#FF7A00] active:scale-90 transition flex items-center justify-center">
+          <i class="fas fa-volume-up text-[11px]"></i>
+        </button>`;
+    }
     box.appendChild(div);
     box.scrollTop = box.scrollHeight;
     return div;
   }
 
-  function bindChat(nivel) {
+  // Marca las palabras objetivo usadas por primera vez y las devuelve.
+  function marcarPalabrasUsadas(text) {
+    if (!chatSession) return [];
+    const t = ' ' + norm(text).replace(/\s+/g, ' ') + ' ';
+    const nuevas = [];
+    chatWords.forEach(w => {
+      const k = norm(w);
+      if (!k || chatSession.used.has(k)) return;
+      if (t.includes(' ' + k + ' ')) {
+        chatSession.used.add(k);
+        nuevas.push(w);
+        document.querySelectorAll('#chat-chips .word-chip').forEach(ch => {
+          if (ch.dataset.word === k) ch.classList.add('used');
+        });
+      }
+    });
+    const cont = document.getElementById('chat-usadas');
+    if (cont) cont.textContent = chatSession.used.size;
+    return nuevas;
+  }
+
+  function pintarProgresoChat() {
+    const cs = chatSession;
+    if (!cs) return;
+    const pct = Math.min(100, (cs.count / cs.goal) * 100);
+    const bar = document.getElementById('chat-bar'); if (bar) bar.style.width = pct + '%';
+    const num = document.getElementById('chat-count'); if (num) num.textContent = cs.count;
+    updateProgressBar(pct);
+  }
+
+  function bindChatPractice() {
+    const box = document.getElementById('ai-messages');
     const input = document.getElementById('ai-input');
     const send = document.getElementById('ai-send');
-    const stopBtn = document.getElementById('ai-stop');
-    if (!input || !send) return;
-    if (stopBtn) stopBtn.onclick = stopSpeaking;
+    if (!input || !send || !box) return;
 
-    const enviar = async () => {
-      const text = (input.value || '').trim();
-      if (!text || send.disabled) return;
+    // Volver a escuchar cualquier mensaje de Abu
+    box.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-say]');
+      if (!b) return;
+      stopSpeaking();
+      speak(decodeURIComponent(b.dataset.say || ''));
+    });
+
+    const exit = document.getElementById('chat-exit');
+    if (exit) exit.onclick = async () => {
+      const cs = chatSession;
+      stopSpeaking();
+      if (cs?.counts && cs.group && flujo.niveles[cs.nivel]?.grupos?.[cs.group]) {
+        flujo.niveles[cs.nivel].grupos[cs.group].chat.count = cs.count;   // se guarda el avance
+        await updateUserFlow();
+        showToast(`💬 Guardamos tu avance: ${cs.count}/${CHAT_GOAL} mensajes.`);
+      }
+      chatSession = null;
+      runFlow();
+    };
+
+    const enviar = async (textoDirecto) => {
+      const text = (textoDirecto ?? input.value ?? '').toString().trim();
+      if (!text || send.disabled || !chatSession) return;
       input.value = '';
       addChatBubble('user', { en: text });
       aiChat.push({ role: 'user', content: text });
 
-      const box = document.getElementById('ai-messages');
+      /* ---- Recompensa inmediata (así el chat engancha) ---- */
+      const cs = chatSession;
+      cs.count++;
+      cs.streak++;
+      let pts = 3;
+      const nuevas = marcarPalabrasUsadas(text);
+      if (nuevas.length) pts += 6 * nuevas.length;
+      if (text.split(/\s+/).length >= 6) pts += 2;      // premio a frases largas
+      pintarProgresoChat();
+      await addPoints(pts);
+      touchStreak();
+      if (nuevas.length) showToast(`🎯 ¡Usaste "${nuevas[0]}"! +${6 * nuevas.length} puntos`);
+      else if (cs.count === Math.ceil(cs.goal / 2)) { triggerConfetti(); showToast('🔥 ¡Mitad del camino! Vas encendido.'); }
+      else if (cs.goal - cs.count === 3) showToast('💪 ¡Solo 3 mensajes más!');
+
+      const quick = document.getElementById('chat-quick');
+      if (quick) quick.innerHTML = '';
+
       const typing = document.createElement('div');
       typing.className = 'flex justify-start';
-      typing.innerHTML = `<div class="bg-slate-100 text-slate-400 rounded-2xl rounded-bl-sm px-4 py-2 text-sm"><i class="fas fa-circle-notch fa-spin mr-1"></i> Abu está escribiendo...</div>`;
-      if (box) { box.appendChild(typing); box.scrollTop = box.scrollHeight; }
+      typing.innerHTML = `<div class="bg-white border border-slate-200 text-slate-400 rounded-2xl rounded-bl-sm px-3.5 py-2 text-sm"><i class="fas fa-circle-notch fa-spin mr-1"></i> Abu escribe...</div>`;
+      box.appendChild(typing);
+      box.scrollTop = box.scrollHeight;
       send.disabled = true;
 
-      try {
-        console.log('[IA chat] enviando', aiChat.length, 'mensajes · nivel', nivel, '· palabras:', chatWords.length);
-        let payload = await callChatFunction({
-          mode: 'chat',
-          nivel,
-          messages: aiChat.slice(-12),
-          words: chatWords // últimas 30 palabras estudiadas: la IA conversa con ellas
-        });
-        if (typeof payload === 'string') { try { payload = JSON.parse(payload); } catch { /* abajo */ } }
-        if (payload && payload.error) throw new Error(payload.detail || payload.error);
+      let reply = await callChatFunction({
+        mode: 'chat',
+        nivel: chatSession?.nivel || flujo.currentNivel,
+        messages: aiChat.slice(-8),           // contexto suficiente para que la charla tenga hilo
+        words: chatWords.slice(0, 8),
+        turn: cs.count,                        // Abu sabe si está empezando o cerrando
+        goal: cs.goal
+      });
+      typing.remove();
+      if (!reply) reply = abuFallback();
 
-        const reply = payload?.reply || payload || {};
-        const en = reply.en || reply.text || '';
-        if (!en) throw new Error('La IA devolvió una respuesta vacía. Intenta de nuevo.');
+      addChatBubble('ai', { en: reply.en, es: reply.es || '', fix: reply.fix || '' });
+      aiChat.push({ role: 'assistant', content: reply.en });
+      pintarSugerencias(reply.tips && reply.tips.length ? reply.tips : reply.en);
+      stopSpeaking();
+      speak(reply.en);
+      send.disabled = false;
+      input.focus();
 
-        typing.remove();
-        addChatBubble('ai', { en, es: reply.es || '' });
-        aiChat.push({ role: 'assistant', content: en });
-        if (document.getElementById('ai-tts')?.checked) speak(en);
-      } catch (err) {
-        console.error('[IA chat] excepción:', err);
-        typing.remove();
-        const errDiv = addChatBubble('ai', { en: '⚠️ I could not reply. Tap to retry.', es: String(err?.message || err) });
-        if (errDiv) { errDiv.style.cursor = 'pointer'; errDiv.onclick = () => { errDiv.remove(); aiChat.pop(); input.value = text; enviar(); }; }
-      } finally {
-        send.disabled = false;
-        input.focus();
-      }
+      if (chatSession && chatSession.count >= chatSession.goal) setTimeout(finishChatPractice, 1100);
     };
 
-    send.onclick = enviar;
+    send.onclick = () => enviar();
     input.addEventListener('keypress', (e) => { if (e.key === 'Enter') enviar(); else sfx('type'); });
-    setTimeout(() => input.focus(), 100);
+    setTimeout(() => input.focus(), 120);
   }
 
+  async function finishChatPractice() {
+    const cs = chatSession;
+    if (!cs) return;
+    chatSession = null;
+    stopSpeaking();
+    await addPoints(25);
 
-  function speakSequence(texts, i = 0) {
-    if (i === 0) stopSpeaking();
-    if (i >= texts.length) return;
-    speak(texts[i], () => speakSequence(texts, i + 1));
+    const g = (cs.group && flujo.niveles[cs.nivel]?.grupos?.[cs.group]) || null;
+    if (cs.counts && g) {
+      g.chat = { done: true, count: cs.count };
+      g.completed = true;
+      flujo.stats.sessionsCompleted = (flujo.stats.sessionsCompleted || 0) + 1;
+      await updateUserFlow();
+      return groupCompleteScreen(cs.nivel, cs.group, g);
+    }
+    playSound('complete'); triggerConfetti();
+    showModal({
+      icon: '💬', title: '¡Conversación completada!',
+      body: `Enviaste <b>${cs.count} mensajes</b> y usaste <b class="text-green-600">${cs.used.size}</b> de tus palabras. <br><span class="text-yellow-600 font-bold">+25 puntos</span>`,
+      dismissable: false,
+      actions: [{ label: 'Continuar', onClick: () => { closeModal(); runFlow(); } }]
+    });
   }
 
   /* ============================================================
@@ -1366,21 +1680,30 @@
   // ---------- Ranking Global (por puntos) ----------
   async function openRankingGlobal() {
     showModal({ icon: '🌍', title: 'Ranking Global', size: 'lg', body: `<div id="rk-body" class="text-left">${spinnerHTML()}</div>`, actions: [] });
-    const { data, error } = await dbClient.from('profiles')
-      .select('id, full_name, points')
+    // ranking_publico: vista de Supabase con SOLO id, nombre, puntos, equipo y nivel.
+    // Así se ven los demás sin exponer teléfono, correo ni el JSON de progreso.
+    const { data, error } = await dbClient.from('ranking_publico')
+      .select('id, full_name, points, nivel')
       .order('points', { ascending: false })
       .limit(20);
     const el = document.getElementById('rk-body');
     if (!el) return;
     if (error) {
       el.innerHTML = `<p class="text-red-500 font-bold text-center">No se pudo leer el ranking.</p>
-        <p class="text-slate-400 text-xs text-center mt-2">${escapeHTML(error.message)}<br>Si solo apareces tú, agrega una política RLS de SELECT pública en <b>profiles</b>.</p>`;
+        <p class="text-slate-400 text-xs text-center mt-2">${escapeHTML(error.message)}<br>Ejecuta <b>abulingo-supabase.sql</b> en el editor SQL: crea la vista <b>ranking_publico</b>.</p>`;
       return;
     }
     el.innerHTML = `<p class="text-xs text-slate-400 text-center mb-3">Los 20 mejores por puntos ⭐</p>` + rankingListHTML(data || []);
   }
 
-  // ---------- Ranking de Equipo (crear / unirse / competir) ----------
+  // ---------- Ranking de Equipo (crear / unirse con código / competir) ----------
+  /*
+    Los equipos son privados: para entrar hace falta un código de 6 dígitos que
+    genera Supabase al crear el equipo. Nadie puede listar equipos ajenos ni
+    colarse sin código (ver abulingo-supabase.sql: RLS + unirse_por_codigo).
+  */
+  const soloDigitos = (t) => (t || '').toString().replace(/\D/g, '');
+
   async function openRankingEquipo() {
     showModal({ icon: '🛡️', title: 'Ranking de Equipo', size: 'lg', body: `<div id="eq-body" class="text-left">${spinnerHTML()}</div>`, actions: [] });
     const el = document.getElementById('eq-body');
@@ -1388,24 +1711,76 @@
 
     if (!userProfile.equipo_id) return renderEquipoSetup(el);
 
-    const { data: eq } = await dbClient.from('equipos').select('id, nombre_equipo').eq('id', userProfile.equipo_id).maybeSingle();
-    const { data: miembros, error } = await dbClient.from('profiles')
+    const { data: eq } = await dbClient.from('equipos')
+      .select('id, nombre_equipo, codigo, creador_id')
+      .eq('id', userProfile.equipo_id).maybeSingle();
+
+    const { data: miembros, error } = await dbClient.from('ranking_publico')
       .select('id, full_name, points')
       .eq('equipo_id', userProfile.equipo_id)
       .order('points', { ascending: false })
       .limit(50);
+
     if (error) {
-      el.innerHTML = `<p class="text-red-500 font-bold text-center">No se pudo leer tu equipo.</p><p class="text-slate-400 text-xs text-center mt-2">${escapeHTML(error.message)}</p>`;
+      el.innerHTML = `<p class="text-red-500 font-bold text-center">No se pudo leer tu equipo.</p>
+        <p class="text-slate-400 text-xs text-center mt-2">${escapeHTML(error.message)}</p>`;
       return;
     }
+
+    const soyCreador = !!(eq && eq.creador_id === currentUser.id);
     const totalPts = (miembros || []).reduce((a, m) => a + (m.points || 0), 0);
+
     el.innerHTML = `
       <div class="text-center mb-3">
         <span class="bg-orange-100 text-[#FF7A00] font-black px-4 py-1.5 rounded-full inline-block">🛡️ ${escapeHTML(eq?.nombre_equipo || 'Mi equipo')}</span>
         <p class="text-xs text-slate-400 mt-2">${(miembros || []).length} integrante(s) · <b>${totalPts}</b> puntos en total ⭐</p>
       </div>
+
+      ${eq?.codigo ? `
+        <div class="bg-slate-50 border-2 border-dashed border-slate-300 rounded-xl p-3 mb-4 text-center">
+          <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Código para invitar</p>
+          <div id="eq-codigo-txt" class="font-black text-3xl tracking-[0.35em] text-[#FF7A00] my-1.5 pl-[0.35em]">${escapeHTML(eq.codigo)}</div>
+          <div class="flex flex-wrap gap-2 justify-center">
+            <button id="eq-copiar" class="text-xs font-bold px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-600 hover:border-[#FF7A00] hover:text-[#FF7A00] transition"><i class="fas fa-copy mr-1"></i>Copiar</button>
+            <button id="eq-compartir" class="text-xs font-bold px-3 py-1.5 rounded-lg bg-[#FF7A00] text-white hover:opacity-90 transition"><i class="fas fa-share-nodes mr-1"></i>Invitar</button>
+            ${soyCreador ? `<button id="eq-regenerar" class="text-xs font-bold px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-400 hover:text-red-500 hover:border-red-200 transition"><i class="fas fa-rotate mr-1"></i>Cambiar</button>` : ''}
+          </div>
+          <p class="text-[10px] text-slate-400 mt-2">Solo quien tenga este código puede entrar.</p>
+        </div>` : ''}
+
       ${rankingListHTML(miembros || [])}
       <button id="eq-salir" class="mt-4 w-full text-center text-xs font-bold text-slate-400 hover:text-red-500 transition">Salir del equipo</button>`;
+
+    const codigo = eq?.codigo || '';
+    const copiar = async () => {
+      try {
+        await navigator.clipboard.writeText(codigo);
+        showToast('📋 Código copiado: ' + codigo);
+      } catch {
+        showToast('Tu código es: <b>' + codigo + '</b>', 4000);
+      }
+    };
+    const btnCopiar = document.getElementById('eq-copiar');
+    if (btnCopiar) btnCopiar.onclick = copiar;
+
+    const btnComp = document.getElementById('eq-compartir');
+    if (btnComp) btnComp.onclick = async () => {
+      const texto = `¡Únete a mi equipo "${eq?.nombre_equipo || ''}" en Abulingo! 🛡️\nEntra a Ranking de Equipo y escribe este código: ${codigo}`;
+      if (navigator.share) { try { await navigator.share({ text: texto }); return; } catch { /* canceló */ } }
+      try { await navigator.clipboard.writeText(texto); showToast('📋 Invitación copiada. ¡Pégala en WhatsApp!'); }
+      catch { copiar(); }
+    };
+
+    const btnRegen = document.getElementById('eq-regenerar');
+    if (btnRegen) btnRegen.onclick = async () => {
+      btnRegen.disabled = true;
+      const { data, error: e3 } = await dbClient.rpc('regenerar_codigo_equipo');
+      btnRegen.disabled = false;
+      if (e3) return showToast('⚠️ ' + e3.message);
+      showToast('🔄 Código nuevo: <b>' + data + '</b>. El anterior ya no sirve.', 4000);
+      openRankingEquipo();
+    };
+
     const salir = document.getElementById('eq-salir');
     if (salir) salir.onclick = async () => {
       const { error: e2 } = await dbClient.from('profiles').update({ equipo_id: null }).eq('id', currentUser.id);
@@ -1416,44 +1791,82 @@
     };
   }
 
-  async function renderEquipoSetup(el) {
-    const { data: equipos } = await dbClient.from('equipos').select('id, nombre_equipo').order('created_at', { ascending: false }).limit(20);
+  function renderEquipoSetup(el) {
     el.innerHTML = `
-      <p class="text-slate-500 text-sm text-center mb-3">Aún no tienes equipo. Crea uno o únete a uno existente para competir juntos. 🏆</p>
-      <div class="flex gap-2 mb-4">
-        <input id="eq-nombre" type="text" maxlength="40" placeholder="Nombre del nuevo equipo..."
-          class="flex-1 min-w-0 bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:border-[#FF7A00] font-medium">
-        <button id="eq-crear" class="btn-juice bg-[#FF7A00] text-white font-bold px-4 py-2 rounded-xl shrink-0">Crear</button>
+      <p class="text-slate-500 text-sm text-center mb-4">Compite con tus amigos: sumen puntos juntos y vean quién va adelante. 🏆</p>
+
+      <div class="bg-orange-50 border-2 border-orange-200 rounded-xl p-3 mb-3">
+        <p class="font-bold text-slate-700 text-sm mb-2 text-center">¿Te pasaron un código?</p>
+        <div class="flex gap-2">
+          <input id="eq-codigo" type="text" inputmode="numeric" maxlength="7" placeholder="······" autocomplete="off"
+            class="flex-1 min-w-0 bg-white border-2 border-slate-200 rounded-xl px-3 py-2 text-center font-black text-xl tracking-[0.3em] text-slate-700 focus:outline-none focus:border-[#FF7A00]">
+          <button id="eq-unirme" class="btn-juice bg-[#FF7A00] text-white font-bold px-4 py-2 rounded-xl shrink-0">Unirme</button>
+        </div>
+        <p class="text-[10px] text-slate-400 text-center mt-1.5">6 dígitos, sin espacios</p>
       </div>
-      ${(equipos || []).length ? `
-        <p class="text-xs font-bold text-slate-400 uppercase mb-2">O únete a un equipo existente:</p>
-        <div class="max-h-48 overflow-y-auto space-y-1 pr-1">${equipos.map(e => `
-          <button class="eq-join w-full flex items-center justify-between px-3 py-2 rounded-xl bg-slate-50 hover:bg-orange-50 font-bold text-slate-700 transition" data-id="${e.id}">
-            <span class="truncate">🛡️ ${escapeHTML(e.nombre_equipo)}</span><span class="text-xs text-[#FF7A00] shrink-0 ml-2">Unirme →</span>
-          </button>`).join('')}</div>` : ''}
+
+      <div class="flex items-center gap-2 my-3">
+        <div class="flex-1 h-px bg-slate-200"></div>
+        <span class="text-[10px] font-bold text-slate-300 uppercase">o</span>
+        <div class="flex-1 h-px bg-slate-200"></div>
+      </div>
+
+      <div class="bg-slate-50 border border-slate-200 rounded-xl p-3">
+        <p class="font-bold text-slate-700 text-sm mb-2 text-center">Crea tu equipo</p>
+        <div class="flex gap-2">
+          <input id="eq-nombre" type="text" maxlength="40" placeholder="Nombre del equipo..."
+            class="flex-1 min-w-0 bg-white border-2 border-slate-200 rounded-xl px-3 py-2 font-medium focus:outline-none focus:border-[#FF7A00]">
+          <button id="eq-crear" class="btn-juice bg-slate-800 text-white font-bold px-4 py-2 rounded-xl shrink-0">Crear</button>
+        </div>
+        <p class="text-[10px] text-slate-400 text-center mt-1.5">Recibirás un código para invitar a quien quieras</p>
+      </div>
+
       <p id="eq-error" class="text-red-500 text-xs font-bold mt-3 hidden text-center"></p>`;
 
-    const setErr = (m) => { const p = document.getElementById('eq-error'); if (p) { p.textContent = m; p.classList.remove('hidden'); } };
+    const setErr = (m) => { const p = document.getElementById('eq-error'); if (p) { p.innerHTML = m; p.classList.remove('hidden'); } };
+
+    // ── Unirse con código ──
+    const inputCod = document.getElementById('eq-codigo');
+    const btnUnir = document.getElementById('eq-unirme');
+    const unir = async () => {
+      const codigo = soloDigitos(inputCod?.value);
+      if (codigo.length !== 6) return setErr('El código son 6 dígitos. Revísalo con quien te invitó.');
+      btnUnir.disabled = true;
+      const { data, error } = await dbClient.rpc('unirse_por_codigo', { p_codigo: codigo });
+      btnUnir.disabled = false;
+      if (error) return setErr(escapeHTML(error.message));
+      const fila = Array.isArray(data) ? data[0] : data;
+      if (!fila) return setErr('Ese código no corresponde a ningún equipo.');
+      userProfile.equipo_id = fila.equipo_id;
+      triggerConfetti();
+      showToast(`🛡️ ¡Bienvenido a ${escapeHTML(fila.nombre_equipo)}!`);
+      openRankingEquipo();
+    };
+    if (btnUnir) btnUnir.onclick = unir;
+    if (inputCod) inputCod.addEventListener('keypress', (e) => { if (e.key === 'Enter') unir(); });
+
+    // ── Crear equipo ──
     const crear = document.getElementById('eq-crear');
     if (crear) crear.onclick = async () => {
       const nombre = (document.getElementById('eq-nombre')?.value || '').trim();
       if (!nombre) return setErr('Escribe un nombre para el equipo.');
       crear.disabled = true;
-      const { data: nuevo, error } = await dbClient.from('equipos').insert({ nombre_equipo: nombre }).select().single();
+      // creador_id es obligatorio: es lo que autoriza el insert en la política RLS
+      const { data: nuevo, error } = await dbClient.from('equipos')
+        .insert({ nombre_equipo: nombre, creador_id: currentUser.id })
+        .select('id, nombre_equipo, codigo').single();
       crear.disabled = false;
-      if (error || !nuevo) return setErr('No se pudo crear el equipo: ' + (error?.message || 'error desconocido') + '. Revisa las políticas RLS de la tabla "equipos".');
-      await unirseEquipo(nuevo.id);
+      if (error || !nuevo) {
+        return setErr('No se pudo crear el equipo: ' + escapeHTML(error?.message || 'error desconocido') +
+          '<br><span class="font-normal">Ejecuta <b>abulingo-supabase.sql</b> en el editor SQL de Supabase.</span>');
+      }
+      const { error: e2 } = await dbClient.from('profiles').update({ equipo_id: nuevo.id }).eq('id', currentUser.id);
+      if (e2) return setErr('Equipo creado, pero no pudimos unirte: ' + escapeHTML(e2.message));
+      userProfile.equipo_id = nuevo.id;
+      triggerConfetti();
+      showToast(`🛡️ Equipo creado · código <b>${nuevo.codigo}</b>`, 4000);
+      openRankingEquipo();
     };
-    el.querySelectorAll('.eq-join').forEach(b => { b.onclick = () => unirseEquipo(parseInt(b.dataset.id)); });
-  }
-
-  async function unirseEquipo(equipoId) {
-    const { error } = await dbClient.from('profiles').update({ equipo_id: equipoId }).eq('id', currentUser.id);
-    if (error) { showToast('⚠️ No se pudo unir al equipo: ' + error.message); return; }
-    userProfile.equipo_id = equipoId;
-    triggerConfetti();
-    showToast('🛡️ ¡Bienvenido al equipo!');
-    openRankingEquipo();
   }
 
   // ---------- Progreso por nivel ----------
@@ -1496,6 +1909,12 @@
         <div class="bg-blue-50 rounded-xl p-3 text-center"><div class="text-2xl font-black text-blue-600">${estudiadas}</div><div class="text-[10px] font-bold text-slate-400 uppercase">Ya estudiadas</div></div>
         <div class="bg-green-50 rounded-xl p-3 text-center"><div class="text-2xl font-black text-green-600">${dominadas}</div><div class="text-[10px] font-bold text-slate-400 uppercase">Dominadas 🏅</div></div>
         <div class="bg-orange-50 rounded-xl p-3 text-center"><div class="text-2xl font-black text-[#FF7A00]">${pendientes}</div><div class="text-[10px] font-bold text-slate-400 uppercase">Por repasar hoy</div></div>
+      </div>
+      <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 mb-4 text-[11px] text-slate-500 space-y-1.5 leading-snug">
+        <p><b class="text-blue-600">Ya estudiadas</b> · palabras que ya viste al menos una vez, así que ya tienen ficha de memoria. Cuentan aunque las hayas fallado.</p>
+        <p><b class="text-green-600">Dominadas 🏅</b> · las que ya viven en tu memoria a largo plazo y <b>no vuelven a "¡Toca repasar!"</b>. Se logra de dos formas: acertando todo a la primera (tarjeta «Fácil» + imagen + dictado sin ningún fallo), o subiendo los ${SRS_INTERVALS_DAYS.length} escalones de repaso espaciado (hasta ${SRS_INTERVALS_DAYS[SRS_INTERVALS_DAYS.length - 1]} días entre repasos).</p>
+        <p><b class="text-[#FF7A00]">Por repasar hoy</b> · estudiadas a las que ya les toca refuerzo para que no se olviden.</p>
+        <p class="text-slate-400">Toda palabra dominada estuvo antes estudiada, por eso «dominadas» nunca supera a «estudiadas».</p>
       </div>
       <div class="mb-3">
         <div class="flex justify-between text-[10px] font-bold text-slate-400 mb-1"><span>DOMINADAS</span><span>${pctDom}% · te falta ${100 - pctDom}%</span></div>
@@ -1542,52 +1961,52 @@
   }
 
   /* ============================================================
-     13.6. MAZO — práctica personalizada desde un Excel del usuario
-     El Excel debe tener una columna "ingles" con una palabra por fila.
-     Esas palabras se buscan en la tabla "palabras" y con las encontradas
-     se genera un entorno de práctica igual al de los niveles.
+     13.6. MAZO — tu propio grupo de palabras, guardado en Supabase
+     ------------------------------------------------------------
+     · Las palabras viven en la tabla "mazo" (una fila por palabra,
+       enlazada a "palabras" por word_id).
+     · El avance vive en la tabla "mazo_flujo" (JSON), igual que
+       "flujo" en profiles: puedes salirte y retomar donde ibas.
+     · El Excel solo hace falta la primera vez. Después basta la M.
   ============================================================ */
-  async function openMazo() {
-    showModal({ icon: '🃏', title: 'Mi Mazo', size: 'lg', body: `<div id="mz-body" class="text-left">${spinnerHTML()}</div>`, actions: [] });
-    const el = document.getElementById('mz-body');
-    if (!el) return;
+  let mazoSession = null;
+  let mazoCount = 0;
 
-    const { data: guardado } = await dbClient.from('mazo').select('ingles, espanol').eq('user_id', currentUser.id);
-    const tiene = (guardado || []).length > 0;
+  // ---------- Lectura del mazo ----------
+  async function cargarMazo() {
+    const { data: filas, error } = await dbClient.from('mazo')
+      .select('id, ingles, espanol, word_id')
+      .eq('user_id', currentUser.id)
+      .order('created_at', { ascending: true });
+    if (error) { console.error('[mazo] no se pudo leer:', error.message); return { error, filas: [], words: [] }; }
 
-    el.innerHTML = `
-      ${tiene ? `
-        <div class="bg-orange-50 border-2 border-orange-200 rounded-xl p-3 mb-4 text-center">
-          <p class="font-bold text-slate-700 mb-2">Tienes un mazo guardado con <b>${guardado.length}</b> palabra(s). 🃏</p>
-          <button id="mz-practicar" class="btn-juice bg-[#FF7A00] text-white font-bold py-2 px-6 rounded-xl">🎯 Practicar mi mazo</button>
-        </div>` : ''}
-      <div class="bg-slate-50 rounded-xl p-3 mb-3 text-sm text-slate-500 space-y-1">
-        <p class="font-bold text-slate-700 mb-1">📋 Tutorial: crea tu mazo en 3 pasos</p>
-        <p>1️⃣ Crea un Excel con una columna llamada <b class="text-slate-700">ingles</b>.</p>
-        <p>2️⃣ Escribe una palabra en inglés por fila (ej: <i>dog, house, water...</i>).</p>
-        <p>3️⃣ Cárgalo aquí abajo: buscaremos esas palabras y crearemos tu zona de práctica personalizada con tarjetas y ejercicios. ✨</p>
-      </div>
-      <label class="block w-full text-center btn-juice bg-slate-800 text-white font-bold py-3 rounded-xl cursor-pointer">
-        <i class="fas fa-file-excel mr-2"></i>${tiene ? 'Reemplazar mazo con un nuevo Excel' : 'Cargar Excel'}
-        <input id="mz-file" type="file" accept=".xlsx,.xls,.csv" class="hidden">
-      </label>
-      <p id="mz-status" class="text-xs text-slate-500 font-bold mt-3 text-center min-h-[1rem]"></p>`;
-
-    if (tiene) {
-      const btn = document.getElementById('mz-practicar');
-      if (btn) btn.onclick = async () => {
-        const st = document.getElementById('mz-status');
-        if (st) st.textContent = '🔎 Preparando tu mazo...';
-        const words = await buscarPalabrasMazo(guardado.map(f => f.ingles));
-        if (!words.length) { if (st) st.textContent = '⚠️ No se encontraron esas palabras en la base.'; return; }
-        startMazoPractice(words);
-      };
+    const ids = (filas || []).filter(f => f.word_id).map(f => f.word_id);
+    let words = [];
+    if (ids.length) {
+      const { data } = await dbClient.from('palabras').select('*').in('id', ids);
+      words = data || [];
     }
-    const fileInput = document.getElementById('mz-file');
-    if (fileInput) fileInput.onchange = (e) => procesarExcelMazo(e.target.files[0]);
+
+    // Mazos guardados antes de existir word_id: se buscan por nombre y se reparan solos.
+    const sinId = (filas || []).filter(f => !f.word_id);
+    if (sinId.length) {
+      const halladas = await buscarPalabrasMazo(sinId.map(f => f.ingles));
+      sinId.forEach(f => {
+        const w = halladas.find(x => (x.ingles || '').toLowerCase() === (f.ingles || '').toLowerCase());
+        if (w) {
+          words.push(w);
+          dbClient.from('mazo').update({ word_id: w.id }).eq('id', f.id).then(() => {});
+        }
+      });
+    }
+
+    // Mismo orden en que las cargó la persona
+    const orden = new Map((filas || []).map((f, k) => [(f.ingles || '').toLowerCase(), k]));
+    words.sort((a, b) => (orden.get((a.ingles || '').toLowerCase()) ?? 999) - (orden.get((b.ingles || '').toLowerCase()) ?? 999));
+    return { filas: filas || [], words };
   }
 
-  // Busca las palabras del Excel en la tabla "palabras" (tolerante a mayúsculas).
+  // Busca palabras del Excel en la tabla "palabras" (tolerante a mayúsculas).
   async function buscarPalabrasMazo(listaIngles) {
     const unicas = [...new Set(listaIngles.map(w => (w || '').toString().trim()).filter(Boolean))];
     if (!unicas.length) return [];
@@ -1605,11 +2024,160 @@
     return out;
   }
 
+  // ---------- Flujo del mazo (tabla mazo_flujo) ----------
+  async function leerMazoFlujo() {
+    const { data, error } = await dbClient.from('mazo_flujo').select('flujo')
+      .eq('user_id', currentUser.id).maybeSingle();
+    if (error) { console.warn('[mazo] flujo:', error.message); return null; }
+    return data?.flujo || null;
+  }
+  function estadoMazo() {
+    const ms = mazoSession;
+    if (!ms) return { pendiente: false };
+    return {
+      pendiente: true,
+      phase: ms.phase,
+      index: ms.index,
+      correct: ms.correct,
+      wrong: ms.wrong,
+      ids: ms.words.map(w => w.id),
+      queue: (ms.queue || []).map(q => ({ id: q.word.id, type: q.type })),
+      total: ms.words.length,
+      updated: new Date().toISOString()
+    };
+  }
+  function guardarMazoFlujo() {
+    if (!currentUser) return;
+    dbClient.from('mazo_flujo')
+      .upsert({ user_id: currentUser.id, flujo: estadoMazo(), updated_at: new Date().toISOString() }, { onConflict: 'user_id' })
+      .then(({ error }) => { if (error) console.warn('[mazo] no se pudo guardar el avance:', error.message); });
+  }
+  async function limpiarMazoFlujo() {
+    await dbClient.from('mazo_flujo').delete().eq('user_id', currentUser.id);
+  }
+
+  // ---------- Insignia del botón "M" ----------
+  async function refreshMazoBadge() {
+    if (!currentUser) return 0;
+    const { count } = await dbClient.from('mazo')
+      .select('id', { count: 'exact', head: true }).eq('user_id', currentUser.id);
+    mazoCount = count || 0;
+    const b = document.getElementById('mazo-badge');
+    if (b) {
+      b.textContent = mazoCount > 99 ? '99+' : mazoCount;
+      b.classList.toggle('hidden', mazoCount === 0);
+      b.classList.toggle('flex', mazoCount > 0);
+    }
+    const m = document.getElementById('mazo-menu-count');
+    if (m) m.textContent = mazoCount ? `${mazoCount} palabras` : '';
+    return mazoCount;
+  }
+
+  // ---------- Botón "M": entra directo, sin Excel ----------
+  async function abrirMazoRapido() {
+    if (!currentUser) return;
+    const { words, error } = await cargarMazo();
+    if (error) { showToast('⚠️ No se pudo leer tu mazo.'); return openMazo(); }
+    if (!words.length) {
+      showToast('🃏 Tu mazo está vacío: carga un Excel una sola vez.');
+      return openMazo();
+    }
+    const guardado = await leerMazoFlujo();
+    if (guardado && guardado.pendiente && (guardado.index || 0) > 0) {
+      const hechas = guardado.phase === 'practice' ? (guardado.total || words.length) + guardado.index : guardado.index;
+      const totales = (guardado.total || words.length) * 2;
+      return showModal({
+        icon: '🃏', title: 'Tienes un mazo a medias',
+        body: `Ibas en el paso <b>${Math.min(hechas, totales)}</b> de ${totales}. ¿Sigues donde lo dejaste?`,
+        actions: [
+          { label: 'Continuar 👉', onClick: () => { closeModal(); startMazoPractice(words, guardado); } },
+          { label: 'Empezar de nuevo', style: 'bg-slate-100 text-slate-500', onClick: async () => { closeModal(); await limpiarMazoFlujo(); startMazoPractice(words); } }
+        ]
+      });
+    }
+    startMazoPractice(words);
+  }
+
+  // ---------- Panel del mazo ----------
+  async function openMazo() {
+    showModal({ icon: '🃏', title: 'Mi Mazo', size: 'lg', body: `<div id="mz-body" class="text-left">${spinnerHTML()}</div>`, actions: [] });
+    const el = document.getElementById('mz-body');
+    if (!el) return;
+
+    const { filas, words } = await cargarMazo();
+    const tiene = words.length > 0;
+    const huerfanas = filas.filter(f => !words.some(w => (w.ingles || '').toLowerCase() === (f.ingles || '').toLowerCase()));
+
+    el.innerHTML = `
+      ${tiene ? `
+        <div class="bg-orange-50 border-2 border-orange-200 rounded-xl p-3 mb-3">
+          <div class="flex items-center justify-between mb-2">
+            <p class="font-bold text-slate-700 text-sm">Tu mazo · <b>${words.length}</b> palabra(s)</p>
+            <button id="mz-vaciar" class="text-[10px] font-bold text-slate-400 hover:text-red-500 transition">Vaciar</button>
+          </div>
+          <div class="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto mb-3">
+            ${words.map(w => `<span class="text-[11px] font-bold px-2 py-1 rounded-full bg-white border border-slate-200 text-slate-500 flex items-center gap-1">${escapeHTML(w.ingles)}<button class="mz-del text-slate-300 hover:text-red-500" data-w="${escapeHTML(w.ingles)}" title="Quitar">&times;</button></span>`).join('')}
+          </div>
+          <button id="mz-practicar" class="btn-juice bg-[#FF7A00] text-white font-bold py-2.5 rounded-xl w-full">🎯 Practicar mi mazo</button>
+          <p class="text-[10px] text-slate-400 text-center mt-2">Atajo: el botón <b class="text-[#FF7A00]">M</b> de arriba lo abre directo.</p>
+        </div>` : ''}
+
+      ${huerfanas.length ? `<p class="text-[11px] text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5 mb-3">${huerfanas.length} palabra(s) de tu mazo no están en la base de datos y no se pueden practicar: ${escapeHTML(huerfanas.slice(0, 4).map(f => f.ingles).join(', '))}${huerfanas.length > 4 ? '…' : ''}</p>` : ''}
+
+      <div class="bg-slate-50 rounded-xl p-3 mb-3 text-sm text-slate-500 space-y-1">
+        <p class="font-bold text-slate-700 mb-1">📋 ${tiene ? 'Añadir más palabras' : 'Crea tu mazo en 3 pasos'}</p>
+        <p>1️⃣ Un Excel con una columna llamada <b class="text-slate-700">ingles</b>.</p>
+        <p>2️⃣ Una palabra en inglés por fila (ej: <i>dog, house, water...</i>).</p>
+        <p>3️⃣ Cárgalo: las palabras quedan <b>guardadas</b> y el Excel ya no hace falta nunca más. ✨</p>
+      </div>
+
+      <label class="block w-full text-center btn-juice bg-slate-800 text-white font-bold py-3 rounded-xl cursor-pointer">
+        <i class="fas fa-file-excel mr-2"></i>${tiene ? 'Añadir palabras desde Excel' : 'Cargar Excel'}
+        <input id="mz-file" type="file" accept=".xlsx,.xls,.csv" class="hidden">
+      </label>
+      <p id="mz-status" class="text-xs text-slate-500 font-bold mt-3 text-center min-h-[1rem]"></p>
+      <div id="mz-actions" class="mt-3"></div>`;
+
+    const btn = document.getElementById('mz-practicar');
+    if (btn) btn.onclick = () => { closeModal(); abrirMazoRapido(); };
+
+    const vaciar = document.getElementById('mz-vaciar');
+    if (vaciar) vaciar.onclick = () => {
+      showModal({
+        icon: '🗑️', title: '¿Vaciar el mazo?',
+        body: 'Se borran las <b>' + words.length + '</b> palabras guardadas. Tu progreso de memoria no se pierde.',
+        actions: [
+          { label: 'Sí, vaciar', style: 'bg-red-500 text-white', onClick: async () => {
+              await dbClient.from('mazo').delete().eq('user_id', currentUser.id);
+              await limpiarMazoFlujo();
+              await refreshMazoBadge();
+              closeModal(); showToast('🗑️ Mazo vacío.'); openMazo();
+            } },
+          { label: 'Cancelar', style: 'bg-slate-100 text-slate-500', onClick: () => openMazo() }
+        ]
+      });
+    };
+
+    el.querySelectorAll('.mz-del').forEach(b => {
+      b.onclick = async () => {
+        const palabra = b.dataset.w;
+        await dbClient.from('mazo').delete().eq('user_id', currentUser.id).ilike('ingles', palabra);
+        await refreshMazoBadge();
+        showToast(`Quitada: ${escapeHTML(palabra)}`, 1500);
+        openMazo();
+      };
+    });
+
+    const fileInput = document.getElementById('mz-file');
+    if (fileInput) fileInput.onchange = (e) => procesarExcelMazo(e.target.files[0]);
+  }
+
+  // ---------- Carga del Excel: AÑADE, no reemplaza ----------
   async function procesarExcelMazo(file) {
     const status = document.getElementById('mz-status');
     const setSt = (html) => { if (status) status.innerHTML = html; };
     if (!file) return;
-    if (!window.XLSX) return setSt('⚠️ No se pudo cargar el lector de Excel. Revisa tu conexión y recarga la página.');
+    if (!window.XLSX) return setSt('⚠️ No se pudo cargar el lector de Excel. Revisa tu conexión y recarga.');
 
     try {
       setSt('⏳ Leyendo el archivo...');
@@ -1618,41 +2186,84 @@
       const filas = XLSX.utils.sheet_to_json(hoja, { defval: '' });
       if (!filas.length) return setSt('❌ El Excel está vacío.');
 
-      // Acepta "ingles", "Ingles", "INGLES", "inglés"...
       const clave = Object.keys(filas[0]).find(k => k.trim().toLowerCase().replace(/é/g, 'e') === 'ingles');
       if (!clave) return setSt('❌ El Excel debe tener una columna llamada <b>ingles</b>.');
 
       const lista = filas.map(f => (f[clave] || '').toString().trim()).filter(Boolean);
       if (!lista.length) return setSt('❌ La columna "ingles" está vacía.');
 
-      setSt(`🔎 Buscando ${lista.length} palabra(s) en la base de datos...`);
-      const words = await buscarPalabrasMazo(lista);
-      if (!words.length) return setSt('❌ Ninguna de esas palabras existe en la base. Revisa la ortografía.');
+      setSt(`🔎 Buscando ${lista.length} palabra(s)...`);
+      const halladas = await buscarPalabrasMazo(lista);
+      if (!halladas.length) return setSt('❌ Ninguna de esas palabras existe en la base. Revisa la ortografía.');
 
-      // Guardar el mazo (reemplaza el anterior)
-      await dbClient.from('mazo').delete().eq('user_id', currentUser.id);
-      const { error: insErr } = await dbClient.from('mazo').insert(
-        words.map(w => ({ user_id: currentUser.id, ingles: w.ingles, espanol: w.espanol }))
-      );
-      if (insErr) console.warn('[mazo] no se pudo guardar el mazo:', insErr.message);
+      // Se añaden solo las que aún no están (el índice único de Supabase también lo impide)
+      const { filas: yaGuardadas } = await cargarMazo();
+      const existentes = new Set(yaGuardadas.map(f => (f.ingles || '').toLowerCase()));
+      const nuevas = halladas.filter(w => !existentes.has((w.ingles || '').toLowerCase()));
 
-      const faltantes = lista.filter(l => !words.some(w => (w.ingles || '').toLowerCase() === l.toLowerCase()));
-      setSt(`✅ <b>${words.length}</b> palabra(s) encontradas${faltantes.length ? ` · <span class="text-slate-400">${faltantes.length} no encontradas: ${escapeHTML(faltantes.slice(0, 5).join(', '))}${faltantes.length > 5 ? '…' : ''}</span>` : ''}. ¡Empezando práctica! 🚀`);
-      setTimeout(() => startMazoPractice(words), 1200);
+      if (nuevas.length) {
+        const { error: insErr } = await dbClient.from('mazo').insert(
+          nuevas.map(w => ({ user_id: currentUser.id, ingles: w.ingles, espanol: w.espanol, word_id: w.id }))
+        );
+        if (insErr) {
+          console.error('[mazo] insert:', insErr);
+          return setSt('❌ No se pudo guardar: ' + escapeHTML(insErr.message) +
+            '<br><span class="font-normal">Ejecuta <b>abulingo-supabase.sql</b> en Supabase.</span>');
+        }
+      }
+
+      const repetidas = halladas.length - nuevas.length;
+      const faltantes = lista.filter(l => !halladas.some(w => (w.ingles || '').toLowerCase() === l.toLowerCase()));
+      await refreshMazoBadge();
+
+      setSt(`✅ <b>${nuevas.length}</b> palabra(s) añadidas a tu mazo` +
+        (repetidas ? ` · <span class="text-slate-400">${repetidas} ya estaban</span>` : '') +
+        (faltantes.length ? ` · <span class="text-slate-400">${faltantes.length} no existen en la base</span>` : ''));
+
+      const cont = document.getElementById('mz-actions');
+      const { words } = await cargarMazo();
+      if (cont) {
+        cont.innerHTML = `
+          <button id="mz-ahora" class="btn-juice bg-[#FF7A00] text-white font-bold py-2.5 rounded-xl w-full">🎯 Practicar ahora (${words.length})</button>
+          <button id="mz-luego" class="mt-2 w-full text-xs font-bold text-slate-400 hover:text-slate-600">Guardar y estudiar después (botón M)</button>`;
+        document.getElementById('mz-ahora').onclick = async () => { await limpiarMazoFlujo(); startMazoPractice(words); };
+        document.getElementById('mz-luego').onclick = () => { closeModal(); showToast('🃏 Guardado. Toca la <b>M</b> cuando quieras estudiarlo.'); };
+      }
     } catch (err) {
       console.error('[mazo] error leyendo el Excel:', err);
       setSt('❌ No se pudo leer el archivo. ¿Es un Excel válido (.xlsx, .xls o .csv)?');
     }
   }
 
-  // Entorno de práctica del mazo: repaso con tarjetas → ejercicios (igual que los niveles).
-  let mazoSession = null;
-  function startMazoPractice(words) {
+  // ---------- Práctica del mazo (tarjetas → ejercicios) ----------
+  function startMazoPractice(words, guardado = null) {
     closeModal();
+    const lbl = document.getElementById('nivel-label');
+    if (lbl) lbl.textContent = 'M';   // arriba se ve que estás en el mazo
     words.forEach(w => { groupCache.map[String(w.id)] = w; }); // para updateSRS e imágenes
+
+    if (guardado && guardado.pendiente) {
+      // Reanudar: mismo orden de palabras y misma cola de ejercicios
+      const porId = new Map(words.map(w => [w.id, w]));
+      const orden = (guardado.ids || []).map(id => porId.get(id)).filter(Boolean);
+      const lista = orden.length ? orden : [...words];
+      const pool = lista.map(w => w.ingles);
+      const queue = (guardado.queue || [])
+        .map(q => { const w = porId.get(q.id); return w ? { word: w, type: q.type,
+          options: q.type === 'select_by_image' ? buildOptions(w.ingles, pool.length >= 4 ? pool : [w.ingles, 'yes', 'no', 'time']) : null } : null; })
+        .filter(Boolean);
+      mazoSession = {
+        words: lista, phase: guardado.phase || 'review', index: guardado.index || 0,
+        queue, correct: guardado.correct || 0, wrong: guardado.wrong || 0
+      };
+      showToast('🃏 Retomamos donde ibas.');
+      return nextMazoStep();
+    }
+
     mazoSession = { words: [...words].sort(() => Math.random() - 0.5), phase: 'review', index: 0, queue: [], correct: 0, wrong: 0 };
+    guardarMazoFlujo();
     renderMessage('🃏', '¡Tu mazo personalizado!',
-      `Vamos a estudiar <b>${words.length}</b> palabra(s) de tu Excel: primero repaso con tarjetas ✨ y luego práctica 👁️👂.<br>Su progreso también entra a tu memoria espaciada. 🧠`,
+      `Vamos con <b>${words.length}</b> palabra(s) de tu mazo: primero tarjetas ✨ y luego ejercicios 👁️👂.<br>Su progreso también entra a tu memoria espaciada. 🧠<br><span class="text-xs text-slate-400">Si sales, retomas donde ibas.</span>`,
       '¡Empezar! 🚀', () => nextMazoStep());
   }
 
@@ -1660,6 +2271,7 @@
     const ms = mazoSession;
     if (!ms) return runFlow();
 
+    // Fase 1: tarjetas
     if (ms.phase === 'review') {
       if (ms.index >= ms.words.length) {
         ms.phase = 'practice'; ms.index = 0;
@@ -1668,42 +2280,49 @@
           const type = (w.imagen && Math.random() > 0.5) ? 'select_by_image' : 'write_by_audio';
           return { word: w, type, options: type === 'select_by_image' ? buildOptions(w.ingles, pool.length >= 4 ? pool : [w.ingles, 'yes', 'no', 'time']) : null };
         }).sort(() => Math.random() - 0.5);
+        guardarMazoFlujo();
         showEncouragement(() => nextMazoStep());
         return;
       }
       const w = ms.words[ms.index];
-      updateProgressBar((ms.index / ms.words.length) * 100);
+      updateProgressBar((ms.index / (ms.words.length * 2)) * 100);
       appContainer.innerHTML = flashcardHTML(w, ms.index + 1, ms.words.length);
       bindFlashcard(w, async (res) => {
         await updateSRS(w.id, res, { type: 'flashcard' });
         ms.index++;
+        guardarMazoFlujo();
         nextMazoStep();
       });
       return;
     }
 
-    // Fase de práctica
+    // Fase 2: ejercicios
     if (ms.index >= ms.queue.length) {
-      const c = ms.correct, f = ms.wrong;
+      const c = ms.correct, f = ms.wrong, total = ms.words.length;
       mazoSession = null;
+      await limpiarMazoFlujo();
+      const lbl = document.getElementById('nivel-label');
+      if (lbl) lbl.textContent = flujo.currentNivel;
       playSound('complete'); triggerConfetti();
       showModal({
         icon: '🃏', title: '¡Mazo completado!',
-        body: `<span class="text-green-600 font-bold">${c} aciertos</span> · <span class="text-slate-400">${f} fallos</span><br>Estas palabras ya entraron a tu ciclo de memoria espaciada. 🧠`,
+        body: `<span class="text-green-600 font-bold">${c} aciertos</span> · <span class="text-slate-400">${f} fallos</span> de ${total} palabras.<br>Ya entraron a tu ciclo de memoria espaciada. 🧠`,
         dismissable: false,
         actions: [
-          { label: 'Practicar de nuevo 🔁', onClick: () => { closeModal(); openMazo(); } },
+          { label: 'Practicar de nuevo 🔁', onClick: async () => { closeModal(); const { words } = await cargarMazo(); startMazoPractice(words); } },
           { label: 'Volver a mis lecciones', style: 'bg-slate-100 text-slate-500', onClick: () => { closeModal(); runFlow(); } }
         ]
       });
       return;
     }
+
     const ex = ms.queue[ms.index];
-    updateProgressBar((ms.index / ms.queue.length) * 100);
+    updateProgressBar(((ms.words.length + ms.index) / (ms.words.length * 2)) * 100);
     const avanzar = async (ok, type) => {
       if (ok) ms.correct++; else ms.wrong++;
       await updateSRS(ex.word.id, ok ? 'practice_correct' : 'practice_wrong', { type });
       ms.index++;
+      guardarMazoFlujo();
       setTimeout(() => nextMazoStep(), ok ? 1000 : 2000);
     };
     if (ex.type === 'select_by_image') renderSelectImage(ex.word, ex.options, (ok) => avanzar(ok, 'select_by_image'));
@@ -1730,16 +2349,40 @@
   document.querySelectorAll('#top-bar button[data-tool]').forEach(btn => {
     btn.onclick = () => {
       const tool = btn.dataset.tool;
-      if (tool === 'ia') openAiDialogue();
+      if (tool === 'ia') openAbuChat();
       else showProModal(); // gramática / pronunciación / club / traductor
     };
   });
   document.getElementById('nivel-btn').onclick = openNivelSelector;
+  document.getElementById('mazo-btn').onclick = abrirMazoRapido;
 
   // Menú de perfil (dropdown)
   const profileBtn = document.getElementById('profile-menu-button');
   const profileDropdown = document.getElementById('profile-menu-dropdown');
-  profileBtn.onclick = (e) => { e.stopPropagation(); profileDropdown.classList.toggle('hidden'); };
+  profileBtn.onclick = (e) => {
+    e.stopPropagation();
+    profileDropdown.classList.toggle('hidden');
+    ocultarPistaPerfil();   // ya entendió que aquí se abre el menú
+  };
+
+  // Globo de ayuda del avatar: se muestra una sola vez, hasta que lo abra.
+  function ocultarPistaPerfil(guardar = true) {
+    const hint = document.getElementById('profile-hint');
+    if (hint) hint.classList.add('hidden');
+    const caret = document.getElementById('profile-caret');
+    if (caret) caret.classList.remove('menu-hint');
+    if (guardar && flujo) {
+      if (!flujo.ui) flujo.ui = {};
+      if (!flujo.ui.menuHintSeen) { flujo.ui.menuHintSeen = true; updateUserFlow(); }
+    }
+  }
+  function mostrarPistaPerfil() {
+    if (flujo?.ui?.menuHintSeen) { ocultarPistaPerfil(false); return; }
+    const hint = document.getElementById('profile-hint');
+    if (!hint) return;
+    setTimeout(() => hint.classList.remove('hidden'), 900);
+    setTimeout(() => hint.classList.add('hidden'), 11000);   // no molesta para siempre
+  }
   document.addEventListener('click', (e) => {
     if (!profileDropdown.contains(e.target) && !profileBtn.contains(e.target)) profileDropdown.classList.add('hidden');
   });
@@ -1812,6 +2455,8 @@
 
       await ensureFlujo();
       updateStreakUI();
+      refreshMazoBadge();      // insignia del botón "M"
+      mostrarPistaPerfil();    // "toca tu foto" la primera vez
       await runFlow();
     } catch (e) {
       console.error(e);
