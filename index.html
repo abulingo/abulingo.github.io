@@ -419,19 +419,41 @@
                 const name = document.getElementById('signup-name').value.trim();
                 const phone = document.getElementById('signup-phone').value.trim();
                 const group = document.getElementById('signup-group').value;
-                const email = document.getElementById('signup-email').value.trim();
+                // Normalizamos el correo (minúsculas y sin espacios) para que
+                // "Juan@Correo.com" y "juan@correo.com" cuenten como el mismo.
+                const email = document.getElementById('signup-email').value.trim().toLowerCase();
                 const pin = document.getElementById('signup-pin').value.trim();
                 const msgEl = document.getElementById('signup-message');
 
-                if (!isValidPin(pin)) {
-                    msgEl.textContent = 'El PIN debe tener exactamente 4 dígitos numéricos.';
+                const showError = (texto) => {
+                    msgEl.textContent = texto;
                     msgEl.className = 'text-sm mt-4 text-center text-feedback-error';
+                };
+                const yaRegistrado = () => showError('Este correo ya está registrado. Inicia sesión con tu PIN.');
+
+                if (!isValidPin(pin)) {
+                    showError('El PIN debe tener exactamente 4 dígitos numéricos.');
                     return;
                 }
 
                 const password = buildPassword(pin); // p.ej. 345299
                 msgEl.textContent = 'Creando cuenta...';
                 msgEl.className = 'text-sm mt-4 text-center text-slate-500';
+
+                // VERIFICACIÓN 1 (la más segura): preguntamos a la base de datos si el
+                // correo ya existe. Requiere la función SQL "email_ya_registrado"
+                // (ver instrucciones). Si la función no existe, seguimos con las demás
+                // verificaciones para no bloquear el registro.
+                try {
+                    const { data: existe, error: rpcError } = await supabase.rpc('email_ya_registrado', { correo: email });
+                    if (!rpcError && existe === true) {
+                        yaRegistrado();
+                        return;
+                    }
+                    if (rpcError) console.warn('No se pudo verificar el correo en la BD:', rpcError.message);
+                } catch (err) {
+                    console.warn('No se pudo verificar el correo en la BD:', err);
+                }
 
                 const { data, error } = await supabase.auth.signUp({
                     email: email,
@@ -446,15 +468,13 @@
                     }
                 });
 
-                const showError = (texto) => {
-                    msgEl.textContent = texto;
-                    msgEl.className = 'text-sm mt-4 text-center text-feedback-error';
-                };
-                const yaRegistrado = () => showError('Este correo ya está registrado. Inicia sesión con tu PIN.');
-
+                // VERIFICACIÓN 2: error explícito de Supabase.
                 if (error) {
                     const m = (error.message || '').toLowerCase();
-                    if (m.includes('already registered') || m.includes('already been registered') || m.includes('user already exists')) {
+                    const code = (error.code || '').toLowerCase();
+                    if (code === 'user_already_exists' || code === 'email_exists' ||
+                        m.includes('already registered') || m.includes('already been registered') ||
+                        m.includes('already exists') || m.includes('already in use')) {
                         yaRegistrado();
                     } else {
                         showError(`Error: ${error.message}`);
@@ -462,11 +482,24 @@
                     return;
                 }
 
-                // Supabase no siempre devuelve error cuando el correo ya existe:
-                // en ese caso regresa un usuario con la lista "identities" vacía.
+                // VERIFICACIÓN 3: Supabase a veces responde sin error y con la lista
+                // "identities" vacía cuando el correo ya existe.
                 if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
                     yaRegistrado();
                     return;
+                }
+
+                // VERIFICACIÓN 4 (clave): si el PIN coincide con el de una cuenta que ya
+                // existía, Supabase NO da error y simplemente inicia sesión en esa cuenta.
+                // Lo detectamos porque el usuario devuelto se creó hace mucho tiempo.
+                const usuarioDevuelto = data.user || (data.session && data.session.user);
+                if (usuarioDevuelto && usuarioDevuelto.created_at) {
+                    const antiguedadMs = Date.now() - new Date(usuarioDevuelto.created_at).getTime();
+                    if (antiguedadMs > 60000) { // más de 1 minuto => la cuenta ya existía
+                        await supabase.auth.signOut();
+                        yaRegistrado();
+                        return;
+                    }
                 }
 
                 // Ya no hay confirmación por correo: iniciamos sesión y entramos directo.
@@ -495,7 +528,7 @@
             // INICIO DE SESIÓN
             document.getElementById('login-form').addEventListener('submit', async (e) => {
                 e.preventDefault();
-                const email = document.getElementById('login-email').value.trim();
+                const email = document.getElementById('login-email').value.trim().toLowerCase();
                 const pin = document.getElementById('login-pin').value.trim();
                 const errEl = document.getElementById('login-error');
                 errEl.textContent = '';
