@@ -1,352 +1,2672 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Abulingo - Flashcards</title>
-    
-    <link rel="preconnect" href="https://zdybpplggppjrmxhfhik.supabase.co" crossorigin>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="preconnect" href="https://cdn.tailwindcss.com">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Abulingo - Aprende Inglés</title>
 
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Work+Sans:wght@400;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" media="print" onload="this.media='all'"></link>
-    <link rel="stylesheet" href="style.css">   
-    <link rel="icon" href="icono.png" type="image/x-icon">
+  <!-- Librerías -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Work+Sans:wght@400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="icono.png" type="image/x-icon">
 
-    <style>
-        body { background-color: #f8fafc; font-family: 'Work Sans', sans-serif; }
-        .card-style { background-color: white; box-shadow: 0 10px 25px -5px rgb(0 0 0 / 0.05), 0 8px 10px -6px rgb(0 0 0 / 0.05); will-change: transform; }
-        .btn-primary { background-color: #FF7A00; color: white; }
-        .font-heading { font-family: 'Space Grotesk', sans-serif; }
-        
-        /* Optimización de animaciones usando GPU */
-        #points-hud {
-            display: inline-flex;
-            align-items: center;
-            gap: 12px;
-            background: white;
-            padding: 10px 24px;
-            border-radius: 9999px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-            border: 2px solid #f1f5f9;
-            font-family: 'Space Grotesk', sans-serif;
-            font-weight: bold;
-            font-size: 1.25rem;
-            color: #475569;
-            margin-bottom: 2rem;
-            transition: transform 0.2s;
-            will-change: transform;
-        }
+  <style>
+    .pt-20 { padding-top: 5rem !important; }
+    body { background-color: #f0f4f8; font-family: 'Work Sans', sans-serif; overflow-x: hidden; }
+    .font-heading { font-family: 'Space Grotesk', sans-serif; }
 
-        @keyframes floatUpFade {
-            0% { opacity: 0; transform: translateY(10px) scale(0.8); }
-            20% { opacity: 1; transform: translateY(0px) scale(1.2); }
-            100% { opacity: 0; transform: translateY(-50px) scale(1); }
-        }
+    /* --- Diseño "Juicy" --- */
+    .card-3d {
+      background: white;
+      border-radius: 24px;
+      box-shadow: 0 10px 0 #cbd5e1, 0 10px 20px rgba(0,0,0,0.1);
+      transition: transform 0.2s, box-shadow 0.2s;
+      border: 2px solid #e2e8f0;
+      position: relative;
+      top: 0;
+    }
+    .btn-juice { transition: all 0.1s; border-bottom: 6px solid rgba(0,0,0,0.2); transform: translateY(0); }
+    .btn-juice:active { transform: translateY(6px); border-bottom-width: 0; box-shadow: inset 0 6px 10px rgba(0,0,0,0.2); }
 
-        .points-floater {
-            position: absolute;
-            font-weight: 900;
-            font-size: 1.5rem;
-            color: #FF7A00;
-            text-shadow: 0 2px 4px rgba(255, 255, 255, 0.8);
-            pointer-events: none;
-            z-index: 100;
-            animation: floatUpFade 1.5s ease-out forwards;
-            will-change: transform, opacity; /* Ayuda al navegador a optimizar */
-        }
+    .progress-track { background: #e2e8f0; height: 10px; border-radius: 99px; overflow: hidden; margin-top: 2px; }
+    .progress-fill { background: linear-gradient(90deg, #FF7A00, #ffaa00); height: 100%; width: 0%; transition: width 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); }
 
-        @keyframes pulse-gold {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.4); color: #eab308; }
-            100% { transform: scale(1); }
-        }
+    @keyframes popIn { 0% { transform: scale(0.9); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+    .animate-pop { animation: popIn 0.4s ease-out forwards; }
 
-        .animate-score-pulse { animation: pulse-gold 0.4s ease-in-out; }
-        .star-icon { color: #fbbf24; font-size: 1.5rem; }
-        
-        /* Clases utilitarias para evitar reflow */
-        .min-card-h { min-height: 500px; }
-    </style>
+    @keyframes floatPoints { 0% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(-80px) scale(1.5); } }
+    .floating-points { position: absolute; color: #fbbf24; font-weight: 900; font-size: 2.5rem; z-index: 100; animation: floatPoints 1s ease-out forwards; pointer-events: none; text-shadow: 0 4px 0 rgba(0,0,0,0.1); }
+
+    .wrong-shake { animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both; }
+    @keyframes shake { 10%, 90% { transform: translate3d(-2px, 0, 0); } 20%, 80% { transform: translate3d(4px, 0, 0); } 30%, 50%, 70% { transform: translate3d(-8px, 0, 0); } 40%, 60% { transform: translate3d(8px, 0, 0); } }
+
+    /* Modal genérico */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(15,23,42,0.55); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; padding: 1rem; z-index: 200; }
+
+    /* Toast (avisos rápidos de recompensa) */
+    .toast {
+      position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(20px);
+      background: #1e293b; color: #fff; font-weight: 700; padding: 10px 18px; border-radius: 14px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.25); z-index: 300; opacity: 0;
+      transition: opacity .25s, transform .25s; pointer-events: none; max-width: 90vw; text-align: center;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    /* Barra de herramientas superior */
+    .tool-btn { transition: transform 0.15s; min-width: 44px; }
+    .tool-btn:active { transform: scale(0.90); }
+
+    /* Pista "toca aquí" del menú de perfil */
+    @keyframes hintBounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+    .menu-hint { animation: hintBounce 1.3s ease-in-out infinite; }
+
+    /* Chat con Abu */
+    .chat-scroll { scrollbar-width: thin; scroll-behavior: smooth; }
+    .no-bar { -ms-overflow-style: none; scrollbar-width: none; }
+    .no-bar::-webkit-scrollbar { display: none; }
+    @keyframes tipIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+    .quick-reply { animation: tipIn .25s ease-out both; }
+    .word-chip { transition: all .25s cubic-bezier(0.34, 1.56, 0.64, 1); }
+    .word-chip.used {
+      background: #dcfce7 !important; color: #16a34a !important;
+      border-color: #86efac !important; transform: scale(1.06);
+      box-shadow: 0 2px 8px rgba(22,163,74,.18);
+    }
+    .word-chip.used::after { content: " ✓"; font-weight: 900; }
+    @keyframes bubbleIn { from { opacity: 0; transform: translateY(8px) scale(.97); } to { opacity: 1; transform: none; } }
+    #ai-messages > div { animation: bubbleIn .22s ease-out both; }
+  </style>
 </head>
-<body class="min-h-screen">
+<body class="min-h-screen flex flex-col">
 
-    <div id="navBarra"></div>
+  <!-- BARRA SUPERIOR: logo · herramientas · club · perfil -->
+  <header id="top-bar" class="fixed top-0 left-0 w-full bg-white/95 backdrop-blur border-b border-slate-200 z-50">
+    <div class="max-w-3xl mx-auto flex items-center gap-1 px-3 h-14">
+      <!-- Logo -->
+      <a href="abulingo.html" class="font-heading font-bold text-sm sm:text-base shrink-0 mr-1 leading-none">Abulingo<span style="color:#FF7A00;">.</span></a>
+
+      <!-- Herramientas -->
+      <nav class="flex-1 flex items-center justify-around gap-0.5">
+        <button data-tool="gramatica" class="tool-btn flex flex-col items-center justify-center px-2 py-1 rounded-lg text-slate-500 hover:bg-slate-100">
+          <i class="fas fa-book text-base"></i><span class="hidden md:block text-[10px] font-bold leading-tight mt-0.5">Gramática</span>
+        </button>
+        <button data-tool="pronunciacion" class="tool-btn flex flex-col items-center justify-center px-2 py-1 rounded-lg text-slate-500 hover:bg-slate-100">
+          <i class="fas fa-microphone-lines text-base"></i><span class="hidden md:block text-[10px] font-bold leading-tight mt-0.5">Pronunciación</span>
+        </button>
+        <button data-tool="club" class="tool-btn flex flex-col items-center justify-center px-2 py-1 rounded-lg text-slate-500 hover:bg-slate-100">
+          <i class="fas fa-users text-base"></i><span class="hidden md:block text-[10px] font-bold leading-tight mt-0.5">Club</span>
+        </button>
+        <button data-tool="traductor" class="tool-btn flex flex-col items-center justify-center px-2 py-1 rounded-lg text-slate-500 hover:bg-slate-100">
+          <i class="fas fa-language text-base"></i><span class="hidden md:block text-[10px] font-bold leading-tight mt-0.5">Traductor</span>
+        </button>
+        <button data-tool="ia" title="Habla con Abu" class="tool-btn flex flex-col items-center justify-center px-2 py-1 rounded-lg text-white bg-gradient-to-br from-[#FF7A00] to-orange-600 shadow">
+          <i class="fas fa-comment-dots text-base"></i><span class="hidden md:block text-[10px] font-bold leading-tight mt-0.5">Hablar</span>
+        </button>
+      </nav>
+
+      <!-- Perfil -->
+      <div class="relative shrink-0">
+        <button id="profile-menu-button" title="Perfil, rankings, progreso y mazo" class="relative block rounded-full ring-2 ring-transparent hover:ring-[#FF7A00] transition">
+          <img id="user-avatar" src="icono.png" alt="Perfil" class="w-9 h-9 rounded-full object-cover bg-slate-100">
+          <!-- Indicador permanente: aquí se abre un menú -->
+          <span id="profile-caret" class="menu-hint absolute -bottom-0.5 -right-0.5 w-[17px] h-[17px] rounded-full bg-[#FF7A00] text-white flex items-center justify-center shadow ring-2 ring-white">
+            <i class="fas fa-chevron-down text-[8px]"></i>
+          </span>
+        </button>
+        <!-- Globo de ayuda: se muestra la primera vez y desaparece al abrir el menú -->
+        <div id="profile-hint" class="hidden absolute top-full right-0 mt-2 z-50 w-max max-w-[72vw]">
+          <div class="relative bg-slate-800 text-white text-[11px] font-bold px-3 py-2 rounded-xl shadow-lg animate-pop">
+            <span class="absolute -top-1 right-4 w-2 h-2 bg-slate-800 rotate-45"></span>
+            👆 Toca tu foto: perfil, rankings, progreso y tu mazo
+          </div>
+        </div>
+        <div id="profile-menu-dropdown" class="hidden absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-xl border border-slate-200 z-50 overflow-hidden">
+          <div class="p-4 border-b">
+            <h3 id="user-name-dropdown" class="font-bold text-slate-800">Cargando...</h3>
+            <p id="user-email-dropdown" class="text-sm text-slate-500 truncate">...</p>
+          </div>
+          <div class="py-2 max-h-80 overflow-y-auto">
+            <div class="flex items-center px-4 py-2 text-slate-700"><i class="fas fa-star w-6 text-yellow-500"></i><span><span id="user-points" class="font-bold">0</span> Puntos</span></div>
+            <div class="flex items-center px-4 py-2 text-slate-700"><i class="fas fa-coins w-6 text-yellow-600"></i><span><span id="user-lingots" class="font-bold">0</span> Lingots</span></div>
+            <button data-menu="ranking-global" class="w-full text-left flex items-center px-4 py-2 text-slate-700 hover:bg-slate-100"><i class="fas fa-globe fa-fw w-6 text-slate-500"></i><span>Ranking Global</span></button>
+            <button data-menu="ranking-equipo" class="w-full text-left flex items-center px-4 py-2 text-slate-700 hover:bg-slate-100"><i class="fas fa-users fa-fw w-6 text-slate-500"></i><span>Ranking Equipo</span></button>
+            <button data-menu="progreso-nivel" class="w-full text-left flex items-center px-4 py-2 text-slate-700 hover:bg-slate-100"><i class="fas fa-chart-line fa-fw w-6 text-slate-500"></i><span>Progreso nivel</span></button>
+            <button data-menu="mazo" class="w-full text-left flex items-center px-4 py-2 text-slate-700 hover:bg-slate-100"><i class="fas fa-layer-group fa-fw w-6 text-slate-500"></i><span>Mazo</span><span id="mazo-menu-count" class="ml-auto text-[10px] font-black text-[#FF7A00]"></span></button>
+            <button data-menu="soporte" class="w-full text-left flex items-center px-4 py-2 text-slate-700 hover:bg-slate-100"><i class="fas fa-headset fa-fw w-6 text-slate-500"></i><span>Soporte</span></button>
+          </div>
+          <div class="py-2 border-t"><button id="logout-btn" class="w-full text-left flex items-center px-4 py-2 text-red-600 hover:bg-red-50"><i class="fas fa-sign-out-alt w-6"></i><span>Cerrar Sesión</span></button></div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- HUD (compacto) -->
+ <div class="w-full max-w-2xl mx-auto px-3 pt-16 pb-2 flex items-center justify-between gap-2">
+    <div class="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-xl shadow-sm border border-slate-200">
+      <i class="fas fa-star text-yellow-400 text-base"></i>
+      <span id="user-points-display" class="font-black text-slate-700 text-base">6310</span>
+    </div>
+
+    <div class="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-xl shadow-sm border border-slate-200" title="Días seguidos aprendiendo">
+      <i class="fas fa-fire text-orange-500 text-base"></i>
+      <span id="streak-days" class="font-black text-slate-700 text-base">2</span>
+    </div>
+
+    <button id="nivel-btn" class="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-xl shadow-sm border border-slate-200 hover:border-[#FF7A00] transition">
+      <span class="text-[10px] font-bold text-slate-400 uppercase">Nivel</span>
+      <span id="nivel-label" class="font-black text-[#FF7A00] text-sm">A1</span>
+      <i class="fas fa-chevron-down text-slate-400 text-[10px]"></i>
+    </button>
+
+    <div class="flex-1 min-w-[80px]">
+      <div class="flex justify-between text-[10px] font-bold text-slate-400 mb-0.5">
+        <span>PROGRESO</span>
+        <span id="progress-text">0%</span>
+      </div>
+      <div class="progress-track"><div id="main-progress" class="progress-fill"></div></div>
+    </div>
+  </div>
+
+  <!-- Efectos de Sonido -->
+  <audio id="snd-correct" src="https://assets.mixkit.co/sfx/preview/mixkit-unlock-game-notification-253.mp3"></audio>
+  <audio id="snd-wrong" src="https://assets.mixkit.co/sfx/preview/mixkit-wrong-answer-fail-notification-940.mp3"></audio>
+  <audio id="snd-complete" src="https://assets.mixkit.co/sfx/preview/mixkit-winning-chimes-2015.mp3"></audio>
+
+  <!-- Contenedor Principal -->
+  <main id="app-container" class="w-full max-w-lg mx-auto px-4 flex-1 flex flex-col justify-start pb-8">
+    <div class="text-center animate-pulse mt-10">
+      <h1 class="text-3xl font-heading font-bold text-slate-400">Cargando experiencia...</h1>
+      <i class="fas fa-circle-notch fa-spin text-4xl text-[#FF7A00] mt-4"></i>
+    </div>
+  </main>
+
+  <!-- Raíz de modales -->
+  <div id="modal-root"></div>
+
+<script type="module">
+function openAbuChat() {
+    const nivel = flujo?.currentNivel || 'A1';
+    const group = flujo?.niveles?.[nivel]?.currentGroup || null;
     
-    <audio id="success-sound" src="https://assets.mixkit.co/sfx/preview/mixkit-arcade-game-jump-coin-216.mp3" preload="metadata"></audio>
+    // Llama directamente a la función que renderiza el chat de Abu en el app-container
+    startChatPractice(nivel, group, false);
+}
+  /* ============================================================
+     1. CONFIGURACIÓN Y ESTADO
+  ============================================================ */
+  const SUPABASE_URL = 'https://eylwewhqeaaqkgcxhgyv.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV5bHdld2hxZWFhcWtnY3hoZ3l2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQzMzAxODgsImV4cCI6MjA5OTkwNjE4OH0.Ji8huj-ny2VcMT5UQSjOuwUKz4k23quNS0fLk-gZr7A';
 
-    <main class="pt-24 pb-12 flex flex-col items-center min-h-screen">
-        
-        <div class="w-full flex justify-center h-20"> <div id="points-hud" class="hidden">
-                <i class="fas fa-star star-icon" id="hud-star"></i>
-                <span id="user-points-display">0</span>
-            </div>
+  // Enlace para la conversión a Pro (mismo que usa la landing)
+  const PRO_UPGRADE_URL = 'https://wa.me/573163748711';
+  const ABULINGO_URL = 'https://abulingo.github.io/';   // se usa al invitar y al compartir
+
+  // Algoritmo de memorización espaciada (tipo SM-2 simplificado)
+  const SRS_INTERVALS_DAYS = [0.007, 1, 2, 4, 8, 15, 30, 60]; // días por nivel de SRS
+  const EASE_DEFAULT = 2.5, EASE_MIN = 1.3, EASE_MAX = 3.0;
+  const GRADUATED_LEVEL = SRS_INTERVALS_DAYS.length - 1; // al llegar aquí la palabra se considera dominada
+  const SRS_SESSION_MAX = 30;   // máximo de palabras por sesión de "¡Toca repasar!"
+
+  /* ╔══════════════════════════════════════════════════════════════╗
+     ║  LÍMITE DE PALABRAS NUEVAS  —  EDITA SOLO ESTAS DOS LÍNEAS   ║
+     ╠══════════════════════════════════════════════════════════════╣
+     ║ NEW_WORDS_PER_TANDA  = palabras NUEVAS por tanda.            ║
+     ║ NEW_WORDS_COOLDOWN_H = horas de espera al agotar la tanda    ║
+     ║                        (12 = medio día). Pasado ese tiempo   ║
+     ║                        el contador se reinicia solo.         ║
+     ║ Los REPASOS nunca se bloquean: sólo las palabras nuevas.     ║
+     ╚══════════════════════════════════════════════════════════════╝ */
+  const NEW_WORDS_PER_TANDA  = 1000;
+  const NEW_WORDS_COOLDOWN_H = 12;
+
+  const CHAT_GOAL = 3;         // mensajes que debes enviar para completar la charla con Abu
+  const DAILY_GOAL_POINTS = 60; // meta diaria de puntos → recompensa (1 lingot)
+  const CEFR_ORDER = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
+  const NIVELES_FIJOS = ['A1', 'A2', 'B1', 'B2']; // siempre visibles en el selector
+
+  const ENCOURAGEMENTS = [
+    { icon: '🚀', title: '¡Vas muy bien!', msg: 'Tu memoria se está fortaleciendo. Sigue así.' },
+    { icon: '🔥', title: '¡Racha encendida!', msg: 'Cada acierto fija mejor las palabras en tu mente.' },
+    { icon: '💪', title: '¡Imparable!', msg: 'Estás aprendiendo de forma efectiva. ¡No pares!' },
+    { icon: '🌟', title: '¡Excelente trabajo!', msg: 'Vas por muy buen camino, sigue sumando.' }
+  ];
+
+  const { createClient } = supabase;
+  const dbClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  let currentUser = null;
+  let userProfile = null;
+  let flujo = null; // atajo a userProfile.flujo
+
+  let sessionStreak = 0;      // racha de aciertos de la sesión (influye en SRS y puntos)
+  let sessionCorrect = 0;     // aciertos totales de la sesión (para mensajes de ánimo)
+  let lastMilestone = 0;
+
+  // Caché de palabras del grupo actual
+  let groupCache = { key: null, list: [], map: {} };
+  // Sesión de repaso SRS transitoria
+  let srsSession = null;
+  // Sesión de repaso inicial (flashcards)
+  let reviewList = [];
+
+  const appContainer = document.getElementById('app-container');
+  const toolsBar = document.getElementById('top-bar');
+
+  /* ============================================================
+     2. UTILIDADES GENERALES
+  ============================================================ */
+  const norm = (s) => (s || '').toString().trim().toLowerCase().replace(/[.,!?;:'"]/g, '');
+  const todayStr = () => new Date().toISOString().slice(0, 10);
+  const escapeHTML = (s) => (s || '').toString()
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+  /*
+    Estado diario. Dos relojes distintos:
+      · La META DE PUNTOS y los contadores del día se reinician a medianoche.
+      · Las PALABRAS NUEVAS van por TANDAS: al agotar NEW_WORDS_PER_TANDA se
+        bloquean NEW_WORDS_COOLDOWN_H horas (medio día) y luego se reinician
+        solas, sin esperar a mañana.
+  */
+  function ensureDaily() {
+    if (!flujo.daily) flujo.daily = { date: todayStr(), newWords: 0, reviewed: 0, points: 0, goalShown: false, unlockAt: null };
+    if (flujo.daily.unlockAt === undefined) flujo.daily.unlockAt = null;
+
+    // Reinicio de medianoche (meta de puntos y estadísticas del día)
+    if (flujo.daily.date !== todayStr()) {
+      flujo.daily.date = todayStr();
+      flujo.daily.points = 0;
+      flujo.daily.reviewed = 0;
+      flujo.daily.goalShown = false;
+    }
+    // Fin del descanso: se libera una tanda nueva de palabras
+    if (flujo.daily.unlockAt && Date.now() >= new Date(flujo.daily.unlockAt).getTime()) {
+      flujo.daily.unlockAt = null;
+      flujo.daily.newWords = 0;
+    }
+    if (!flujo.racha) flujo.racha = { days: 0, last: null, best: 0 };
+  }
+
+  // ¿Se agotó la tanda de palabras nuevas? Si acaba de agotarse, arranca el reloj.
+  function newWordsLocked() {
+    ensureDaily();
+    if (flujo.daily.unlockAt) return true;
+    if ((flujo.daily.newWords || 0) >= NEW_WORDS_PER_TANDA) {
+      flujo.daily.unlockAt = new Date(Date.now() + NEW_WORDS_COOLDOWN_H * 3600000).toISOString();
+      updateUserFlow();
+      return true;
+    }
+    return false;
+  }
+  function newWordsLeft() { ensureDaily(); return Math.max(0, NEW_WORDS_PER_TANDA - (flujo.daily.newWords || 0)); }
+
+  // "3 h 25 min" a partir de milisegundos
+  function fmtEspera(ms) {
+    const min = Math.max(1, Math.round(ms / 60000));
+    const h = Math.floor(min / 60), m = min % 60;
+    if (h && m) return `${h} h ${m} min`;
+    if (h) return `${h} h`;
+    return `${m} min`;
+  }
+
+  // Racha de días consecutivos: se enciende con la primera actividad del día.
+  function touchStreak() {
+    ensureDaily();
+    const hoy = todayStr();
+    if (flujo.racha.last === hoy) return;
+    const ayer = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    flujo.racha.days = (flujo.racha.last === ayer) ? (flujo.racha.days || 0) + 1 : 1;
+    flujo.racha.last = hoy;
+    flujo.racha.best = Math.max(flujo.racha.best || 0, flujo.racha.days);
+    updateStreakUI();
+    if (flujo.racha.days > 1) showToast(`🔥 ¡Racha de ${flujo.racha.days} días! No la rompas.`);
+  }
+  function updateStreakUI() {
+    const el = document.getElementById('streak-days');
+    if (el && flujo && flujo.racha) el.textContent = flujo.racha.days || 0;
+  }
+
+  let toastTimer = null;
+  function showToast(msg, ms = 2600) {
+    let t = document.getElementById('app-toast');
+    if (!t) { t = document.createElement('div'); t.id = 'app-toast'; t.className = 'toast'; document.body.appendChild(t); }
+    t.innerHTML = msg;
+    sfx('toast');
+    requestAnimationFrame(() => t.classList.add('show'));
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), ms);
+  }
+
+  function sortNiveles(arr) {
+    return [...arr].sort((a, b) => {
+      const ia = CEFR_ORDER.indexOf(a), ib = CEFR_ORDER.indexOf(b);
+      return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib) || String(a).localeCompare(String(b));
+    });
+  }
+  function sortGroups(arr) {
+    return [...arr].sort((a, b) => {
+      const na = parseInt(String(a).replace(/\D/g, '')), nb = parseInt(String(b).replace(/\D/g, ''));
+      if (!isNaN(na) && !isNaN(nb) && na !== nb) return na - nb;
+      return String(a).localeCompare(String(b));
+    });
+  }
+
+  function playSound(type) {
+    const id = type === 'correct' ? 'snd-correct' : (type === 'wrong' ? 'snd-wrong' : 'snd-complete');
+    const el = document.getElementById(id);
+    if (el) { el.currentTime = 0; el.play().catch(() => {}); }
+  }
+
+  /*
+    Sonidos de interacción sintetizados con WebAudio (sin archivos externos):
+    'click' → tap de botón · 'flip' → aparece una tarjeta/ejercicio ·
+    'pop' → se abre un modal · 'toast' → aviso de recompensa · 'type' → teclas del chat
+  */
+  let audioCtx = null;
+  function getAudioCtx() {
+    try {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+      return audioCtx;
+    } catch { return null; }
+  }
+  function tone(ctx, { freq = 600, freqEnd = null, dur = 0.06, type = 'sine', vol = 0.12, delay = 0 }) {
+    const t0 = ctx.currentTime + delay;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t0);
+    if (freqEnd) osc.frequency.exponentialRampToValueAtTime(freqEnd, t0 + dur);
+    gain.gain.setValueAtTime(vol, t0);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(t0); osc.stop(t0 + dur + 0.02);
+  }
+  function sfx(kind) {
+    const ctx = getAudioCtx();
+    if (!ctx) return;
+    try {
+      if (kind === 'click')      tone(ctx, { freq: 880, freqEnd: 660, dur: 0.05, type: 'triangle', vol: 0.08 });
+      else if (kind === 'flip')  tone(ctx, { freq: 320, freqEnd: 620, dur: 0.10, type: 'sine', vol: 0.10 });
+      else if (kind === 'pop')   { tone(ctx, { freq: 500, freqEnd: 900, dur: 0.08, type: 'sine', vol: 0.10 }); }
+      else if (kind === 'toast') { tone(ctx, { freq: 780, dur: 0.09, type: 'sine', vol: 0.10 }); tone(ctx, { freq: 1040, dur: 0.12, type: 'sine', vol: 0.10, delay: 0.09 }); }
+      else if (kind === 'type')  tone(ctx, { freq: 1200, dur: 0.02, type: 'square', vol: 0.03 });
+    } catch { /* silencio */ }
+  }
+  // Tap sonoro en cualquier botón de la app (delegado, no requiere cablear cada uno).
+  document.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('button')) sfx('click');
+  }, { passive: true });
+
+  // Reproduce el audio de la palabra; si no hay, usa síntesis de voz.
+  window.playWordAudio = (word) => {
+    if (word && word.audio) { new Audio(word.audio).play().catch(() => speak(word.ingles)); }
+    else if (word) { speak(word.ingles); }
+  };
+  window.playAudioUrl = (url) => { if (url) new Audio(url).play().catch(() => {}); };
+
+  // Síntesis de voz (Text-to-Speech) en inglés
+  let ttsVoices = [];
+  function loadVoices() { ttsVoices = window.speechSynthesis ? window.speechSynthesis.getVoices() : []; }
+  if (window.speechSynthesis) {
+    loadVoices();
+    window.speechSynthesis.onvoiceschanged = loadVoices;
+  }
+  function pickEnglishVoice() {
+    if (!ttsVoices.length) loadVoices();
+    return ttsVoices.find(v => /en[-_]US/i.test(v.lang)) || ttsVoices.find(v => /^en/i.test(v.lang)) || null;
+  }
+  function speak(text, onend) {
+    if (!window.speechSynthesis) { if (onend) onend(); return; }
+    const u = new SpeechSynthesisUtterance(text);
+    const v = pickEnglishVoice();
+    if (v) u.voice = v;
+    u.lang = 'en-US'; u.rate = 0.95;
+    if (onend) u.onend = onend;
+    window.speechSynthesis.speak(u);
+  }
+  function stopSpeaking() { if (window.speechSynthesis) window.speechSynthesis.cancel(); }
+
+  function triggerConfetti() {
+    if (window.confetti) confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 }, colors: ['#FF7A00', '#3b82f6', '#fbbf24'] });
+  }
+  function floatPoints(points) {
+    const float = document.createElement('div');
+    float.textContent = sessionStreak >= 3 ? `+${points} 🔥x${sessionStreak}` : `+${points}`;
+    float.className = 'floating-points';
+    float.style.left = '50%'; float.style.top = '25%';
+    document.body.appendChild(float);
+    setTimeout(() => float.remove(), 1000);
+  }
+
+  function updateProgressBar(pct) {
+    document.getElementById('main-progress').style.width = `${Math.max(0, Math.min(100, pct))}%`;
+    document.getElementById('progress-text').textContent = `${Math.round(Math.max(0, Math.min(100, pct)))}%`;
+  }
+
+  /* ============================================================
+     3. MODALES
+  ============================================================ */
+  const modalRoot = document.getElementById('modal-root');
+
+  function closeModal() { modalRoot.innerHTML = ''; stopSpeaking(); }
+
+  // actions: [{ label, onClick, style }]
+  function showModal({ icon, title, body, actions = [], dismissable = true, size = 'md' }) {
+    sfx('pop');
+    const maxW = size === 'lg' ? 'max-w-lg' : 'max-w-sm';
+    const actionsHTML = actions.map((a, i) =>
+      `<button data-idx="${i}" class="modal-action w-full btn-juice ${a.style || 'bg-[#FF7A00] text-white'} font-bold py-3 rounded-xl text-lg">${a.label}</button>`
+    ).join('');
+
+    modalRoot.innerHTML = `
+      <div class="modal-overlay">
+        <div class="card-3d ${maxW} w-full p-7 text-center animate-pop relative">
+          ${dismissable ? '<button id="modal-close" class="absolute top-3 right-4 text-slate-300 hover:text-slate-500 text-2xl">&times;</button>' : ''}
+          ${icon ? `<div class="text-6xl mb-3">${icon}</div>` : ''}
+          ${title ? `<h2 class="text-2xl font-heading font-bold text-slate-800 mb-2">${title}</h2>` : ''}
+          <div class="text-slate-500 mb-6">${body || ''}</div>
+          <div class="space-y-3">${actionsHTML}</div>
         </div>
+      </div>`;
 
-        <div id="app-container" class="w-full max-w-2xl mx-auto px-4 min-card-h flex flex-col justify-center">
-            <div class="text-center">
-                <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mb-4"></div>
-                <h1 class="text-3xl font-bold font-heading">Cargando Flashcards...</h1>
-                <p class="text-slate-600">Sincronizando con la nube.</p>
-            </div>
+    if (dismissable) {
+      document.getElementById('modal-close').onclick = closeModal;
+      modalRoot.querySelector('.modal-overlay').addEventListener('click', (e) => {
+        if (e.target.classList.contains('modal-overlay')) closeModal();
+      });
+    }
+    actions.forEach((a, i) => {
+      const btn = modalRoot.querySelector(`.modal-action[data-idx="${i}"]`);
+      if (btn) btn.onclick = () => { if (a.onClick) a.onClick(); };
+    });
+  }
+
+  function showEncouragement(next) {
+    const e = ENCOURAGEMENTS[Math.floor(Math.random() * ENCOURAGEMENTS.length)];
+    playSound('complete'); triggerConfetti();
+    showModal({
+      icon: e.icon, title: e.title, body: e.msg, dismissable: false,
+      actions: [{ label: '¡Seguir! 💥', onClick: () => { closeModal(); next(); } }]
+    });
+  }
+
+  function showProModal() {
+    showModal({
+      icon: '🔒',
+      title: 'Función Pro',
+      body: 'Este espacio está reservado para los usuarios <b>Pro</b>. Mejora tu plan para desbloquear gramática guiada, análisis de pronunciación y traductor inteligente.',
+      actions: [
+        { label: 'Ver planes Pro ✨', onClick: () => openPlanesPro('modal_pro') },
+        { label: 'Ahora no', style: 'bg-slate-100 text-slate-500', onClick: closeModal }
+      ]
+    });
+  }
+
+  /* ------------------------------------------------------------
+     PLANES PRO
+     Cada clic queda registrado en la tabla "pro_clicks" (usuario +
+     fecha + de dónde vino + qué plan miró), para saber cuánta gente
+     se interesa y por cuál plan.
+  ------------------------------------------------------------ */
+  async function registrarClickPro(origen, plan = null) {
+    if (!currentUser) return;
+    const { error } = await dbClient.from('pro_clicks').insert({
+      user_id: currentUser.id,
+      email: currentUser.email || null,
+      origen,          // de dónde salió el clic
+      plan,            // 'gratis' | 'plus' | 'pro' | null (solo abrió los planes)
+      nivel: flujo?.currentNivel || null,
+      puntos: userProfile?.points || 0
+    });
+    if (error) console.warn('[pro] no se pudo registrar el clic:', error.message);
+  }
+
+  function openPlanesPro(origen = 'menu') {
+    registrarClickPro(origen);   // se guarda aunque no elija ningún plan
+
+    const plan = (nombre, precio, subtitulo, extra) => `
+      <div class="rounded-2xl border-2 ${extra?.destacado ? 'border-[#FF7A00] relative' : 'border-slate-200'} bg-white p-4 text-left">
+        ${extra?.destacado ? '<span class="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-[#FF7A00] text-white text-[10px] font-black px-3 py-0.5 rounded-full whitespace-nowrap">MÁS POPULAR</span>' : ''}
+        <h3 class="font-heading font-bold text-xl text-slate-800">${nombre}</h3>
+        <p class="text-slate-400 text-xs mb-1">${subtitulo}</p>
+        ${extra?.nota ? `<p class="text-slate-400 text-[11px] mb-1">${extra.nota}</p>` : ''}
+        <p class="font-heading font-bold text-4xl text-slate-800 my-2">$${precio}<span class="text-sm text-slate-400 font-medium"> USD/mes</span></p>
+        <button class="plan-btn w-full py-2.5 rounded-xl font-bold ${extra?.destacado ? 'btn-juice bg-[#FF7A00] text-white' : 'border border-slate-300 text-slate-600 hover:bg-slate-50'} transition"
+          data-plan="${extra?.id}" data-url="${extra?.url || ''}">${extra?.cta}</button>
+      </div>`;
+
+    showModal({
+      icon: '✨', title: 'Planes de Abulingo', size: 'lg',
+      body: `
+        <p class="text-slate-500 text-sm text-center mb-4">Todos los precios están en <b>dólares estadounidenses (USD)</b>.</p>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center">
+          ${plan('Gratis', '0', 'Para empezar a explorar', { id: 'gratis', cta: 'Ya lo tienes ✓' })}
+          ${plan('Plus', '5', 'Para hablar con fluidez', { id: 'plus', cta: 'Elegir plan Plus', destacado: true, nota: 'Pago anual', url: PRO_UPGRADE_URL })}
+          ${plan('Pro', '20', 'Para dominar el idioma', { id: 'pro', cta: 'Contactar', url: PRO_UPGRADE_URL })}
         </div>
-    </main>
+        <p class="text-[11px] text-slate-400 text-center mt-4">Al elegir un plan te escribimos por WhatsApp para activarlo.</p>`,
+      actions: [{ label: 'Ahora no', style: 'bg-slate-100 text-slate-500', onClick: closeModal }]
+    });
 
-    <script type="module">
-        // --- 1. CONFIGURACIÓN ---
-        const SUPABASE_URL = 'https://zdybpplggppjrmxhfhik.supabase.co';
-        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpkeWJwcGxnZ3BwanJteGhmaGlrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTkxODY0MTcsImV4cCI6MjA3NDc2MjQxN30._1LRLhgIsNnc48Tj431F7xRWwHma0WCkc613ztmpjtU';
+    document.querySelectorAll('.plan-btn').forEach(b => {
+      b.onclick = () => {
+        const id = b.dataset.plan;
+        registrarClickPro(origen, id);
+        if (id === 'gratis') { closeModal(); return showToast('😄 Ya estás en el plan Gratis. ¡A seguir aprendiendo!'); }
+        if (b.dataset.url) window.open(b.dataset.url, '_blank', 'noopener');
+      };
+    });
+  }
 
-        const { createClient } = supabase;
-        const dbClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  /* ============================================================
+     4. PERSISTENCIA (flujo + puntos + SRS)
+  ============================================================ */
+  async function updateUserFlow() {
+    userProfile.flujo = flujo;
+    const { error } = await dbClient.from('profiles').update({ flujo }).eq('id', currentUser.id);
+    if (error) console.error('Error guardando flujo:', error.message);
+  }
 
-        // --- CACHÉ DOM (Optimización JS) ---
-        const DOM = {
-            appContainer: document.getElementById('app-container'),
-            pointsHud: document.getElementById('points-hud'),
-            pointsDisplay: document.getElementById('user-points-display'),
-            hudStar: document.getElementById('hud-star'),
-            audio: document.getElementById('success-sound'),
-            body: document.body
+  async function addPoints(points) {
+    if (!points) return;
+    const newPts = (userProfile.points || 0) + points;
+    userProfile.points = newPts;
+    document.getElementById('user-points-display').textContent = newPts;
+    const dd = document.getElementById('user-points'); if (dd) dd.textContent = newPts;
+    floatPoints(points);
+
+    // Meta diaria: al alcanzarla se gana 1 lingot (recompensa fija diaria).
+    ensureDaily();
+    flujo.daily.points = (flujo.daily.points || 0) + points;
+    if (!flujo.daily.goalShown && flujo.daily.points >= DAILY_GOAL_POINTS) {
+      flujo.daily.goalShown = true;
+      const lingots = (parseFloat(userProfile.lingots) || 0) + 1;
+      userProfile.lingots = lingots;
+      const dl = document.getElementById('user-lingots'); if (dl) dl.textContent = lingots;
+      dbClient.from('profiles').update({ lingots }).eq('id', currentUser.id).then(() => {});
+      updateUserFlow();
+      triggerConfetti();
+      showToast(`🎯 ¡Meta diaria cumplida! <span class="text-yellow-400">+1 💎 Lingot</span>`, 3500);
+    }
+
+    const { error } = await dbClient.from('profiles').update({ points: newPts }).eq('id', currentUser.id);
+    if (error) console.error('Error guardando puntos:', error.message);
+  }
+
+  /*
+    Núcleo del algoritmo de memorización espaciada.
+    Se guarda en flujo.srs (columna "flujo") y se replica en user_word_progress (durabilidad).
+    Los PUNTOS influyen en el SRS: una racha alta añade un pequeño bono de "ease",
+    lo que alarga el intervalo (repasas menos lo que ya dominas).
+  */
+  /*
+    result: 'easy' | 'hard'  (tarjeta ✨ Repaso)  ·  'practice_correct' | 'practice_wrong' (ejercicios)
+    opts.type: 'flashcard' | 'select_by_image' | 'write_by_audio'
+
+    Regla de DOMINIO INMEDIATO: si la palabra se marcó "Fácil" en su primer repaso
+    Y el primer intento de "Identifica la imagen" Y de "Escucha y escribe" fueron
+    correctos (sin ningún fallo), se marca learned=true y NUNCA vuelve a "¡Toca repasar!".
+    Las demás palabras siguen el ciclo SRS hasta graduarse en el intervalo máximo.
+  */
+  async function updateSRS(wordId, result, opts = {}) {
+    ensureDaily();
+    const key = String(wordId);
+    const isNew = !flujo.srs[key];
+    const s = flujo.srs[key] || { level: 0, ease: EASE_DEFAULT, reps: 0, lapses: 0, due: null, learned: false, easyFirst: false, first: {} };
+    if (!s.first) s.first = {};
+    if (isNew) flujo.daily.newWords = (flujo.daily.newWords || 0) + 1; // cuenta para el límite diario
+
+    const ok = (result === 'easy' || result === 'correct' || result === 'practice_correct');
+    const hard = (result === 'hard');
+    const type = opts.type || null;
+
+    // Registro del PRIMER intento por tipo (antes de tocar reps/lapses)
+    if (type === 'flashcard' && s.reps === 0 && s.lapses === 0 && !s.easyFirst) {
+      s.easyFirst = (result === 'easy');
+    }
+    if ((type === 'select_by_image' || type === 'write_by_audio') && s.first[type] === undefined) {
+      s.first[type] = ok;
+    }
+
+    let points = 0;
+
+    if (ok) {
+      sessionStreak++;
+      sessionCorrect++;
+      flujo.stats.totalCorrect = (flujo.stats.totalCorrect || 0) + 1;
+      const streakBonus = Math.min(sessionStreak * 0.02, 0.12); // la racha alarga el intervalo
+      s.reps++;
+      s.ease = Math.min(EASE_MAX, s.ease + (result === 'easy' ? 0.15 : 0.08) + streakBonus);
+      s.level = Math.min(s.level + 1, SRS_INTERVALS_DAYS.length - 1);
+      points = (result === 'easy' ? 12 : 10) + Math.min(sessionStreak, 8); // bono por racha
+      if (Math.random() < 0.08) { points += 5; setTimeout(() => showToast('🎁 ¡Bonus sorpresa! +5 puntos extra'), 400); }
+      playSound('correct'); triggerConfetti();
+    } else if (hard) {
+      s.reps++;
+      s.ease = Math.max(EASE_MIN, s.ease - 0.15);
+      // el nivel se mantiene
+      points = 3;
+    } else { // fallo
+      sessionStreak = 0;
+      flujo.stats.totalWrong = (flujo.stats.totalWrong || 0) + 1;
+      s.lapses++;
+      s.ease = Math.max(EASE_MIN, s.ease - 0.2);
+      s.level = Math.max(0, s.level - 2); // retrocede 2 niveles (no castiga hasta cero: mejor experiencia)
+      points = 0;
+      playSound('wrong');
+    }
+
+    // ¿Dominio inmediato? Fácil a la primera + ambos ejercicios bien al primer intento + cero fallos.
+    const word = groupCache.map[key];
+    const requiereImagen = word ? !!word.imagen : true;
+    const imagenOk = !requiereImagen || s.first.select_by_image === true;
+    const audioOk = s.first.write_by_audio === true;
+    if (!s.learned && s.easyFirst && imagenOk && audioOk && s.lapses === 0) {
+      s.learned = true;
+      setTimeout(() => showToast('🏅 ¡Palabra dominada a la primera! No volverá a repaso.'), 600);
+    }
+    // Graduación normal: alcanzó el intervalo máximo del SRS.
+    if (!s.learned && s.level >= GRADUATED_LEVEL) {
+      s.learned = true;
+      setTimeout(() => showToast('🎓 ¡Palabra graduada! Ya vive en tu memoria a largo plazo.'), 600);
+    }
+
+    if (s.learned) {
+      s.due = null; // dominada: fuera de "¡Toca repasar!" para siempre
+    } else {
+      const baseDays = SRS_INTERVALS_DAYS[s.level];
+      const days = Math.max(0.005, baseDays * (s.ease / EASE_DEFAULT));
+      s.due = new Date(Date.now() + days * 86400000).toISOString();
+    }
+    s.updated = new Date().toISOString();
+
+    flujo.srs[key] = s;
+    touchStreak();
+
+    // Guardado principal en la columna flujo
+    await updateUserFlow();
+    if (points) await addPoints(points);
+
+    // Réplica (no bloqueante) en la tabla dedicada. next_review_at es NOT NULL:
+    // para palabras dominadas se guarda una fecha lejana.
+    dbClient.from('user_word_progress').upsert({
+      user_id: currentUser.id,
+      word_id: wordId,
+      srs_level: s.level,
+      ease_factor: s.ease,
+      next_review_at: s.due || '2099-12-31T00:00:00.000Z'
+    }, { onConflict: 'user_id, word_id' }).then(({ error }) => {
+      if (error) console.warn('user_word_progress (opcional):', error.message);
+    });
+  }
+
+  /* ============================================================
+     5. DATOS (palabras / niveles / grupos / repasos)
+  ============================================================ */
+  async function getNiveles() {
+    /*
+      ARREGLO "Sin contenido": la consulta anterior traía TODAS las filas de "palabras"
+      y PostgREST corta en 1000, así que los niveles cuyas filas quedaban fuera del corte
+      (p. ej. A1/A2) aparecían como vacíos. Ahora se cuenta por nivel con head:true
+      (sin traer filas) y con fallback insensible a mayúsculas/minúsculas.
+    */
+    const candidatos = [...new Set([...NIVELES_FIJOS, ...CEFR_ORDER])];
+    const conContenido = [];
+    await Promise.all(candidatos.map(async (n) => {
+      let { count, error } = await dbClient.from('palabras').select('id', { count: 'exact', head: true }).eq('nivel', n);
+      if ((error || !count)) {
+        // fallback: 'a1', 'A1 ', etc.
+        const r2 = await dbClient.from('palabras').select('id', { count: 'exact', head: true }).ilike('nivel', n);
+        count = r2.count; error = r2.error;
+      }
+      if (!error && (count || 0) > 0) conContenido.push(n);
+    }));
+    // Complemento: detectar niveles con nombres fuera del estándar CEFR (dentro del primer bloque de filas).
+    const { data } = await dbClient.from('palabras').select('nivel').range(0, 999);
+    (data || []).forEach(r => {
+      const v = (r.nivel || '').trim();
+      if (v && !conContenido.some(c => c.toLowerCase() === v.toLowerCase())) conContenido.push(v);
+    });
+    console.log('[getNiveles] niveles con contenido:', conContenido);
+    return sortNiveles(conContenido);
+  }
+  async function getGroups(nivel) {
+    let { data, error } = await dbClient.from('palabras').select('grupo').eq('nivel', nivel).range(0, 9999);
+    if (!error && !(data || []).length) {
+      ({ data, error } = await dbClient.from('palabras').select('grupo').ilike('nivel', nivel).range(0, 9999));
+    }
+    if (error) { console.error(`[getGroups ${nivel}] ❌`, error.message, error); return []; }
+    const set = sortGroups([...new Set((data || []).map(r => (r.grupo || '').trim()).filter(Boolean))]);
+    console.log(`[getGroups ${nivel}] grupos:`, set);
+    return set;
+  }
+  async function getGroupWords(nivel, group) {
+    const key = `${nivel}|${group}`;
+    if (groupCache.key === key && groupCache.list.length) return groupCache.list;
+    let { data, error } = await dbClient.from('palabras').select('*').eq('nivel', nivel).eq('grupo', group).range(0, 9999);
+    if (!error && !(data || []).length) {
+      ({ data, error } = await dbClient.from('palabras').select('*').ilike('nivel', nivel).ilike('grupo', group).range(0, 9999));
+    }
+    if (error) { console.error(`[getGroupWords ${key}] ❌`, error.message, error); return []; }
+    const list = data || [];
+    console.log(`[getGroupWords ${key}] palabras:`, list.length, list.map(w => w.ingles));
+    groupCache = { key, list, map: Object.fromEntries(list.map(w => [String(w.id), w])) };
+    return list;
+  }
+
+  // Sonda de diagnóstico: cuántas filas de "palabras" ve realmente el cliente.
+  async function probeContent() {
+    const { count, error } = await dbClient.from('palabras').select('id', { count: 'exact', head: true });
+    if (error) { console.error('[probeContent] ❌ No se pudo leer "palabras":', error.message, error); return { ok: false, count: 0 }; }
+    console.log('[probeContent] ✅ filas visibles en "palabras":', count);
+    return { ok: true, count: count || 0 };
+  }
+
+  // Palabras cuyo próximo repaso ya venció (SRS), limitadas al nivel actual.
+  // Excluye las dominadas (learned), prioriza las más difíciles/vencidas y
+  // limita la sesión a SRS_SESSION_MAX (30) palabras.
+  async function getDueReviews(nivel) {
+    const now = Date.now();
+    const dueIds = Object.entries(flujo.srs)
+      .filter(([, v]) => !v.learned && v.due && new Date(v.due).getTime() <= now)
+      .sort((a, b) => {
+        const la = a[1].lapses || 0, lb = b[1].lapses || 0;
+        if (lb !== la) return lb - la; // primero las que más cuestan
+        return new Date(a[1].due) - new Date(b[1].due); // luego las más vencidas
+      })
+      .map(([id]) => parseInt(id))
+      .filter(n => !isNaN(n))
+      .slice(0, SRS_SESSION_MAX);
+    if (!dueIds.length) return [];
+    let { data } = await dbClient.from('palabras').select('*').eq('nivel', nivel).in('id', dueIds);
+    if (!(data || []).length) {
+      ({ data } = await dbClient.from('palabras').select('*').ilike('nivel', nivel).in('id', dueIds));
+    }
+    const orden = new Map(dueIds.map((id, i) => [id, i]));
+    return (data || []).sort((a, b) => (orden.get(a.id) ?? 99) - (orden.get(b.id) ?? 99)).slice(0, SRS_SESSION_MAX);
+  }
+
+  /* ============================================================
+     6. INICIALIZACIÓN DEL FLUJO (JSON columna "flujo")
+  ============================================================ */
+  function defaultGroupState() {
+    return {
+      review: { done: false, index: 0 },
+      practice: { done: false, queue: [], index: 0 },
+      chat: { done: false, count: 0 },   // 💬 última práctica: hablar con Abu
+      completed: false, correct: 0, wrong: 0
+    };
+  }
+  function defaultFlujo(nivel) {
+    return {
+      version: 3,
+      currentNivel: nivel,
+      niveles: {},
+      srs: {},
+      stats: { totalCorrect: 0, totalWrong: 0, sessionsCompleted: 0 },
+      daily: { date: todayStr(), newWords: 0, reviewed: 0, points: 0, goalShown: false, unlockAt: null },
+      racha: { days: 0, last: null, best: 0 }
+    };
+  }
+
+  async function ensureFlujo() {
+    const baseNivel = (userProfile.nivel) || 'A1';
+
+    // Migración: si viene el formato viejo (flowState) o no existe, se reinicia a v2.
+    if (!flujo || !flujo.version || flujo.version < 2 || flujo.flowState) {
+      const old = flujo || {};
+      flujo = defaultFlujo(baseNivel);
+      if (old.currentGroup) { /* se conserva el punto de partida como referencia */ }
+      // Importa el SRS previo desde user_word_progress para no perder el progreso.
+      const { data: prev } = await dbClient.from('user_word_progress').select('*').eq('user_id', currentUser.id);
+      (prev || []).forEach(p => {
+        flujo.srs[String(p.word_id)] = {
+          level: p.srs_level || 0,
+          ease: parseFloat(p.ease_factor) || EASE_DEFAULT,
+          reps: p.srs_level || 0, lapses: 0,
+          due: p.next_review_at || new Date().toISOString()
         };
+      });
+      await updateUserFlow();
+    }
+    if (!flujo.currentNivel) flujo.currentNivel = baseNivel;
+    if (!flujo.srs) flujo.srs = {};
+    if (!flujo.stats) flujo.stats = { totalCorrect: 0, totalWrong: 0, sessionsCompleted: 0 };
+    // Migración suave v2 → v3 (sin perder progreso): agrega estado diario, racha y campos SRS nuevos.
+    ensureDaily();
+    Object.values(flujo.srs).forEach(s => {
+      if (s.learned === undefined) s.learned = false;
+      if (!s.first) s.first = {};
+      if (s.easyFirst === undefined) s.easyFirst = false;
+      // Palabras que ya alcanzaron el intervalo máximo se gradúan.
+      if (!s.learned && (s.level || 0) >= GRADUATED_LEVEL) { s.learned = true; s.due = null; }
+    });
+    if (flujo.version < 3) { flujo.version = 3; await updateUserFlow(); }
+  }
 
-        let currentUser = null;
-        let userProfile = null;
-        let currentWord = null;
+  async function ensureNivel(nivel) {
+    if (!flujo.niveles[nivel]) flujo.niveles[nivel] = { currentGroup: null, grupos: {} };
+    const n = flujo.niveles[nivel];
+    const groups = await getGroups(nivel); // solo grupos que realmente tienen palabras
+    if (!groups.length) { n.currentGroup = null; return n; } // nivel sin contenido
 
-        const srsIntervals = [600000, 86400000, 259200000, 604800000, 1209600000, 2592000000]; // Pre-calculados en ms
+    // Validar el grupo guardado contra los grupos reales. Si es inválido o no existe,
+    // elegimos el primer grupo aún no completado (o el primero disponible).
+    if (!n.currentGroup || !groups.includes(n.currentGroup)) {
+      const firstIncomplete = groups.find(g => !(n.grupos[g] && n.grupos[g].completed));
+      n.currentGroup = firstIncomplete || groups[0];
+    }
+    if (!n.grupos[n.currentGroup]) n.grupos[n.currentGroup] = defaultGroupState();
 
-        // --- 2. LÓGICA OPTIMIZADA ---
+    // Migración: grupos creados antes de existir la práctica de conversación.
+    // Los que ya estaban completados NO tienen que repetir la charla.
+    Object.values(n.grupos).forEach(g => {
+      if (!g.chat) g.chat = g.completed ? { done: true, count: CHAT_GOAL } : { done: false, count: 0 };
+    });
+    return n;
+  }
 
-        async function updateWordProgress(wordId, wasCorrect) {
-            if (!currentUser) return;
-            
-            // Optimización: Fetch optimista o paralelo si fuera posible, aquí mantenemos la lógica segura
-            const { data: progress } = await dbClient.from('user_word_progress')
-                .select('srs_level')
-                .eq('user_id', currentUser.id)
-                .eq('word_id', wordId)
-                .maybeSingle(); // maybeSingle es más rápido que single si puede no existir
-            
-            let newSrsLevel = progress ? progress.srs_level : 0;
-            newSrsLevel = wasCorrect ? newSrsLevel + 1 : 0;
-            
-            const interval = srsIntervals[Math.min(newSrsLevel, srsIntervals.length - 1)];
-            const next_review_at = new Date(Date.now() + interval).toISOString();
-            
-            const { error } = await dbClient.from('user_word_progress').upsert({ 
-                user_id: currentUser.id, 
-                word_id: wordId, 
-                srs_level: newSrsLevel, 
-                next_review_at: next_review_at 
-            }, { onConflict: 'user_id, word_id' });
-            
-            if (wasCorrect) updateUserPoints(5); // No usamos await para no bloquear la UI
+  /* ============================================================
+     7. CONTROLADOR DE FLUJO ÚNICO
+     Prioridad: (1) repasos SRS vencidos  →  (2) repaso del grupo  →  (3) práctica  →  (4) siguiente grupo
+  ============================================================ */
+  async function runFlow() {
+    toolsBar.classList.remove('hidden');
+    console.groupCollapsed('%c[runFlow]', 'color:#FF7A00;font-weight:bold');
+    console.log('flujo actual:', JSON.parse(JSON.stringify(flujo)));
+
+    // Sonda: ¿el cliente puede leer la tabla "palabras"?
+    const probe = await probeContent();
+    if (probe.count === 0) {
+      console.warn('La consulta a "palabras" devolvió 0 filas. Causa más probable: falta la política RLS de SELECT en la tabla "palabras".');
+      console.groupEnd();
+      return renderMessage('🔒', 'No se pueden leer las palabras',
+        'La base de datos devolvió <b>0 palabras</b>. Si ya las cargaste, falta la política <b>RLS de SELECT</b> en la tabla <b>palabras</b>. Aplica el SQL de permisos y recarga.',
+        'Reintentar', () => window.location.reload());
+    }
+
+    // Niveles que realmente tienen palabras cargadas.
+    const niveles = await getNiveles();
+
+    // Si el nivel guardado no tiene contenido, saltamos al primero que sí lo tenga.
+    if (niveles.length && !niveles.includes(flujo.currentNivel)) {
+      console.log(`[runFlow] "${flujo.currentNivel}" sin contenido → cambio a "${niveles[0]}"`);
+      flujo.currentNivel = niveles[0];
+      await updateUserFlow();
+    }
+
+    const nivel = flujo.currentNivel;
+    document.getElementById('nivel-label').textContent = nivel;
+    const n = await ensureNivel(nivel);
+    console.log(`[runFlow] nivel=${nivel} · currentGroup=${n.currentGroup}`);
+
+    // Nivel sin grupos con palabras: ofrecer cambiar de nivel.
+    if (!n.currentGroup) {
+      console.groupEnd();
+      return renderMessage('📭', 'Nivel sin contenido',
+        `No hay palabras cargadas para el nivel <b>${nivel}</b>. Elige otro nivel o carga palabras para este.`,
+        'Elegir otro nivel', openNivelSelector);
+    }
+
+    // (1) Repasos espaciados vencidos
+    const due = await getDueReviews(nivel);
+    if (due.length) { console.log('[runFlow] repasos SRS vencidos:', due.length); console.groupEnd(); return startSrsReview(due); }
+
+    // (2)/(3)/(4) Progresión por grupos
+    const group = n.currentGroup;
+    if (!n.grupos[group]) n.grupos[group] = defaultGroupState();
+    const g = n.grupos[group];
+
+    const words = await getGroupWords(nivel, group);
+    if (!words.length) {
+      console.groupEnd();
+      return renderMessage('📭', 'Grupo sin contenido',
+        `El grupo <b>${group}</b> del nivel <b>${nivel}</b> no tiene palabras.`,
+        'Elegir otro nivel', openNivelSelector);
+    }
+
+    console.log(`[runFlow] estado grupo ${group}: review.done=${g.review.done} practice.done=${g.practice.done}`);
+    console.groupEnd();
+
+    if (!g.review.done) return renderReview(nivel, group, words);
+    if (!g.practice.done) return renderPractice(nivel, group);
+    if (!g.chat || !g.chat.done) return chatPracticeIntro(nivel, group); // 💬 hablar con Abu
+    return advanceGroup(nivel, group);
+  }
+
+  /* ------------------------------------------------------------
+     Descanso entre tandas de palabras nuevas.
+     Dice la hora exacta a la que se habilitan más palabras y va
+     descontando el tiempo en vivo. Los repasos siguen disponibles.
+  ------------------------------------------------------------ */
+  let pauseTimer = null;
+  function renderNewWordsPause(nivel) {
+    ensureDaily();
+    const unlockMs = flujo.daily.unlockAt ? new Date(flujo.daily.unlockAt).getTime() : Date.now();
+    const hora = new Date(unlockMs).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' });
+    const manana = new Date(unlockMs).toDateString() !== new Date().toDateString();
+
+    renderMessage('🌙', 'Seguiremos más tarde',
+      `Ya estudiaste <b>${NEW_WORDS_PER_TANDA} palabras nuevas</b> en esta tanda: es el máximo que tu memoria fija bien de una sola vez.<br>
+       <span class="block mt-3 text-slate-600">Se habilitan más palabras <b class="text-[#FF7A00]">a las ${hora}${manana ? ' de mañana' : ''}</b></span>
+       <span id="pause-countdown" class="block mt-1 text-sm font-bold text-slate-400">faltan ${fmtEspera(unlockMs - Date.now())}</span>
+       <span class="block mt-3 text-xs text-slate-400">Mientras tanto puedes repasar lo aprendido: los repasos no tienen límite. 🧠</span>`,
+      'Repasar lo aprendido 🧠', async () => {
+        const due = await getDueReviews(nivel);
+        if (due.length) return startSrsReview(due);
+        renderMessage('😴', 'Todo al día',
+          `No tienes repasos pendientes. Descansa: a las <b>${hora}</b> te esperan palabras nuevas. 🌙`);
+      });
+
+    // Cuenta atrás en vivo + recarga automática cuando se cumple el tiempo
+    clearInterval(pauseTimer);
+    pauseTimer = setInterval(() => {
+      const el = document.getElementById('pause-countdown');
+      if (!el) { clearInterval(pauseTimer); return; }
+      const resta = unlockMs - Date.now();
+      if (resta <= 0) {
+        clearInterval(pauseTimer);
+        showToast('🎉 ¡Ya puedes estudiar palabras nuevas!');
+        ensureDaily();
+        runFlow();
+        return;
+      }
+      el.textContent = `faltan ${fmtEspera(resta)}`;
+    }, 20000);
+  }
+
+  /* ============================================================
+     8. PASO 1 — REPASO DEL GRUPO (flashcards de todas las palabras)
+  ============================================================ */
+  async function renderReview(nivel, group, words) {
+    const g = flujo.niveles[nivel].grupos[group];
+    reviewList = words;
+    const i = g.review.index || 0;
+
+    if (i >= reviewList.length) {
+      g.review.done = true;
+      await updateUserFlow();
+      await addPoints(5);
+      showEncouragement(() => runFlow());
+      return;
+    }
+
+    const word = reviewList[i];
+
+    // Límite por tanda: NEW_WORDS_PER_TANDA palabras NUEVAS y descanso de medio día.
+    const esNueva = !flujo.srs[String(word.id)];
+    if (esNueva && newWordsLocked()) {
+      updateProgressBar(100);
+      return renderNewWordsPause(nivel);
+    }
+
+    updateProgressBar((i / reviewList.length) * 100);
+    appContainer.innerHTML = flashcardHTML(word, i + 1, reviewList.length);
+    bindFlashcard(word, async (result) => {
+      await updateSRS(word.id, result, { type: 'flashcard' }); // 'easy' | 'hard' (siembra el SRS)
+      g.review.index = i + 1;
+      await updateUserFlow();
+      renderReview(nivel, group, words);
+    });
+  }
+
+  function flashcardHTML(word, pos, total) {
+    const fon = word.fonetica ? `/${word.fonetica}/` : '—';
+    const img = word.imagen
+      ? `<img src="${word.imagen}" class="h-full object-contain transition-transform duration-500 group-hover:scale-110" alt="${word.espanol || ''}">`
+      : `<div class="text-slate-300 text-6xl"><i class="fas fa-image"></i></div>`;
+    return `
+      <div class="card-3d p-4 sm:p-6 text-center relative animate-pop mt-1">
+        <div class="flex items-center justify-between mb-2">
+          <span class="bg-green-100 text-green-600 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest">✨ Repaso</span>
+          <span class="text-xs font-bold text-slate-400">${pos} / ${total}</span>
+        </div>
+
+        <div class="w-full h-40 sm:h-52 bg-slate-50 rounded-2xl mb-4 overflow-hidden flex items-center justify-center border border-slate-100 relative shadow-inner">
+          ${img}
+        </div>
+
+        <div class="relative flex items-center justify-center mb-1 min-h-[3.25rem] -mx-4 sm:-mx-6">
+          <h1 class="text-4xl sm:text-5xl font-black font-heading text-[#FF7A00] tracking-tight text-center px-14">${word.ingles}</h1>
+          <button id="btn-word-audio" title="Escuchar pronunciación" class="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 w-11 h-11 sm:w-12 sm:h-12 shrink-0 rounded-full bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-400 hover:text-slate-600 text-base transition flex items-center justify-center">
+            <i class="fas fa-volume-up"></i>
+          </button>
+        </div>
+
+        <div class="h-9 mb-2 flex items-center justify-center">
+          <button id="btn-show-phonetic" class="text-slate-400 hover:text-slate-600 hover:bg-slate-100 text-xs font-bold border border-slate-200 rounded-full px-3 py-1 transition-all flex items-center gap-2">
+            <i class="fas fa-eye"></i> Ver fonética
+          </button>
+          <span id="txt-phonetic" class="hidden text-slate-500 font-mono text-base sm:text-lg bg-slate-100 px-3 py-1 rounded-lg border border-slate-200 tracking-wide">${fon}</span>
+        </div>
+        <p class="text-xl sm:text-2xl text-slate-500 font-medium mb-4 border-b-2 border-slate-100 pb-3 inline-block px-8">${word.espanol}</p>
+
+        <div class="grid grid-cols-2 gap-3">
+          <button id="btn-hard" class="btn-juice bg-red-50 text-red-500 hover:bg-red-100 border-red-200 font-bold py-3 rounded-xl text-base sm:text-lg flex flex-col items-center gap-1">
+            <i class="fas fa-brain"></i> Difícil
+          </button>
+          <button id="btn-easy" class="btn-juice bg-green-50 text-green-600 hover:bg-green-100 border-green-200 font-bold py-3 rounded-xl text-base sm:text-lg flex flex-col items-center gap-1">
+            <i class="fas fa-check-circle"></i> Fácil
+          </button>
+        </div>
+      </div>`;
+  }
+
+  function bindFlashcard(word, onRate) {
+    sfx('flip');
+    setTimeout(() => playWordAudio(word), 350);
+    const btnAudio = document.getElementById('btn-word-audio');
+    if (btnAudio) btnAudio.onclick = (e) => { e.stopPropagation(); playWordAudio(word); };
+    const btnP = document.getElementById('btn-show-phonetic');
+    const txtP = document.getElementById('txt-phonetic');
+    if (btnP && txtP) btnP.onclick = (e) => { e.stopPropagation(); btnP.classList.add('hidden'); txtP.classList.remove('hidden'); txtP.classList.add('animate-pop'); };
+    document.getElementById('btn-easy').onclick = () => onRate('easy');
+    document.getElementById('btn-hard').onclick = () => onRate('hard');
+  }
+
+  /* ============================================================
+     9. PASO 2 — PRÁCTICA (audio→escribir  /  imagen→elegir)
+  ============================================================ */
+  /*
+    CADA palabra lleva SUS DOS ejercicios: 👁️ Identifica la imagen y 👂 Escucha y escribe.
+    Esto es lo que permite marcarla como DOMINADA a la primera: updateSRS exige el
+    primer intento correcto de AMBOS tipos (más "Fácil" en la tarjeta y cero fallos).
+    Con un solo ejercicio por palabra ese requisito nunca se cumplía y casi nada
+    llegaba a "dominada".
+    Las palabras sin imagen solo llevan el de audio; para ellas el dominio no
+    exige el ejercicio de imagen.
+    Orden: primero la ronda de imágenes, después la de dictados. Así los dos
+    ejercicios de una misma palabra quedan separados, que es como mejor se fija.
+  */
+  async function buildPracticeQueue(nivel, group) {
+    const words = await getGroupWords(nivel, group);
+    const englishPool = words.map(w => w.ingles);
+
+    const ronda1 = [], ronda2 = [];
+    words.forEach(w => {
+      if (w.imagen) {
+        ronda1.push({ word_id: w.id, type: 'select_by_image', options: buildOptions(w.ingles, englishPool) });
+      }
+      // El audio tiene respaldo por voz del navegador, así que siempre se puede.
+      ronda2.push({ word_id: w.id, type: 'write_by_audio', options: null });
+    });
+    ronda1.sort(() => Math.random() - 0.5);
+    ronda2.sort(() => Math.random() - 0.5);
+
+    const g = flujo.niveles[nivel].grupos[group];
+    g.practice = { done: false, queue: [...ronda1, ...ronda2], index: 0 };
+    await updateUserFlow();
+  }
+
+  // Cuántos ejercicios debería tener el grupo con la regla de dos por palabra
+  function tamanoEsperadoCola(words) {
+    return words.length + words.filter(w => w.imagen).length;
+  }
+
+  function buildOptions(correct, pool) {
+    const distractors = pool.filter(x => x !== correct).sort(() => Math.random() - 0.5).slice(0, 3);
+    return [correct, ...distractors].sort(() => Math.random() - 0.5);
+  }
+
+  async function renderPractice(nivel, group) {
+    const g = flujo.niveles[nivel].grupos[group];
+
+    // Cargamos las palabras reales del grupo primero.
+    const words = await getGroupWords(nivel, group);
+    const validIds = new Set(words.map(w => String(w.id)));
+
+    // Construir la cola si no existe, o regenerarla si quedó obsoleta
+    // (p. ej. word_id que ya no pertenecen a este grupo).
+    const colaCompleta = g.practice.queue && g.practice.queue.length >= tamanoEsperadoCola(words);
+    const queueOk = g.practice.queue && g.practice.queue.length &&
+      g.practice.queue.every(ex => validIds.has(String(ex.word_id))) &&
+      // Colas viejas (una sola práctica por palabra): se rehacen si aún no empezó
+      (colaCompleta || (g.practice.index || 0) > 0);
+    if (!queueOk) {
+      console.warn(`[renderPractice] cola inválida/obsoleta en ${nivel}/${group} → regenerando`);
+      g.practice.index = 0;
+      await buildPracticeQueue(nivel, group);
+    }
+
+    const q = g.practice.queue;
+    const i = g.practice.index || 0;
+
+    if (i >= q.length) {
+      g.practice.done = true;
+      await updateUserFlow();
+      // Falta la última práctica: usar estas palabras hablando con Abu.
+      return showEncouragement(() => runFlow());
+    }
+
+    const ex = q[i];
+    const word = groupCache.map[String(ex.word_id)];
+    if (!word) { g.practice.index = i + 1; await updateUserFlow(); return renderPractice(nivel, group); }
+
+    updateProgressBar((i / q.length) * 100);
+    console.log(`[practica] ${i + 1}/${q.length} · ${ex.type} · ${word.ingles}`);
+
+    const advance = async (isCorrect) => {
+      const gg = flujo.niveles[nivel].grupos[group];
+      if (isCorrect) gg.correct++; else gg.wrong++;
+      gg.practice.index = i + 1;
+      await updateSRS(word.id, isCorrect ? 'practice_correct' : 'practice_wrong', { type: ex.type });
+      await updateUserFlow();
+      // Mensaje de ánimo cada 5 aciertos
+      if (isCorrect && sessionCorrect > 0 && sessionCorrect % 5 === 0 && sessionCorrect !== lastMilestone) {
+        lastMilestone = sessionCorrect;
+        setTimeout(() => showEncouragement(() => renderPractice(nivel, group)), 900);
+      } else {
+        setTimeout(() => renderPractice(nivel, group), isCorrect ? 1000 : 2000);
+      }
+    };
+
+    if (ex.type === 'select_by_image') renderSelectImage(word, ex.options, advance);
+    else renderWriteAudio(word, advance);
+  }
+
+  function renderSelectImage(word, options, advance) {
+    sfx('flip');
+    const btns = options.map(opt => `
+      <button class="option-btn btn-juice w-full bg-white border-2 border-slate-200 text-slate-600 font-bold text-base sm:text-lg py-3 rounded-xl hover:border-[#FF7A00] hover:text-[#FF7A00] transition mb-2" data-val="${opt}">${opt}</button>
+    `).join('');
+
+    appContainer.innerHTML = `
+      <div class="card-3d p-4 sm:p-5 animate-pop text-center mt-1">
+        <div class="bg-blue-100 text-blue-600 px-3 py-1 rounded-full text-xs font-bold uppercase mb-3 inline-block">👁️ Identifica la imagen</div>
+        <div class="w-32 h-32 sm:w-40 sm:h-40 mx-auto bg-slate-50 rounded-2xl border-4 border-white shadow-lg overflow-hidden mb-4 p-2">
+          <img src="${word.imagen}" class="w-full h-full object-contain" alt="">
+        </div>
+        <div class="flex flex-col gap-1">${btns}</div>
+      </div>`;
+
+    document.querySelectorAll('.option-btn').forEach(btn => {
+      btn.onclick = (e) => {
+        document.querySelectorAll('.option-btn').forEach(b => b.disabled = true);
+        const val = e.currentTarget.dataset.val;
+        if (val === word.ingles) {
+          e.currentTarget.className = 'w-full bg-green-500 text-white font-bold text-lg py-4 rounded-xl shadow-lg border-none transform scale-105 transition mb-3';
+          e.currentTarget.innerHTML = `${val} <i class='fas fa-check ml-2'></i>`;
+          advance(true);
+        } else {
+          e.currentTarget.className = 'w-full bg-red-500 text-white font-bold text-lg py-4 rounded-xl shadow-lg border-none wrong-shake mb-3';
+          e.currentTarget.innerHTML = `${val} <i class='fas fa-times ml-2'></i>`;
+          const correctBtn = Array.from(document.querySelectorAll('.option-btn')).find(b => b.dataset.val === word.ingles);
+          if (correctBtn) correctBtn.classList.add('bg-green-100', 'text-green-600', 'border-green-300');
+          advance(false);
         }
+      };
+    });
+  }
 
-        function updateUserPoints(pointsToAdd) {
-            if (!userProfile) return;
-            
-            const newPoints = (userProfile.points || 0) + pointsToAdd;
-            userProfile.points = newPoints;
-            
-            // 1. Actualizar UI Inmediatamente (Optimistic UI update)
-            DOM.pointsDisplay.textContent = newPoints;
-            
-            // 2. Reproducir sonido
-            if(DOM.audio) {
-                DOM.audio.currentTime = 0;
-                DOM.audio.volume = 0.5;
-                DOM.audio.play().catch(() => {});
-            }
+  function renderWriteAudio(word, advance) {
+    sfx('flip');
+    appContainer.innerHTML = `
+      <div class="card-3d p-5 sm:p-6 animate-pop text-center mt-1">
+        <div class="bg-pink-100 text-pink-600 px-3 py-1 rounded-full text-xs font-bold uppercase mb-4 inline-block">👂 Escucha y escribe</div>
+        <button id="play-btn" class="w-20 h-20 sm:w-24 sm:h-24 bg-gradient-to-br from-[#FF7A00] to-orange-600 rounded-full shadow-xl shadow-orange-200 text-white text-3xl hover:scale-105 transition active:scale-95 mb-5 flex items-center justify-center mx-auto">
+          <i class="fas fa-volume-up"></i>
+        </button>
+        <input type="text" id="input-word" class="w-full bg-slate-50 border-b-4 border-slate-200 text-center text-xl sm:text-2xl font-bold text-slate-700 p-3 focus:outline-none focus:border-[#FF7A00] transition rounded-t-xl mb-4" placeholder="Escribe en inglés..." autocomplete="off" autocapitalize="off" spellcheck="false">
+        <button id="check-btn" class="w-full btn-juice bg-slate-800 text-white font-bold py-3 rounded-xl text-lg sm:text-xl shadow-lg">COMPROBAR</button>
+        <div id="feedback-area" class="h-8 mt-3 text-lg"></div>
+      </div>`;
 
-            // 3. Animaciones
-            requestAnimationFrame(() => {
-                // Flotante
-                const floatingEl = document.createElement('div');
-                floatingEl.textContent = `+${pointsToAdd}`;
-                floatingEl.className = 'points-floater';
-                
-                const rect = DOM.pointsHud.getBoundingClientRect();
-                const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-                
-                floatingEl.style.left = `${rect.left + rect.width/2}px`;
-                floatingEl.style.top = `${rect.top + scrollTop}px`;
-                
-                DOM.body.appendChild(floatingEl);
-                setTimeout(() => floatingEl.remove(), 1500);
+    const input = document.getElementById('input-word');
+    const checkBtn = document.getElementById('check-btn');
+    setTimeout(() => playWordAudio(word), 300);
+    document.getElementById('play-btn').onclick = () => { playWordAudio(word); input.focus(); };
 
-                // Pulso
-                DOM.pointsDisplay.classList.remove('animate-score-pulse');
-                DOM.hudStar.classList.remove('animate-score-pulse');
-                void DOM.pointsDisplay.offsetWidth; // Force reflow
-                DOM.pointsDisplay.classList.add('animate-score-pulse');
-                DOM.hudStar.classList.add('animate-score-pulse');
-            });
+    const check = () => {
+      checkBtn.disabled = true;
+      if (norm(input.value) === norm(word.ingles)) {
+        input.classList.add('text-green-600', 'border-green-500');
+        checkBtn.className = 'w-full bg-green-500 text-white font-bold py-4 rounded-xl shadow-lg';
+        checkBtn.innerHTML = "¡EXCELENTE! <i class='fas fa-check'></i>";
+        advance(true);
+      } else {
+        input.classList.add('text-red-500', 'wrong-shake', 'border-red-500');
+        document.getElementById('feedback-area').innerHTML = `<span class="text-slate-400 text-sm">Correcto:</span> <span class="text-red-500 font-bold">${word.ingles}</span>`;
+        advance(false);
+      }
+    };
+    checkBtn.onclick = check;
+    input.addEventListener('keypress', (e) => { if (e.key === 'Enter') check(); });
+    input.focus();
+  }
 
-            // 4. Guardar en DB en segundo plano
-            dbClient.from('profiles').update({ points: newPoints }).eq('id', currentUser.id).then();
+  /* ============================================================
+     10. REPASO SRS (sesión de palabras vencidas)
+  ============================================================ */
+  function startSrsReview(words) {
+    srsSession = { queue: words.slice(0, SRS_SESSION_MAX), index: 0, aciertos: 0 };
+    renderMessage('🧠', '¡Toca repasar!',
+      `Tienes <b>${srsSession.queue.length}</b> palabra(s) que tu memoria está a punto de olvidar. Vamos a reforzarlas.<br><span class="text-xs text-slate-400">(máximo ${SRS_SESSION_MAX} por sesión para no saturarte)</span>`,
+      'Empezar repaso', () => nextSrsReview());
+  }
+  async function nextSrsReview() {
+    if (!srsSession || srsSession.index >= srsSession.queue.length) {
+      const aciertos = srsSession ? srsSession.aciertos : 0;
+      const total = srsSession ? srsSession.queue.length : 0;
+      srsSession = null;
+      flujo.stats.sessionsCompleted = (flujo.stats.sessionsCompleted || 0) + 1;
+      await updateUserFlow();
+      playSound('complete'); triggerConfetti();
+      showModal({
+        icon: '🧠', title: '¡Repaso terminado!',
+        body: `Has fortalecido tu memoria a largo plazo.<br><span class="text-green-600 font-bold">${aciertos}/${total} aciertos</span>`,
+        dismissable: false,
+        actions: [{ label: 'Continuar', onClick: () => { closeModal(); runFlow(); } }]
+      });
+      return;
+    }
+    const word = srsSession.queue[srsSession.index];
+    updateProgressBar((srsSession.index / srsSession.queue.length) * 100);
+
+    const s = flujo.srs[String(word.id)] || {};
+    const esDebil = (s.lapses || 0) >= 3 || (s.level || 0) === 0; // le cuesta: mejor volver a estudiarla
+
+    const avanzar = async (result, type, fueBien) => {
+      await updateSRS(word.id, result, { type });
+      ensureDaily();
+      flujo.daily.reviewed = (flujo.daily.reviewed || 0) + 1;
+      if (fueBien) srsSession.aciertos++;
+      srsSession.index++;
+      setTimeout(() => nextSrsReview(), fueBien ? 1000 : 2000);
+    };
+
+    // Mezcla de formatos: tarjeta ✨ Repaso, imagen o dictado.
+    const r = Math.random();
+    if (esDebil || r < 0.34) {
+      // Tarjeta ✨ Repaso (flashcard) también dentro de "¡Toca repasar!"
+      appContainer.innerHTML = flashcardHTML(word, srsSession.index + 1, srsSession.queue.length);
+      bindFlashcard(word, (res) => avanzar(res, 'flashcard', res === 'easy'));
+    } else if (word.imagen && r < 0.67) {
+      const pool = (groupCache.list.length ? groupCache.list : srsSession.queue).map(w => w.ingles);
+      renderSelectImage(word, buildOptions(word.ingles, pool.length >= 4 ? pool : [word.ingles, 'yes', 'no', 'time']),
+        (ok) => avanzar(ok ? 'practice_correct' : 'practice_wrong', 'select_by_image', ok));
+    } else {
+      renderWriteAudio(word, (ok) => avanzar(ok ? 'practice_correct' : 'practice_wrong', 'write_by_audio', ok));
+    }
+  }
+
+  /* ============================================================
+     11. AVANCE DE GRUPO / NIVEL
+  ============================================================ */
+  function groupCompleteScreen(nivel, group, g) {
+    playSound('complete'); triggerConfetti();
+    // Cofre de recompensa: +1 lingot por completar el grupo.
+    const lingots = (parseFloat(userProfile.lingots) || 0) + 1;
+    userProfile.lingots = lingots;
+    const dl = document.getElementById('user-lingots'); if (dl) dl.textContent = lingots;
+    dbClient.from('profiles').update({ lingots }).eq('id', currentUser.id).then(() => {});
+    showModal({
+      icon: '🏆',
+      title: '¡Grupo completado!',
+      body: `Terminaste <b>${group}</b> del nivel <b>${nivel}</b>.<br><span class="text-green-600 font-bold">${g.correct} aciertos</span> · <span class="text-slate-400">${g.wrong} fallos</span><br><span class="text-yellow-600 font-bold text-lg">🎁 +1 💎 Lingot</span>`,
+      dismissable: false,
+      actions: [{ label: 'Siguiente 👉', onClick: () => { closeModal(); advanceGroup(nivel, group); } }]
+    });
+  }
+
+  async function advanceGroup(nivel, group) {
+    const groups = await getGroups(nivel);
+    const idx = groups.indexOf(group);
+    const next = groups[idx + 1];
+
+    if (next) {
+      flujo.niveles[nivel].currentGroup = next;
+      if (!flujo.niveles[nivel].grupos[next]) flujo.niveles[nivel].grupos[next] = defaultGroupState();
+      groupCache = { key: null, list: [], map: {} };
+      await updateUserFlow();
+      runFlow();
+    } else {
+      // Nivel terminado
+      playSound('complete'); triggerConfetti();
+      showModal({
+        icon: '🎓',
+        title: `¡Nivel ${nivel} completado!`,
+        body: 'Dominaste todos los grupos de este nivel. ¿Subimos de nivel?',
+        dismissable: false,
+        actions: [
+          { label: 'Elegir nivel', onClick: () => { closeModal(); openNivelSelector(); } },
+          { label: 'Repasar lo aprendido', style: 'bg-slate-100 text-slate-500', onClick: () => { closeModal(); runFlow(); } }
+        ]
+      });
+    }
+  }
+
+  /* ============================================================
+     12. SELECTOR DE NIVEL
+  ============================================================ */
+  async function openNivelSelector() {
+    const conContenido = await getNiveles(); // niveles que sí tienen palabras
+    // Unimos los niveles fijos con cualquier otro detectado en la base de datos.
+    const niveles = sortNiveles([...new Set([...NIVELES_FIJOS, ...conContenido])]);
+    const current = flujo.currentNivel;
+
+    const body = `<div class="grid grid-cols-2 gap-3 mt-2">${niveles.map(n => {
+      const tiene = conContenido.includes(n);
+      const activo = n === current;
+      return `<button class="nivel-opt btn-juice ${activo ? 'bg-[#FF7A00] text-white' : (tiene ? 'bg-slate-100 text-slate-700' : 'bg-slate-50 text-slate-400')} font-black text-lg py-4 rounded-xl flex flex-col items-center gap-1" data-nivel="${n}">
+        <span>${n}</span>
+        <span class="text-[10px] font-bold uppercase ${activo ? 'text-white/80' : (tiene ? 'text-green-500' : 'text-slate-300')}">${tiene ? 'Disponible' : 'Sin contenido'}</span>
+      </button>`;
+    }).join('')}</div>`;
+
+    showModal({ icon: '🎯', title: '¿Qué nivel quieres estudiar?', body, size: 'md' });
+
+    modalRoot.querySelectorAll('.nivel-opt').forEach(btn => {
+      btn.onclick = async () => {
+        const nivel = btn.dataset.nivel;
+        console.log('[nivel] seleccionado:', nivel);
+        flujo.currentNivel = nivel;
+        await ensureNivel(nivel);
+        await updateUserFlow();
+        await dbClient.from('profiles').update({ nivel }).eq('id', currentUser.id);
+        userProfile.nivel = nivel;
+        groupCache = { key: null, list: [], map: {} };
+        closeModal();
+        runFlow();
+      };
+    });
+  }
+
+  /* ============================================================
+     13. HABLAR CON ABU — práctica de conversación (última misión)
+     ------------------------------------------------------------
+     Es una práctica más, como las tarjetas o los ejercicios: hay que
+     enviar CHAT_GOAL mensajes para completarla y cerrar el grupo.
+     Abu contesta corto, corrige al instante y usa las palabras que
+     acabas de estudiar. Nunca se presenta como una IA: es Abu.
+     Respuestas: Edge Function "generar-dialogo" (mode:"chat").
+  ============================================================ */
+  function chatPracticeIntro(nivel, group) {
+  showModal({
+    icon: '💬',
+    title: '¡Hora de hablar!',
+    body: 'Es momento de poner en práctica lo que aprendiste. Conversa con Abu e intenta usar las palabras de este grupo.',
+    dismissable: false,
+    actions: [
+      { 
+        label: 'Empezar a chatear 👉', 
+        onClick: () => {
+          // Llama a la función principal del chat pasando 'true' para que cuente el progreso
+          startChatPractice(nivel, group, true); 
+        } 
+      }
+    ]
+  });
+}
+  const CHAT_TIMEOUT_MS = 20000;   // con "thinking" desactivado la respuesta llega en 1-3 s
+  let aiChat = [];                 // historial [{role:'user'|'assistant', content}]
+  let chatWords = [];              // palabras objetivo de esta charla
+  let chatSession = null;          // { nivel, group, counts, count, goal, used:Set, streak }
+  let chatModoLocalAvisado = false; // para avisar una sola vez si falla la Edge Function
+
+  // Últimas N palabras estudiadas (con registro SRS), ordenadas por fecha de estudio.
+  async function getStudiedWords(max = 10) {
+    const ids = Object.entries(flujo.srs)
+      .sort((a, b) => new Date(b[1].updated || 0) - new Date(a[1].updated || 0))
+      .slice(0, max)
+      .map(([id]) => parseInt(id))
+      .filter(n => !isNaN(n));
+    if (!ids.length) return [];
+    const { data, error } = await dbClient.from('palabras').select('id, ingles').in('id', ids);
+    if (error) { console.warn('[Abu] no se pudieron leer palabras estudiadas:', error.message); return []; }
+    const porId = new Map((data || []).map(w => [w.id, w.ingles]));
+    return ids.map(id => porId.get(id)).filter(Boolean);
+  }
+
+  // Palabras objetivo: las del grupo que se acaba de practicar; si no hay, las últimas estudiadas.
+  async function getChatWords(nivel, group, max = 10) {
+    let list = [];
+    if (nivel && group) {
+      const words = await getGroupWords(nivel, group);
+      list = words.map(w => w.ingles).filter(Boolean);
+    }
+    if (!list.length) list = await getStudiedWords(max);
+    return [...new Set(list.map(w => String(w).trim()).filter(Boolean))].slice(0, max);
+  }
+
+  /*
+    Llamada a la Edge Function. Reintenta una vez y, si aun así falla,
+    devuelve null para que la charla continúe con una respuesta local
+    (nunca se corta la práctica con "no pude responder").
+  */
+  async function callChatFunction(body, reintentos = 1) {
+    for (let intento = 0; intento <= reintentos; intento++) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), CHAT_TIMEOUT_MS);
+      try {
+        const { data: { session } } = await dbClient.auth.getSession();
+        const resp = await fetch(`${SUPABASE_URL}/functions/v1/generar-dialogo`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${session?.access_token || SUPABASE_ANON_KEY}`
+          },
+          body: JSON.stringify(body),
+          signal: controller.signal
+        });
+        let payload = null;
+        try { payload = await resp.json(); } catch { /* respuesta no JSON */ }
+        if (!resp.ok || payload?.error) {
+          throw new Error(`${payload?.error || 'HTTP ' + resp.status}${payload?.motivo ? ' · ' + payload.motivo : ''}`);
         }
+        const en = (payload?.reply?.en || '').trim();
+        if (!en) throw new Error('respuesta vacía');
+        return payload.reply;
+      } catch (err) {
+        console.warn(`[Abu] intento ${intento + 1}:`, err?.name === 'AbortError' ? 'tardó demasiado' : (err?.message || err));
+        if (intento < reintentos) await new Promise(r => setTimeout(r, 500));
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+    return null;
+  }
 
-        async function renderFlow1_Flashcards() {
-            // Mostrar estado de carga "suave" si tarda mucho, o mantener la carta anterior
-            // Aquí optamos por velocidad: buscar la palabra
-            const word = await getNextWordForReview();
-            
-            if (word) {
-                currentWord = word;
-                // Usamos requestAnimationFrame para asegurar que el pintado ocurre en el frame correcto
-                requestAnimationFrame(() => {
-                    DOM.appContainer.innerHTML = getFlashcardHTML(word);
-                    addFlashcardEventListeners();
-                });
-            } else {
-                DOM.appContainer.innerHTML = getCompletionHTML();
-                document.getElementById('btn-reload').addEventListener('click', () => window.location.reload());
-            }
+  /*
+    Diagnóstico rápido. Abre la consola del navegador (F12) y escribe:
+        await pingAbu()
+    Te dice si la clave de DeepSeek existe, si responde y en cuántos ms.
+  */
+  window.pingAbu = async function () {
+    const { data: { session } } = await dbClient.auth.getSession();
+    const r = await fetch(`${SUPABASE_URL}/functions/v1/generar-dialogo`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${session?.access_token || SUPABASE_ANON_KEY}`
+      },
+      body: JSON.stringify({ mode: 'ping' })
+    });
+    const j = await r.json().catch(() => ({ error: 'respuesta no JSON', status: r.status }));
+    console.log(j.ok ? '✅ Abu responde bien:' : '❌ Abu no responde:', j);
+    return j;
+  };
+
+  /* ------------------------------------------------------------
+     GUION LOCAL DE ABU
+     Se usa cuando la Edge Function no contesta (sin conexión, API
+     caída o clave vencida). Antes soltaba frases sueltas y repetía
+     "¿te gusta 'we'?", que además no tiene sentido con pronombres.
+     Ahora es una conversación de verdad: reacciona a lo que escribió
+     el estudiante, nunca repite pregunta y cada 3 turnos le pide usar
+     una palabra del grupo en una frase.
+  ------------------------------------------------------------ */
+  const ABU_GUION = [
+    { id: 'today',   en: "What did you do today?",             es: "¿Qué hiciste hoy?",                       tips: ['I worked.', 'I studied English.', 'Nothing special 😅'] },
+    { id: 'family',  en: "Who do you live with?",              es: "¿Con quién vives?",                       tips: ['With my family.', 'I live alone.', 'With my friends.'] },
+    { id: 'work',    en: "Do you work or study?",              es: "¿Trabajas o estudias?",                   tips: ['I work.', 'I study.', 'Both! 😅'] },
+    { id: 'food',    en: "What food do you like?",             es: "¿Qué comida te gusta?",                   tips: ['I like pizza.', 'Rice and chicken.', 'Everything! 😄'] },
+    { id: 'weekend', en: "What do you do on weekends?",        es: "¿Qué haces los fines de semana?",         tips: ['I rest at home.', 'I go out.', 'I see my family.'] },
+    { id: 'city',    en: "Where are you from?",                es: "¿De dónde eres?",                         tips: ["I'm from Colombia.", 'From Bogotá.', 'A small town.'] },
+    { id: 'why',     en: "Why do you learn English?",          es: "¿Por qué aprendes inglés?",               tips: ['For my job.', 'To travel ✈️', 'I like it.'] },
+    { id: 'music',   en: "What music do you listen to?",       es: "¿Qué música escuchas?",                   tips: ['I like rock.', 'Reggaeton 🔥', 'All kinds.'] },
+    { id: 'travel',  en: "Where do you want to travel?",       es: "¿A dónde quieres viajar?",                tips: ['To the USA.', 'To Europe.', 'Anywhere! 😄'] },
+    { id: 'morning', en: "What time do you wake up?",          es: "¿A qué hora te levantas?",                tips: ['At six.', 'Very early 😴', 'Late on Sundays.'] },
+    { id: 'pet',     en: "Do you have a pet?",                 es: "¿Tienes mascota?",                        tips: ['Yes, a dog 🐶', "No, I don't.", 'I want one!'] },
+    { id: 'movie',   en: "What was the last movie you saw?",   es: "¿Cuál fue la última película que viste?", tips: ['A comedy.', "I don't remember 😅", 'A horror movie.'] },
+    { id: 'friend',  en: "Tell me about your best friend.",    es: "Cuéntame de tu mejor amigo.",             tips: ['He is funny.', 'She is very kind.', 'We study together.'] },
+    { id: 'dream',   en: "What is your dream job?",            es: "¿Cuál es el trabajo de tus sueños?",      tips: ['A doctor.', "I don't know yet.", 'Something with computers.'] },
+    { id: 'plans',   en: "What are your plans for tomorrow?",  es: "¿Qué planes tienes para mañana?",         tips: ['I work.', 'I rest.', 'I study English.'] }
+  ];
+
+  const alAzar = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+  // Reacción corta a lo último que escribió el estudiante (así se siente escuchado)
+  function reaccionAbu(texto, usadas) {
+    const t = (texto || '').toLowerCase().trim();
+    if (usadas && usadas.length) return { en: `Perfect use of "${usadas[0]}"! 🎯`, es: `¡Perfecto uso de "${usadas[0]}"! 🎯` };
+    if (/don'?t know|no s[eé]|idk|ni idea/.test(t))     return { en: 'No problem! 😄', es: '¡No pasa nada! 😄' };
+    if (/hard|difficult|dif[ií]cil/.test(t))            return { en: "I know, but you're doing great! 💪", es: '¡Lo sé, pero lo haces muy bien! 💪' };
+    if (/easy|f[aá]cil/.test(t))                        return { en: 'That’s the spirit! 🔥', es: '¡Ese es el ánimo! 🔥' };
+    if (/^(yes|yeah|yep|sure|of course)/.test(t))       return { en: 'Great! 😄', es: '¡Genial! 😄' };
+    if (/^(no|nope|not really|never)/.test(t))          return { en: 'Okay! 👌', es: '¡Está bien! 👌' };
+    if (t.split(/\s+/).length >= 6)                     return { en: 'Wow, great sentence! 🔥', es: '¡Wow, gran frase! 🔥' };
+    return alAzar([
+      { en: 'Nice!', es: '¡Bien!' }, { en: 'Cool!', es: '¡Genial!' },
+      { en: 'Love it!', es: '¡Me encanta!' }, { en: 'So good!', es: '¡Muy bien!' },
+      { en: 'Awesome!', es: '¡Excelente!' }
+    ]);
+  }
+
+  function abuFallback(textoUsuario = '', usadas = []) {
+    const cs = chatSession;
+    if (cs && !cs.guionUsado) cs.guionUsado = new Set();
+    const hechas = cs?.guionUsado || new Set();
+    const turno = cs?.count || 0;
+    const r = reaccionAbu(textoUsuario, usadas);
+
+    // Último mensaje: despedida, sin preguntas
+    if (cs && turno >= cs.goal) {
+      return {
+        en: `${r.en} You did an amazing job today. See you soon! 👋`,
+        es: `${r.es} Hiciste un trabajo increíble hoy. ¡Nos vemos pronto! 👋`,
+        tips: ['Thank you! 😄', 'See you, Abu!', 'Bye bye 👋']
+      };
+    }
+
+    // Cada 3 turnos: reto con una palabra del grupo. Se lleva registro de
+    // cuáles ya se pidieron para no repetir siempre la misma.
+    if (cs && !cs.retadas) cs.retadas = new Set();
+    const retadas = cs?.retadas || new Set();
+    const sinUsar = chatWords.filter(w => !cs?.used.has(norm(w)));
+    const libre = sinUsar.find(w => !retadas.has(norm(w))) || sinUsar[0];
+    if (libre && turno > 0 && turno % 3 === 0) {
+      retadas.add(norm(libre));
+      const reto = alAzar([
+        { en: `Now use "${libre}" in a sentence 💪`,        es: `Ahora usa "${libre}" en una frase 💪` },
+        { en: `Try a sentence with "${libre}" 👀`,          es: `Intenta una frase con "${libre}" 👀` },
+        { en: `Show me "${libre}" in a sentence! 🔥`,       es: `¡Muéstrame "${libre}" en una frase! 🔥` },
+        { en: `Your turn: a sentence with "${libre}" ✍️`,   es: `Te toca: una frase con "${libre}" ✍️` }
+      ]);
+      return {
+        en: `${r.en} ${reto.en}`,
+        es: `${r.es} ${reto.es}`,
+        tips: ['Let me try...', "It's hard 😅", 'Can you help me?']
+      };
+    }
+
+    // Siguiente pregunta del guion que todavía no se haya hecho
+    const pendientes = ABU_GUION.filter(q => !hechas.has(q.id));
+    const sig = pendientes.length ? alAzar(pendientes) : ABU_GUION[turno % ABU_GUION.length];
+    hechas.add(sig.id);
+    return { en: `${r.en} ${sig.en}`, es: `${r.es} ${sig.es}`, tips: sig.tips };
+  }
+
+  /*
+    Respuestas sugeridas. Lo ideal viene de Abu (campo "tips"), pero si no
+    llega se arman aquí leyendo qué tipo de pregunta hizo: así siempre hay
+    algo que responder aunque falle la red.
+  */
+  function sugerenciasLocales(textoAbu) {
+    const t = (textoAbu || '').toLowerCase();
+    const libre = chatWords.filter(w => !chatSession?.used.has(norm(w)))[0];
+    let base;
+    // Las preguntas con wh- mandan sobre las de sí/no: "Why do you...?" no se
+    // responde con "Yes, I do", aunque contenga "do you".
+    if (/how are you|how do you feel|how is it going/.test(t))  base = ["I'm good! 😄", "A little tired.", "Great, thanks!"];
+    else if (/\bwhy\b/.test(t))                            base = ['Because I like it.', "I don't know 😅", "It's fun!"];
+    else if (/\bwhere\b/.test(t))                          base = ['At home.', 'In my city.', 'At school.'];
+    else if (/\bwhen|what time\b/.test(t))                 base = ['Every day.', 'On weekends.', 'In the morning.'];
+    else if (/\bhow (many|much|often|long)\b/.test(t))     base = ['Two or three.', 'A lot!', 'Not much.'];
+    else if (/\bhow\b/.test(t))                            base = ['With my phone.', "It's easy!", "It's hard 😅"];
+    else if (/\bwho\b/.test(t))                            base = ['My family.', 'My best friend.', 'My teacher.'];
+    else if (/\bwhich\b/.test(t))                          base = ['The first one.', 'Both! 😄', "I'm not sure 🤔"];
+    else if (/\bwhat.*(like|favou?rite|prefer)\b/.test(t)) base = ['I like it a lot.', 'Not really.', 'My favourite! 🔥'];
+    else if (/\bwhat\b/.test(t))                           base = ['I like it.', "I'm not sure 🤔", 'Tell me more.'];
+    else if (/\b(do|did|does|are|is|was|can|have|had|would|will) you\b/.test(t)) base = ['Yes, I do! 😄', "No, I don't.", 'Sometimes.'];
+    else                                                    base = ['Yes! 😄', 'Really?', 'Tell me more.'];
+    // Una sugerencia siempre empuja a usar una palabra del grupo
+    if (libre) base = [...base.slice(0, 2), `What about "${libre}"?`];
+    return base;
+  }
+
+  function pintarSugerencias(tips) {
+    const cont = document.getElementById('chat-quick');
+    if (!cont) return;
+    const lista = (Array.isArray(tips) ? tips : [])
+      .map(t => String(t || '').trim()).filter(Boolean).slice(0, 3);
+    const finales = lista.length >= 2 ? lista : sugerenciasLocales(tips);
+    cont.innerHTML = finales.map(r =>
+      `<button class="quick-reply shrink-0 text-[11px] font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-500 hover:bg-orange-50 hover:text-[#FF7A00] transition" data-txt="${escapeHTML(r)}">${escapeHTML(r)}</button>`
+    ).join('');
+    const input = document.getElementById('ai-input');
+    cont.querySelectorAll('.quick-reply').forEach(b => {
+      b.onclick = () => { if (input) { input.value = b.dataset.txt || ''; input.focus(); } };
+    });
+  }
+
+  /* ---------- Pantalla de la charla ---------- */
+  async function startChatPractice(nivel, group, cuenta) {
+    closeModal();
+    stopSpeaking();
+    const g = (group && flujo.niveles[nivel]?.grupos?.[group]) || null;
+    chatWords = await getChatWords(nivel, group, 10);
+    aiChat = [];
+    chatSession = {
+      nivel, group, counts: !!cuenta, goal: CHAT_GOAL,
+      count: (cuenta && g?.chat?.count) ? g.chat.count : 0,
+      used: new Set(), streak: 0
+    };
+
+    const chips = chatWords.map(w =>
+      `<span class="word-chip shrink-0 text-[11px] font-bold px-2 py-1 rounded-full bg-white border border-slate-200 text-slate-500" data-word="${escapeHTML(norm(w))}">${escapeHTML(w)}</span>`
+    ).join('');
+
+    appContainer.innerHTML = `
+      <div class="card-3d p-3 sm:p-4 animate-pop mt-1">
+
+        <div class="flex items-center gap-2 mb-1.5">
+          <span class="bg-purple-100 text-purple-600 px-2.5 py-1 rounded-full text-[11px] font-bold uppercase shrink-0">💬 Abu</span>
+          <div class="flex-1 progress-track" style="margin-top:0"><div id="chat-bar" class="progress-fill" style="width:${(chatSession.count / CHAT_GOAL) * 100}%"></div></div>
+          <span class="text-[11px] font-black text-slate-400 shrink-0"><span id="chat-count" class="text-[#FF7A00]">${chatSession.count}</span>/${CHAT_GOAL}</span>
+          <button id="chat-exit" title="Salir" class="shrink-0 w-6 h-6 rounded-full text-slate-300 hover:text-slate-500 hover:bg-slate-100 transition text-sm">&times;</button>
+        </div>
+
+        ${chips ? `
+        <div class="flex items-center gap-2 mb-2">
+          <div id="chat-chips" class="no-bar flex-1 flex gap-1.5 overflow-x-auto whitespace-nowrap py-0.5">${chips}</div>
+          <span class="text-[10px] font-bold text-slate-400 shrink-0"><span id="chat-usadas">0</span>/${chatWords.length}</span>
+        </div>` : ''}
+
+        <div id="ai-messages" class="chat-scroll h-[46vh] min-h-[220px] overflow-y-auto p-2 space-y-2 mb-2 bg-slate-50 rounded-xl border border-slate-100"></div>
+
+        <div id="chat-quick" class="no-bar flex gap-1.5 overflow-x-auto whitespace-nowrap mb-2 min-h-[26px]"></div>
+
+        <div class="flex gap-2">
+          <input id="ai-input" type="text" placeholder="Escribe en inglés..." autocomplete="off" autocapitalize="sentences" spellcheck="false" enterkeyhint="send"
+            class="flex-1 min-w-0 bg-white border-2 border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-[#FF7A00] text-slate-700 font-medium">
+          <button id="ai-send" class="btn-juice bg-[#FF7A00] text-white font-bold px-4 py-2 rounded-xl shrink-0"><i class="fas fa-paper-plane"></i></button>
+        </div>
+      </div>`;
+
+    bindChatPractice();
+    pintarProgresoChat();
+
+    // Saludo de Abu (local: no gasta tokens y aparece al instante)
+    const muestra = chatWords.slice(0, 2).join(', ');
+    const saludo = chatWords.length
+      ? { en: `Hey! I'm Abu 👋 Let's talk about "${muestra}". How are you today?`,
+          es: `¡Hey! Soy Abu 👋 Hablemos de "${muestra}". ¿Cómo estás hoy?` }
+      : { en: `Hey! I'm Abu 👋 How are you today?`,
+          es: `¡Hey! Soy Abu 👋 ¿Cómo estás hoy?` };
+    addChatBubble('ai', saludo);
+    aiChat.push({ role: 'assistant', content: saludo.en });
+    pintarSugerencias(saludo.en);   // sugerencias acordes al saludo
+    speak(saludo.en);
+  }
+
+  function addChatBubble(role, msg) {
+    const box = document.getElementById('ai-messages');
+    if (!box) return null;
+    const div = document.createElement('div');
+    if (role === 'user') {
+      div.className = 'flex justify-end';
+      div.innerHTML = `<div class="bg-[#FF7A00] text-white rounded-2xl rounded-br-sm px-3.5 py-2 max-w-[85%] font-medium">${escapeHTML(msg.en)}</div>`;
+    } else {
+      div.className = 'flex justify-start items-end gap-1.5';
+      div.innerHTML = `
+        <div class="bg-white border border-slate-200 text-slate-800 rounded-2xl rounded-bl-sm px-3.5 py-2 max-w-[78%] shadow-sm">
+          <div class="font-medium leading-snug">${escapeHTML(msg.en)}</div>
+          ${msg.es ? `<div class="text-xs text-slate-400 mt-0.5 leading-snug">${escapeHTML(msg.es)}</div>` : ''}
+          ${msg.fix ? `<div class="mt-1.5 text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1 leading-snug">✏️ ${escapeHTML(msg.fix)}</div>` : ''}
+        </div>
+        <button data-say="${encodeURIComponent(msg.en || '')}" title="Escuchar otra vez"
+          class="say-btn shrink-0 w-8 h-8 rounded-full bg-white border border-slate-200 text-slate-400 hover:text-[#FF7A00] hover:border-[#FF7A00] active:scale-90 transition flex items-center justify-center">
+          <i class="fas fa-volume-up text-[11px]"></i>
+        </button>`;
+    }
+    box.appendChild(div);
+    box.scrollTop = box.scrollHeight;
+    return div;
+  }
+
+  // Marca las palabras objetivo usadas por primera vez y las devuelve.
+  function marcarPalabrasUsadas(text) {
+    if (!chatSession) return [];
+    const t = ' ' + norm(text).replace(/\s+/g, ' ') + ' ';
+    const nuevas = [];
+    chatWords.forEach(w => {
+      const k = norm(w);
+      if (!k || chatSession.used.has(k)) return;
+      if (t.includes(' ' + k + ' ')) {
+        chatSession.used.add(k);
+        nuevas.push(w);
+        document.querySelectorAll('#chat-chips .word-chip').forEach(ch => {
+          if (ch.dataset.word === k) ch.classList.add('used');
+        });
+      }
+    });
+    const cont = document.getElementById('chat-usadas');
+    if (cont) cont.textContent = chatSession.used.size;
+    return nuevas;
+  }
+
+  function pintarProgresoChat() {
+    const cs = chatSession;
+    if (!cs) return;
+    const pct = Math.min(100, (cs.count / cs.goal) * 100);
+    const bar = document.getElementById('chat-bar'); if (bar) bar.style.width = pct + '%';
+    const num = document.getElementById('chat-count'); if (num) num.textContent = cs.count;
+    updateProgressBar(pct);
+  }
+
+  function bindChatPractice() {
+    const box = document.getElementById('ai-messages');
+    const input = document.getElementById('ai-input');
+    const send = document.getElementById('ai-send');
+    if (!input || !send || !box) return;
+
+    // Volver a escuchar cualquier mensaje de Abu
+    box.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-say]');
+      if (!b) return;
+      stopSpeaking();
+      speak(decodeURIComponent(b.dataset.say || ''));
+    });
+
+    const exit = document.getElementById('chat-exit');
+    if (exit) exit.onclick = async () => {
+      const cs = chatSession;
+      stopSpeaking();
+      if (cs?.counts && cs.group && flujo.niveles[cs.nivel]?.grupos?.[cs.group]) {
+        flujo.niveles[cs.nivel].grupos[cs.group].chat.count = cs.count;   // se guarda el avance
+        await updateUserFlow();
+        showToast(`💬 Guardamos tu avance: ${cs.count}/${CHAT_GOAL} mensajes.`);
+      }
+      chatSession = null;
+      runFlow();
+    };
+
+    const enviar = async (textoDirecto) => {
+      const text = (textoDirecto ?? input.value ?? '').toString().trim();
+      if (!text || send.disabled || !chatSession) return;
+      input.value = '';
+      addChatBubble('user', { en: text });
+      aiChat.push({ role: 'user', content: text });
+
+      /* ---- Recompensa inmediata (así el chat engancha) ---- */
+      const cs = chatSession;
+      cs.count++;
+      cs.streak++;
+      let pts = 3;
+      const nuevas = marcarPalabrasUsadas(text);
+      if (nuevas.length) pts += 6 * nuevas.length;
+      if (text.split(/\s+/).length >= 6) pts += 2;      // premio a frases largas
+      pintarProgresoChat();
+      await addPoints(pts);
+      touchStreak();
+      if (nuevas.length) showToast(`🎯 ¡Usaste "${nuevas[0]}"! +${6 * nuevas.length} puntos`);
+      else if (cs.count === Math.ceil(cs.goal / 2)) { triggerConfetti(); showToast('🔥 ¡Mitad del camino! Vas encendido.'); }
+      else if (cs.goal - cs.count === 3) showToast('💪 ¡Solo 3 mensajes más!');
+
+      const quick = document.getElementById('chat-quick');
+      if (quick) quick.innerHTML = '';
+
+      const typing = document.createElement('div');
+      typing.className = 'flex justify-start';
+      typing.innerHTML = `<div class="bg-white border border-slate-200 text-slate-400 rounded-2xl rounded-bl-sm px-3.5 py-2 text-sm"><i class="fas fa-circle-notch fa-spin mr-1"></i> Abu escribe...</div>`;
+      box.appendChild(typing);
+      box.scrollTop = box.scrollHeight;
+      send.disabled = true;
+
+      let reply = await callChatFunction({
+        mode: 'chat',
+        nivel: chatSession?.nivel || flujo.currentNivel,
+        messages: aiChat.slice(-8),           // contexto suficiente para que la charla tenga hilo
+        words: chatWords.slice(0, 8),
+        turn: cs.count,                        // Abu sabe si está empezando o cerrando
+        goal: cs.goal
+      });
+      typing.remove();
+      if (!reply) {
+        reply = abuFallback(text, nuevas);
+        // Aviso único: si sale, la Edge Function no está respondiendo.
+        if (!chatModoLocalAvisado) {
+          chatModoLocalAvisado = true;
+          console.warn('[Abu] sin respuesta de la Edge Function → guion local. Revisa los logs de generar-dialogo en Supabase.');
+          showToast('📴 Abu está respondiendo en modo básico.', 2600);
         }
+      }
 
-        // --- GENERACIÓN DE HTML (Template Strings) ---
-        // Placeholder SVG base64 muy ligero para evitar una petición HTTP extra a via.placeholder
-        const placeholderImg = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 200'%3E%3Crect width='400' height='200' fill='%23e6f0ff'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='20' fill='%230d47a1'%3EAbulingo%3C/text%3E%3C/svg%3E";
+      addChatBubble('ai', { en: reply.en, es: reply.es || '', fix: reply.fix || '' });
+      aiChat.push({ role: 'assistant', content: reply.en });
+      pintarSugerencias(reply.tips && reply.tips.length ? reply.tips : reply.en);
+      stopSpeaking();
+      speak(reply.en);
+      send.disabled = false;
+      input.focus();
 
-        function getFlashcardHTML(word) {
-            const imgSrc = word.imagen || placeholderImg;
-            
-            return `
-                <div id="flashcard-container" class="card-style w-full max-w-md mx-auto p-8 rounded-2xl text-center transition-all duration-300">
-                    <img id="card-image" 
-                         src="${imgSrc}" 
-                         alt="${word.ingles}" 
-                         class="rounded-lg mb-4 w-full object-cover h-48 bg-slate-100"
-                         loading="eager" 
-                         fetchpriority="high">
-                    
-                    <h1 class="text-5xl font-bold font-heading mb-1 text-slate-800">${word.ingles}</h1>
-                    <p class="text-xl text-slate-500 opacity-75 mb-4">${word.espanol}</p>
-                    <p id="card-phonetic" class="text-lg font-mono text-[#FF7A00] mb-4 hidden">${word.fonetica || ''}</p>
-                    
-                    <div class="flex justify-center space-x-4 mb-6">
-                        <button id="pronounce-btn" class="flex-1 bg-blue-50 text-blue-700 font-semibold py-3 rounded-xl hover:bg-blue-100 transition duration-200 flex items-center justify-center space-x-2 touch-manipulation">
-                            <i class="fas fa-volume-up"></i><span>Sonido</span>
-                        </button>
-                        <button id="phonetic-btn" class="flex-1 bg-blue-50 text-blue-700 font-semibold py-3 rounded-xl hover:bg-blue-100 transition duration-200 flex items-center justify-center space-x-2 touch-manipulation">
-                            <i class="fas fa-language"></i><span>Fonética</span>
-                        </button>
-                    </div>
-                    
-                    <div class="flex space-x-4">
-                        <button id="btn-easy" class="w-1/2 py-4 rounded-xl font-bold transition duration-200 text-green-700 bg-green-50 hover:bg-green-100 border border-green-200 touch-manipulation transform active:scale-95">Fácil</button>
-                        <button id="btn-hard" class="w-1/2 py-4 rounded-xl font-bold transition duration-200 text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 touch-manipulation transform active:scale-95">Difícil</button>
-                    </div>
-                </div>`;
+      if (chatSession && chatSession.count >= chatSession.goal) setTimeout(finishChatPractice, 1100);
+    };
+
+    send.onclick = () => enviar();
+    input.addEventListener('keypress', (e) => { if (e.key === 'Enter') enviar(); else sfx('type'); });
+    setTimeout(() => input.focus(), 120);
+  }
+
+  async function finishChatPractice() {
+    const cs = chatSession;
+    if (!cs) return;
+    chatSession = null;
+    stopSpeaking();
+    await addPoints(25);
+
+    const g = (cs.group && flujo.niveles[cs.nivel]?.grupos?.[cs.group]) || null;
+    if (cs.counts && g) {
+      g.chat = { done: true, count: cs.count };
+      g.completed = true;
+      flujo.stats.sessionsCompleted = (flujo.stats.sessionsCompleted || 0) + 1;
+      await updateUserFlow();
+      return groupCompleteScreen(cs.nivel, cs.group, g);
+    }
+    playSound('complete'); triggerConfetti();
+    showModal({
+      icon: '💬', title: '¡Conversación completada!',
+      body: `Enviaste <b>${cs.count} mensajes</b> y usaste <b class="text-green-600">${cs.used.size}</b> de tus palabras. <br><span class="text-yellow-600 font-bold">+25 puntos</span>`,
+      dismissable: false,
+      actions: [{ label: 'Continuar', onClick: () => { closeModal(); runFlow(); } }]
+    });
+  }
+
+  /* ============================================================
+     13.5. MENÚ DE PERFIL — Rankings · Progreso · Mazo · Soporte
+  ============================================================ */
+  const spinnerHTML = () => '<div class="w-10 h-10 border-4 border-[#FF7A00] border-t-transparent rounded-full animate-spin mx-auto my-6"></div>';
+
+  function rankingListHTML(rows) {
+    if (!rows.length) return '<p class="text-slate-400 text-center py-4">Aún no hay usuarios en el ranking.</p>';
+    const medallas = ['🥇', '🥈', '🥉'];
+    return `<div class="max-h-80 overflow-y-auto space-y-1 pr-1">` + rows.map((r, i) => {
+      const yo = r.id === currentUser.id;
+      return `<div class="flex items-center gap-3 px-3 py-2 rounded-xl ${yo ? 'bg-orange-50 border-2 border-orange-200' : 'bg-slate-50'}">
+        <span class="w-8 text-center font-black ${i < 3 ? 'text-xl' : 'text-slate-400'}">${medallas[i] || (i + 1)}</span>
+        <span class="flex-1 font-bold text-slate-700 truncate">${escapeHTML(r.full_name || 'Anónimo')}${yo ? ' <span class="text-[10px] text-[#FF7A00] font-black">(TÚ)</span>' : ''}</span>
+        <span class="font-black text-slate-600 shrink-0"><i class="fas fa-star text-yellow-400 mr-1"></i>${r.points || 0}</span>
+      </div>`;
+    }).join('') + `</div>`;
+  }
+
+  // ---------- Ranking Global (por puntos) ----------
+  async function openRankingGlobal() {
+    showModal({ icon: '🌍', title: 'Ranking Global', size: 'lg', body: `<div id="rk-body" class="text-left">${spinnerHTML()}</div>`, actions: [] });
+    // ranking_publico: vista de Supabase con SOLO id, nombre, puntos, equipo y nivel.
+    // Así se ven los demás sin exponer teléfono, correo ni el JSON de progreso.
+    const { data, error } = await dbClient.from('ranking_publico')
+      .select('id, full_name, points, nivel')
+      .order('points', { ascending: false })
+      .limit(20);
+    const el = document.getElementById('rk-body');
+    if (!el) return;
+    if (error) {
+      el.innerHTML = `<p class="text-red-500 font-bold text-center">No se pudo leer el ranking.</p>
+        <p class="text-slate-400 text-xs text-center mt-2">${escapeHTML(error.message)}<br>Ejecuta <b>abulingo-supabase.sql</b> en el editor SQL: crea la vista <b>ranking_publico</b>.</p>`;
+      return;
+    }
+    el.innerHTML = `<p class="text-xs text-slate-400 text-center mb-3">Los 20 mejores por puntos ⭐</p>` + rankingListHTML(data || []);
+  }
+
+  // ---------- Ranking de Equipo (crear / unirse con código / competir) ----------
+  /*
+    Los equipos son privados: para entrar hace falta un código de 6 dígitos que
+    genera Supabase al crear el equipo. Nadie puede listar equipos ajenos ni
+    colarse sin código (ver abulingo-supabase.sql: RLS + unirse_por_codigo).
+  */
+  const soloDigitos = (t) => (t || '').toString().replace(/\D/g, '');
+
+  async function openRankingEquipo() {
+    showModal({ icon: '🛡️', title: 'Ranking de Equipo', size: 'lg', body: `<div id="eq-body" class="text-left">${spinnerHTML()}</div>`, actions: [] });
+    const el = document.getElementById('eq-body');
+    if (!el) return;
+
+    if (!userProfile.equipo_id) return renderEquipoSetup(el);
+
+    const { data: eq } = await dbClient.from('equipos')
+      .select('id, nombre_equipo, codigo, creador_id')
+      .eq('id', userProfile.equipo_id).maybeSingle();
+
+    const { data: miembros, error } = await dbClient.from('ranking_publico')
+      .select('id, full_name, points')
+      .eq('equipo_id', userProfile.equipo_id)
+      .order('points', { ascending: false })
+      .limit(50);
+
+    if (error) {
+      el.innerHTML = `<p class="text-red-500 font-bold text-center">No se pudo leer tu equipo.</p>
+        <p class="text-slate-400 text-xs text-center mt-2">${escapeHTML(error.message)}</p>`;
+      return;
+    }
+
+    const soyCreador = !!(eq && eq.creador_id === currentUser.id);
+    const totalPts = (miembros || []).reduce((a, m) => a + (m.points || 0), 0);
+
+    el.innerHTML = `
+      <div class="text-center mb-3">
+        <span class="bg-orange-100 text-[#FF7A00] font-black px-4 py-1.5 rounded-full inline-block">🛡️ ${escapeHTML(eq?.nombre_equipo || 'Mi equipo')}</span>
+        <p class="text-xs text-slate-400 mt-2">${(miembros || []).length} integrante(s) · <b>${totalPts}</b> puntos en total ⭐</p>
+      </div>
+
+      ${eq?.codigo ? `
+        <div class="bg-slate-50 border-2 border-dashed border-slate-300 rounded-xl p-3 mb-4 text-center">
+          <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Código para invitar</p>
+          <div id="eq-codigo-txt" class="font-black text-3xl tracking-[0.35em] text-[#FF7A00] my-1.5 pl-[0.35em]">${escapeHTML(eq.codigo)}</div>
+          <div class="flex flex-wrap gap-2 justify-center">
+            <button id="eq-copiar" class="text-xs font-bold px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-600 hover:border-[#FF7A00] hover:text-[#FF7A00] transition"><i class="fas fa-copy mr-1"></i>Copiar</button>
+            <button id="eq-compartir" class="text-xs font-bold px-3 py-1.5 rounded-lg bg-[#FF7A00] text-white hover:opacity-90 transition"><i class="fas fa-share-nodes mr-1"></i>Invitar</button>
+            ${soyCreador ? `<button id="eq-regenerar" class="text-xs font-bold px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-400 hover:text-red-500 hover:border-red-200 transition"><i class="fas fa-rotate mr-1"></i>Cambiar</button>` : ''}
+          </div>
+          <p class="text-[10px] text-slate-400 mt-2">Solo quien tenga este código puede entrar.</p>
+        </div>` : ''}
+
+      ${rankingListHTML(miembros || [])}
+      <button id="eq-salir" class="mt-4 w-full text-center text-xs font-bold text-slate-400 hover:text-red-500 transition">Salir del equipo</button>`;
+
+    const codigo = eq?.codigo || '';
+    const copiar = async () => {
+      try {
+        await navigator.clipboard.writeText(codigo);
+        showToast('📋 Código copiado: ' + codigo);
+      } catch {
+        showToast('Tu código es: <b>' + codigo + '</b>', 4000);
+      }
+    };
+    const btnCopiar = document.getElementById('eq-copiar');
+    if (btnCopiar) btnCopiar.onclick = copiar;
+
+    const btnComp = document.getElementById('eq-compartir');
+    if (btnComp) btnComp.onclick = async () => {
+      const texto = `¡Únete a mi equipo "${eq?.nombre_equipo || ''}" en Abulingo! 🛡️\n\n` +
+        `1. Entra a ${ABULINGO_URL}\n` +
+        `2. Abre "Ranking de Equipo" en tu perfil\n` +
+        `3. Escribe este código: ${codigo}\n\n` +
+        `¡Te espero para aprender inglés juntos! 🔥`;
+      if (navigator.share) {
+        try { await navigator.share({ title: 'Abulingo', text: texto, url: ABULINGO_URL }); return; } catch { /* canceló */ }
+      }
+      try { await navigator.clipboard.writeText(texto); showToast('📋 Invitación copiada. ¡Pégala en WhatsApp!'); }
+      catch { copiar(); }
+    };
+
+    const btnRegen = document.getElementById('eq-regenerar');
+    if (btnRegen) btnRegen.onclick = async () => {
+      btnRegen.disabled = true;
+      const { data, error: e3 } = await dbClient.rpc('regenerar_codigo_equipo');
+      btnRegen.disabled = false;
+      if (e3) return showToast('⚠️ ' + e3.message);
+      showToast('🔄 Código nuevo: <b>' + data + '</b>. El anterior ya no sirve.', 4000);
+      openRankingEquipo();
+    };
+
+    const salir = document.getElementById('eq-salir');
+    if (salir) salir.onclick = async () => {
+      const { error: e2 } = await dbClient.from('profiles').update({ equipo_id: null }).eq('id', currentUser.id);
+      if (e2) { showToast('⚠️ No se pudo salir: ' + e2.message); return; }
+      userProfile.equipo_id = null;
+      showToast('👋 Saliste del equipo.');
+      openRankingEquipo();
+    };
+  }
+
+  function renderEquipoSetup(el) {
+    el.innerHTML = `
+      <p class="text-slate-500 text-sm text-center mb-4">Compite con tus amigos: sumen puntos juntos y vean quién va adelante. 🏆</p>
+
+      <div class="bg-orange-50 border-2 border-orange-200 rounded-xl p-3 mb-3">
+        <p class="font-bold text-slate-700 text-sm mb-2 text-center">¿Te pasaron un código?</p>
+        <div class="flex gap-2">
+          <input id="eq-codigo" type="text" inputmode="numeric" maxlength="7" placeholder="······" autocomplete="off"
+            class="flex-1 min-w-0 bg-white border-2 border-slate-200 rounded-xl px-3 py-2 text-center font-black text-xl tracking-[0.3em] text-slate-700 focus:outline-none focus:border-[#FF7A00]">
+          <button id="eq-unirme" class="btn-juice bg-[#FF7A00] text-white font-bold px-4 py-2 rounded-xl shrink-0">Unirme</button>
+        </div>
+        <p class="text-[10px] text-slate-400 text-center mt-1.5">6 dígitos, sin espacios</p>
+      </div>
+
+      <div class="flex items-center gap-2 my-3">
+        <div class="flex-1 h-px bg-slate-200"></div>
+        <span class="text-[10px] font-bold text-slate-300 uppercase">o</span>
+        <div class="flex-1 h-px bg-slate-200"></div>
+      </div>
+
+      <div class="bg-slate-50 border border-slate-200 rounded-xl p-3">
+        <p class="font-bold text-slate-700 text-sm mb-2 text-center">Crea tu equipo</p>
+        <div class="flex gap-2">
+          <input id="eq-nombre" type="text" maxlength="40" placeholder="Nombre del equipo..."
+            class="flex-1 min-w-0 bg-white border-2 border-slate-200 rounded-xl px-3 py-2 font-medium focus:outline-none focus:border-[#FF7A00]">
+          <button id="eq-crear" class="btn-juice bg-slate-800 text-white font-bold px-4 py-2 rounded-xl shrink-0">Crear</button>
+        </div>
+        <p class="text-[10px] text-slate-400 text-center mt-1.5">Recibirás un código para invitar a quien quieras</p>
+      </div>
+
+      <p id="eq-error" class="text-red-500 text-xs font-bold mt-3 hidden text-center"></p>`;
+
+    const setErr = (m) => { const p = document.getElementById('eq-error'); if (p) { p.innerHTML = m; p.classList.remove('hidden'); } };
+
+    // ── Unirse con código ──
+    const inputCod = document.getElementById('eq-codigo');
+    const btnUnir = document.getElementById('eq-unirme');
+    const unir = async () => {
+      const codigo = soloDigitos(inputCod?.value);
+      if (codigo.length !== 6) return setErr('El código son 6 dígitos. Revísalo con quien te invitó.');
+      btnUnir.disabled = true;
+      const { data, error } = await dbClient.rpc('unirse_por_codigo', { p_codigo: codigo });
+      btnUnir.disabled = false;
+      if (error) return setErr(escapeHTML(error.message));
+      const fila = Array.isArray(data) ? data[0] : data;
+      if (!fila) return setErr('Ese código no corresponde a ningún equipo.');
+      userProfile.equipo_id = fila.equipo_id;
+      triggerConfetti();
+      showToast(`🛡️ ¡Bienvenido a ${escapeHTML(fila.nombre_equipo)}!`);
+      openRankingEquipo();
+    };
+    if (btnUnir) btnUnir.onclick = unir;
+    if (inputCod) inputCod.addEventListener('keypress', (e) => { if (e.key === 'Enter') unir(); });
+
+    // ── Crear equipo ──
+    const crear = document.getElementById('eq-crear');
+    if (crear) crear.onclick = async () => {
+      const nombre = (document.getElementById('eq-nombre')?.value || '').trim();
+      if (!nombre) return setErr('Escribe un nombre para el equipo.');
+      crear.disabled = true;
+      // creador_id es obligatorio: es lo que autoriza el insert en la política RLS
+      const { data: nuevo, error } = await dbClient.from('equipos')
+        .insert({ nombre_equipo: nombre, creador_id: currentUser.id })
+        .select('id, nombre_equipo, codigo').single();
+      crear.disabled = false;
+      if (error || !nuevo) {
+        return setErr('No se pudo crear el equipo: ' + escapeHTML(error?.message || 'error desconocido') +
+          '<br><span class="font-normal">Ejecuta <b>abulingo-supabase.sql</b> en el editor SQL de Supabase.</span>');
+      }
+      const { error: e2 } = await dbClient.from('profiles').update({ equipo_id: nuevo.id }).eq('id', currentUser.id);
+      if (e2) return setErr('Equipo creado, pero no pudimos unirte: ' + escapeHTML(e2.message));
+      userProfile.equipo_id = nuevo.id;
+      triggerConfetti();
+      showToast(`🛡️ Equipo creado · código <b>${nuevo.codigo}</b>`, 4000);
+      openRankingEquipo();
+    };
+  }
+
+  // ---------- Progreso por nivel ----------
+  async function openProgresoNivel() {
+    showModal({ icon: '📈', title: 'Progreso por nivel', size: 'lg', body: `<div id="pg-body" class="text-left">${spinnerHTML()}</div>`, actions: [] });
+    renderProgresoNivel(flujo.currentNivel);
+  }
+
+  async function renderProgresoNivel(nivel) {
+    const el = document.getElementById('pg-body');
+    if (!el) return;
+    el.innerHTML = spinnerHTML();
+
+    const conContenido = await getNiveles();
+    const niveles = sortNiveles([...new Set([...NIVELES_FIJOS, ...conContenido])]);
+
+    let { data } = await dbClient.from('palabras').select('id').eq('nivel', nivel).range(0, 9999);
+    if (!(data || []).length) ({ data } = await dbClient.from('palabras').select('id').ilike('nivel', nivel).range(0, 9999));
+    const ids = (data || []).map(r => String(r.id));
+
+    const total = ids.length;
+    const estudiadas = ids.filter(id => flujo.srs[id]).length;
+    const dominadas = ids.filter(id => flujo.srs[id] && flujo.srs[id].learned).length;
+    const ahora = Date.now();
+    const pendientes = ids.filter(id => { const s = flujo.srs[id]; return s && !s.learned && s.due && new Date(s.due).getTime() <= ahora; }).length;
+    const pctDom = total ? Math.round((dominadas / total) * 100) : 0;
+    const pctEst = total ? Math.round((estudiadas / total) * 100) : 0;
+
+    const grupos = await getGroups(nivel);
+    const gCompletos = grupos.filter(g => flujo.niveles[nivel]?.grupos?.[g]?.completed).length;
+
+    const chips = niveles.map(n => `
+      <button class="pg-chip btn-juice ${n === nivel ? 'bg-[#FF7A00] text-white' : 'bg-slate-100 text-slate-600'} font-black text-sm px-4 py-2 rounded-xl" data-nivel="${n}">${n}</button>`).join('');
+
+    el.innerHTML = `
+      <div class="flex flex-wrap justify-center gap-2 mb-4">${chips}</div>
+      ${total === 0 ? `<p class="text-slate-400 text-center py-4">El nivel <b>${nivel}</b> no tiene palabras cargadas todavía. 📭</p>` : `
+      <div class="grid grid-cols-2 gap-2 mb-4">
+        <div class="bg-slate-50 rounded-xl p-3 text-center"><div class="text-2xl font-black text-slate-700">${total}</div><div class="text-[10px] font-bold text-slate-400 uppercase">Palabras en el nivel</div></div>
+        <div class="bg-blue-50 rounded-xl p-3 text-center"><div class="text-2xl font-black text-blue-600">${estudiadas}</div><div class="text-[10px] font-bold text-slate-400 uppercase">Ya estudiadas</div></div>
+        <div class="bg-green-50 rounded-xl p-3 text-center"><div class="text-2xl font-black text-green-600">${dominadas}</div><div class="text-[10px] font-bold text-slate-400 uppercase">Dominadas 🏅</div></div>
+        <div class="bg-orange-50 rounded-xl p-3 text-center"><div class="text-2xl font-black text-[#FF7A00]">${pendientes}</div><div class="text-[10px] font-bold text-slate-400 uppercase">Por repasar hoy</div></div>
+      </div>
+      <div class="mb-3">
+        <div class="flex justify-between text-[10px] font-bold text-slate-400 mb-1"><span>DOMINADAS</span><span>${pctDom}% · te falta ${100 - pctDom}%</span></div>
+        <div class="progress-track"><div class="progress-fill" style="width:${pctDom}%"></div></div>
+      </div>
+      <div class="mb-3">
+        <div class="flex justify-between text-[10px] font-bold text-slate-400 mb-1"><span>ESTUDIADAS</span><span>${pctEst}% · te falta ${100 - pctEst}%</span></div>
+        <div class="progress-track"><div class="progress-fill" style="width:${pctEst}%; background: linear-gradient(90deg,#3b82f6,#60a5fa);"></div></div>
+      </div>
+      <p class="text-center text-sm text-slate-500">Grupos completados: <b class="text-slate-700">${gCompletos} / ${grupos.length}</b> 📚 · Racha: <b class="text-orange-500">${flujo.racha?.days || 0} día(s)</b> 🔥</p>`}`;
+
+    el.querySelectorAll('.pg-chip').forEach(b => { b.onclick = () => renderProgresoNivel(b.dataset.nivel); });
+  }
+
+  // ---------- Soporte ----------
+  function openSoporte() {
+    showModal({
+      icon: '🎧', title: 'Soporte', size: 'lg',
+      body: `
+        <div class="text-left">
+          <p class="text-slate-500 text-sm mb-3 text-center">Cuéntanos tu problema o sugerencia y te responderemos pronto. 💬</p>
+          <input id="sp-email" type="email" value="${escapeHTML(currentUser.email || '')}" placeholder="Tu correo"
+            class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-2 mb-2 font-medium focus:outline-none focus:border-[#FF7A00]">
+          <textarea id="sp-msg" rows="4" placeholder="Escribe tu mensaje..."
+            class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-2 font-medium focus:outline-none focus:border-[#FF7A00]"></textarea>
+          <p id="sp-error" class="text-red-500 text-xs font-bold mt-2 hidden text-center"></p>
+        </div>`,
+      actions: [{
+        label: 'Enviar mensaje 📨',
+        onClick: async () => {
+          const mensaje = (document.getElementById('sp-msg')?.value || '').trim();
+          const email = (document.getElementById('sp-email')?.value || '').trim();
+          const errEl = document.getElementById('sp-error');
+          const setErr = (m) => { if (errEl) { errEl.textContent = m; errEl.classList.remove('hidden'); } };
+          if (!mensaje) return setErr('Escribe un mensaje antes de enviar.');
+          const { error } = await dbClient.from('soporte').insert({ user_id: currentUser.id, email, mensaje });
+          if (error) return setErr('No se pudo enviar: ' + error.message + '. Revisa las políticas RLS de "soporte".');
+          closeModal();
+          triggerConfetti();
+          showToast('📨 Mensaje enviado. ¡Gracias por escribirnos!');
         }
+      }]
+    });
+  }
 
-        function getCompletionHTML() {
-            return `
-                <div class="text-center card-style w-full max-w-md mx-auto p-8 rounded-2xl animate-fade-in">
-                    <div class="mb-6 text-6xl animate-bounce">🎉</div>
-                    <h2 class="text-2xl font-bold font-heading mb-4">¡Estás al día!</h2>
-                    <p class="text-slate-600 mb-8">Has repasado todas las palabras de este grupo.</p>
-                    <button id="btn-reload" class="w-full btn-primary py-4 rounded-xl font-bold text-lg shadow-lg hover:opacity-90 transition transform hover:scale-105">
-                        <i class="fas fa-sync-alt ml-2"></i> Volver a comprobar
-                    </button>
-                </div>`;
+  /* ============================================================
+     13.6. MAZO — tu propio grupo de palabras, guardado en Supabase
+     ------------------------------------------------------------
+     · Las palabras viven en la tabla "mazo" (una fila por palabra,
+       enlazada a "palabras" por word_id).
+     · El avance vive en la tabla "mazo_flujo" (JSON), igual que
+       "flujo" en profiles: puedes salirte y retomar donde ibas.
+     · El Excel solo hace falta la primera vez. Después basta la M.
+  ============================================================ */
+  let mazoSession = null;
+  let mazoCount = 0;
+
+  // ---------- Lectura del mazo ----------
+  async function cargarMazo() {
+    const { data: filas, error } = await dbClient.from('mazo')
+      .select('id, ingles, espanol, word_id')
+      .eq('user_id', currentUser.id)
+      .order('created_at', { ascending: true });
+    if (error) { console.error('[mazo] no se pudo leer:', error.message); return { error, filas: [], words: [] }; }
+
+    const ids = (filas || []).filter(f => f.word_id).map(f => f.word_id);
+    let words = [];
+    if (ids.length) {
+      const { data } = await dbClient.from('palabras').select('*').in('id', ids);
+      words = data || [];
+    }
+
+    // Mazos guardados antes de existir word_id: se buscan por nombre y se reparan solos.
+    const sinId = (filas || []).filter(f => !f.word_id);
+    if (sinId.length) {
+      const halladas = await buscarPalabrasMazo(sinId.map(f => f.ingles));
+      sinId.forEach(f => {
+        const w = halladas.find(x => (x.ingles || '').toLowerCase() === (f.ingles || '').toLowerCase());
+        if (w) {
+          words.push(w);
+          dbClient.from('mazo').update({ word_id: w.id }).eq('id', f.id).then(() => {});
         }
+      });
+    }
 
-        function addFlashcardEventListeners() {
-            // Usamos delegación de eventos si fuera posible, pero direct ID es rápido aquí
-            document.getElementById('pronounce-btn').onclick = () => {
-                if (currentWord && currentWord.audio) new Audio(currentWord.audio).play();
-            };
-            document.getElementById('phonetic-btn').onclick = () => {
-                document.getElementById('card-phonetic').classList.remove('hidden'); 
-            };
-            
-            const handleResponse = (isEasy) => {
-                // UI Feedback inmediato (opacidad) para que el usuario sienta rapidez
-                document.getElementById('flashcard-container').style.opacity = '0.5';
-                updateWordProgress(currentWord.id, isEasy); // Async en background
-                renderFlow1_Flashcards(); // Pasa a la siguiente
-            };
-            
-            document.getElementById('btn-easy').onclick = () => handleResponse(true);
-            document.getElementById('btn-hard').onclick = () => handleResponse(false);
+    // Mismo orden en que las cargó la persona
+    const orden = new Map((filas || []).map((f, k) => [(f.ingles || '').toLowerCase(), k]));
+    words.sort((a, b) => (orden.get((a.ingles || '').toLowerCase()) ?? 999) - (orden.get((b.ingles || '').toLowerCase()) ?? 999));
+    return { filas: filas || [], words };
+  }
+
+  // Busca palabras del Excel en la tabla "palabras" (tolerante a mayúsculas).
+  async function buscarPalabrasMazo(listaIngles) {
+    const unicas = [...new Set(listaIngles.map(w => (w || '').toString().trim()).filter(Boolean))];
+    if (!unicas.length) return [];
+    const variantes = [...new Set(unicas.flatMap(w => [
+      w, w.toLowerCase(), w.toUpperCase(),
+      w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()
+    ]))];
+    const { data, error } = await dbClient.from('palabras').select('*').in('ingles', variantes);
+    if (error) { console.error('[mazo] error buscando palabras:', error.message); return []; }
+    const vistos = new Set(); const out = [];
+    (data || []).forEach(w => {
+      const k = (w.ingles || '').toLowerCase();
+      if (!vistos.has(k)) { vistos.add(k); out.push(w); }
+    });
+    return out;
+  }
+
+  // ---------- Flujo del mazo (tabla mazo_flujo) ----------
+  async function leerMazoFlujo() {
+    const { data, error } = await dbClient.from('mazo_flujo').select('flujo')
+      .eq('user_id', currentUser.id).maybeSingle();
+    if (error) { console.warn('[mazo] flujo:', error.message); return null; }
+    return data?.flujo || null;
+  }
+  function estadoMazo() {
+    const ms = mazoSession;
+    if (!ms) return { pendiente: false };
+    return {
+      pendiente: true,
+      phase: ms.phase,
+      index: ms.index,
+      correct: ms.correct,
+      wrong: ms.wrong,
+      ids: ms.words.map(w => w.id),
+      queue: (ms.queue || []).map(q => ({ id: q.word.id, type: q.type })),
+      total: ms.words.length,
+      updated: new Date().toISOString()
+    };
+  }
+  function guardarMazoFlujo() {
+    if (!currentUser) return;
+    dbClient.from('mazo_flujo')
+      .upsert({ user_id: currentUser.id, flujo: estadoMazo(), updated_at: new Date().toISOString() }, { onConflict: 'user_id' })
+      .then(({ error }) => { if (error) console.warn('[mazo] no se pudo guardar el avance:', error.message); });
+  }
+  async function limpiarMazoFlujo() {
+    await dbClient.from('mazo_flujo').delete().eq('user_id', currentUser.id);
+  }
+
+  // ---------- Insignia del botón "M" ----------
+  async function refreshMazoBadge() {
+    if (!currentUser) return 0;
+    const { count } = await dbClient.from('mazo')
+      .select('id', { count: 'exact', head: true }).eq('user_id', currentUser.id);
+    mazoCount = count || 0;
+    const b = document.getElementById('mazo-badge');
+    if (b) {
+      b.textContent = mazoCount > 99 ? '99+' : mazoCount;
+      b.classList.toggle('hidden', mazoCount === 0);
+      b.classList.toggle('flex', mazoCount > 0);
+    }
+    const m = document.getElementById('mazo-menu-count');
+    if (m) m.textContent = mazoCount ? `${mazoCount} palabras` : '';
+    return mazoCount;
+  }
+
+  // ---------- Botón "M": entra directo, sin Excel ----------
+  async function abrirMazoRapido() {
+    if (!currentUser) return;
+    const { words, error } = await cargarMazo();
+    if (error) { showToast('⚠️ No se pudo leer tu mazo.'); return openMazo(); }
+    if (!words.length) {
+      showToast('🃏 Tu mazo está vacío: carga un Excel una sola vez.');
+      return openMazo();
+    }
+    const guardado = await leerMazoFlujo();
+    if (guardado && guardado.pendiente && (guardado.index || 0) > 0) {
+      const hechas = guardado.phase === 'practice' ? (guardado.total || words.length) + guardado.index : guardado.index;
+      const totales = (guardado.total || words.length) * 2;
+      return showModal({
+        icon: '🃏', title: 'Tienes un mazo a medias',
+        body: `Ibas en el paso <b>${Math.min(hechas, totales)}</b> de ${totales}. ¿Sigues donde lo dejaste?`,
+        actions: [
+          { label: 'Continuar 👉', onClick: () => { closeModal(); startMazoPractice(words, guardado); } },
+          { label: 'Empezar de nuevo', style: 'bg-slate-100 text-slate-500', onClick: async () => { closeModal(); await limpiarMazoFlujo(); startMazoPractice(words); } }
+        ]
+      });
+    }
+    startMazoPractice(words);
+  }
+
+  // ---------- Panel del mazo ----------
+  async function openMazo() {
+    showModal({ icon: '🃏', title: 'Mi Mazo', size: 'lg', body: `<div id="mz-body" class="text-left">${spinnerHTML()}</div>`, actions: [] });
+    const el = document.getElementById('mz-body');
+    if (!el) return;
+
+    const { filas, words } = await cargarMazo();
+    const tiene = words.length > 0;
+    const huerfanas = filas.filter(f => !words.some(w => (w.ingles || '').toLowerCase() === (f.ingles || '').toLowerCase()));
+
+    el.innerHTML = `
+      ${tiene ? `
+        <div class="bg-orange-50 border-2 border-orange-200 rounded-xl p-3 mb-3">
+          <div class="flex items-center justify-between mb-2">
+            <p class="font-bold text-slate-700 text-sm">Tu mazo · <b>${words.length}</b> palabra(s)</p>
+            <button id="mz-vaciar" class="text-[10px] font-bold text-slate-400 hover:text-red-500 transition">Vaciar</button>
+          </div>
+          <div class="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto mb-3">
+            ${words.map(w => `<span class="text-[11px] font-bold px-2 py-1 rounded-full bg-white border border-slate-200 text-slate-500 flex items-center gap-1">${escapeHTML(w.ingles)}<button class="mz-del text-slate-300 hover:text-red-500" data-w="${escapeHTML(w.ingles)}" title="Quitar">&times;</button></span>`).join('')}
+          </div>
+          <button id="mz-practicar" class="btn-juice bg-[#FF7A00] text-white font-bold py-2.5 rounded-xl w-full">🎯 Practicar mi mazo</button>
+          <p class="text-[10px] text-slate-400 text-center mt-2">Atajo: el botón <b class="text-[#FF7A00]">M</b> de arriba lo abre directo.</p>
+        </div>` : ''}
+
+      ${huerfanas.length ? `<p class="text-[11px] text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5 mb-3">${huerfanas.length} palabra(s) de tu mazo no están en la base de datos y no se pueden practicar: ${escapeHTML(huerfanas.slice(0, 4).map(f => f.ingles).join(', '))}${huerfanas.length > 4 ? '…' : ''}</p>` : ''}
+
+      <div class="bg-slate-50 rounded-xl p-3 mb-3 text-sm text-slate-500 space-y-1">
+        <p class="font-bold text-slate-700 mb-1">📋 ${tiene ? 'Añadir más palabras' : 'Crea tu mazo en 3 pasos'}</p>
+        <p>1️⃣ Un Excel con una columna llamada <b class="text-slate-700">ingles</b>.</p>
+        <p>2️⃣ Una palabra en inglés por fila (ej: <i>dog, house, water...</i>).</p>
+        <p>3️⃣ Cárgalo: las palabras quedan <b>guardadas</b> y el Excel ya no hace falta nunca más. ✨</p>
+      </div>
+
+      <label class="block w-full text-center btn-juice bg-slate-800 text-white font-bold py-3 rounded-xl cursor-pointer">
+        <i class="fas fa-file-excel mr-2"></i>${tiene ? 'Añadir palabras desde Excel' : 'Cargar Excel'}
+        <input id="mz-file" type="file" accept=".xlsx,.xls,.csv" class="hidden">
+      </label>
+      <p id="mz-status" class="text-xs text-slate-500 font-bold mt-3 text-center min-h-[1rem]"></p>
+      <div id="mz-actions" class="mt-3"></div>`;
+
+    const btn = document.getElementById('mz-practicar');
+    if (btn) btn.onclick = () => { closeModal(); abrirMazoRapido(); };
+
+    const vaciar = document.getElementById('mz-vaciar');
+    if (vaciar) vaciar.onclick = () => {
+      showModal({
+        icon: '🗑️', title: '¿Vaciar el mazo?',
+        body: 'Se borran las <b>' + words.length + '</b> palabras guardadas. Tu progreso de memoria no se pierde.',
+        actions: [
+          { label: 'Sí, vaciar', style: 'bg-red-500 text-white', onClick: async () => {
+              await dbClient.from('mazo').delete().eq('user_id', currentUser.id);
+              await limpiarMazoFlujo();
+              await refreshMazoBadge();
+              closeModal(); showToast('🗑️ Mazo vacío.'); openMazo();
+            } },
+          { label: 'Cancelar', style: 'bg-slate-100 text-slate-500', onClick: () => openMazo() }
+        ]
+      });
+    };
+
+    el.querySelectorAll('.mz-del').forEach(b => {
+      b.onclick = async () => {
+        const palabra = b.dataset.w;
+        await dbClient.from('mazo').delete().eq('user_id', currentUser.id).ilike('ingles', palabra);
+        await refreshMazoBadge();
+        showToast(`Quitada: ${escapeHTML(palabra)}`, 1500);
+        openMazo();
+      };
+    });
+
+    const fileInput = document.getElementById('mz-file');
+    if (fileInput) fileInput.onchange = (e) => procesarExcelMazo(e.target.files[0]);
+  }
+
+  // ---------- Carga del Excel: AÑADE, no reemplaza ----------
+  async function procesarExcelMazo(file) {
+    const status = document.getElementById('mz-status');
+    const setSt = (html) => { if (status) status.innerHTML = html; };
+    if (!file) return;
+    if (!window.XLSX) return setSt('⚠️ No se pudo cargar el lector de Excel. Revisa tu conexión y recarga.');
+
+    try {
+      setSt('⏳ Leyendo el archivo...');
+      const wb = XLSX.read(await file.arrayBuffer());
+      const hoja = wb.Sheets[wb.SheetNames[0]];
+      const filas = XLSX.utils.sheet_to_json(hoja, { defval: '' });
+      if (!filas.length) return setSt('❌ El Excel está vacío.');
+
+      const clave = Object.keys(filas[0]).find(k => k.trim().toLowerCase().replace(/é/g, 'e') === 'ingles');
+      if (!clave) return setSt('❌ El Excel debe tener una columna llamada <b>ingles</b>.');
+
+      const lista = filas.map(f => (f[clave] || '').toString().trim()).filter(Boolean);
+      if (!lista.length) return setSt('❌ La columna "ingles" está vacía.');
+
+      setSt(`🔎 Buscando ${lista.length} palabra(s)...`);
+      const halladas = await buscarPalabrasMazo(lista);
+      if (!halladas.length) return setSt('❌ Ninguna de esas palabras existe en la base. Revisa la ortografía.');
+
+      // Se añaden solo las que aún no están (el índice único de Supabase también lo impide)
+      const { filas: yaGuardadas } = await cargarMazo();
+      const existentes = new Set(yaGuardadas.map(f => (f.ingles || '').toLowerCase()));
+      const nuevas = halladas.filter(w => !existentes.has((w.ingles || '').toLowerCase()));
+
+      if (nuevas.length) {
+        const { error: insErr } = await dbClient.from('mazo').insert(
+          nuevas.map(w => ({ user_id: currentUser.id, ingles: w.ingles, espanol: w.espanol, word_id: w.id }))
+        );
+        if (insErr) {
+          console.error('[mazo] insert:', insErr);
+          return setSt('❌ No se pudo guardar: ' + escapeHTML(insErr.message) +
+            '<br><span class="font-normal">Ejecuta <b>abulingo-supabase.sql</b> en Supabase.</span>');
         }
+      }
 
-        // --- 3. QUERIES DE DATOS (Optimizadas) ---
-        async function getNextWordForReview() {
-            const now = new Date().toISOString(); 
-            const group = userProfile.flujo.currentGroup;
-            
-            // Intenta traer la palabra de repaso
-            let { data: review } = await dbClient.from('user_word_progress')
-                .select(`srs_level, palabras!inner(*)`)
-                .eq('user_id', currentUser.id)
-                .eq('palabras.grupo', group)
-                .lte('next_review_at', now)
-                .order('next_review_at')
-                .limit(1)
-                .maybeSingle();
-            
-            if (review) return { ...review.palabras, srs_level: review.srs_level };
-            
-            // Si no hay repaso, busca nueva
-            // Optimización: Traer IDs vistos en una query ligera
-            const { data: seen } = await dbClient.from('user_word_progress').select('word_id').eq('user_id', currentUser.id);
-            const seenIds = seen && seen.length > 0 ? seen.map(w => w.word_id) : []; // Manejo seguro de array vacío
-            
-            let query = dbClient.from('palabras').select('*').eq('grupo', group);
-            
-            // Solo aplicamos el filtro NOT IN si hay vistos, para no romper la query
-            if (seenIds.length > 0) {
-                query = query.not('id', 'in', `(${seenIds.join(',')})`);
-            }
-            
-            const { data: newWord } = await query.order('id').limit(1).maybeSingle();
-            return newWord ? { ...newWord, srs_level: 0 } : null;
+      const repetidas = halladas.length - nuevas.length;
+      const faltantes = lista.filter(l => !halladas.some(w => (w.ingles || '').toLowerCase() === l.toLowerCase()));
+      await refreshMazoBadge();
+
+      setSt(`✅ <b>${nuevas.length}</b> palabra(s) añadidas a tu mazo` +
+        (repetidas ? ` · <span class="text-slate-400">${repetidas} ya estaban</span>` : '') +
+        (faltantes.length ? ` · <span class="text-slate-400">${faltantes.length} no existen en la base</span>` : ''));
+
+      const cont = document.getElementById('mz-actions');
+      const { words } = await cargarMazo();
+      if (cont) {
+        cont.innerHTML = `
+          <button id="mz-ahora" class="btn-juice bg-[#FF7A00] text-white font-bold py-2.5 rounded-xl w-full">🎯 Practicar ahora (${words.length})</button>
+          <button id="mz-luego" class="mt-2 w-full text-xs font-bold text-slate-400 hover:text-slate-600">Guardar y estudiar después (botón M)</button>`;
+        document.getElementById('mz-ahora').onclick = async () => { await limpiarMazoFlujo(); startMazoPractice(words); };
+        document.getElementById('mz-luego').onclick = () => { closeModal(); showToast('🃏 Guardado. Toca la <b>M</b> cuando quieras estudiarlo.'); };
+      }
+    } catch (err) {
+      console.error('[mazo] error leyendo el Excel:', err);
+      setSt('❌ No se pudo leer el archivo. ¿Es un Excel válido (.xlsx, .xls o .csv)?');
+    }
+  }
+
+  // ---------- Práctica del mazo (tarjetas → ejercicios) ----------
+  function startMazoPractice(words, guardado = null) {
+    closeModal();
+    const lbl = document.getElementById('nivel-label');
+    if (lbl) lbl.textContent = 'M';   // arriba se ve que estás en el mazo
+    words.forEach(w => { groupCache.map[String(w.id)] = w; }); // para updateSRS e imágenes
+
+    if (guardado && guardado.pendiente) {
+      // Reanudar: mismo orden de palabras y misma cola de ejercicios
+      const porId = new Map(words.map(w => [w.id, w]));
+      const orden = (guardado.ids || []).map(id => porId.get(id)).filter(Boolean);
+      const lista = orden.length ? orden : [...words];
+      const pool = lista.map(w => w.ingles);
+      const queue = (guardado.queue || [])
+        .map(q => { const w = porId.get(q.id); return w ? { word: w, type: q.type,
+          options: q.type === 'select_by_image' ? buildOptions(w.ingles, pool.length >= 4 ? pool : [w.ingles, 'yes', 'no', 'time']) : null } : null; })
+        .filter(Boolean);
+      mazoSession = {
+        words: lista, phase: guardado.phase || 'review', index: guardado.index || 0,
+        queue, correct: guardado.correct || 0, wrong: guardado.wrong || 0
+      };
+      showToast('🃏 Retomamos donde ibas.');
+      return nextMazoStep();
+    }
+
+    mazoSession = { words: [...words].sort(() => Math.random() - 0.5), phase: 'review', index: 0, queue: [], correct: 0, wrong: 0 };
+    guardarMazoFlujo();
+    renderMessage('🃏', '¡Tu mazo personalizado!',
+      `Vamos con <b>${words.length}</b> palabra(s) de tu mazo: primero tarjetas ✨ y luego ejercicios 👁️👂.<br>Su progreso también entra a tu memoria espaciada. 🧠<br><span class="text-xs text-slate-400">Si sales, retomas donde ibas.</span>`,
+      '¡Empezar! 🚀', () => nextMazoStep());
+  }
+
+  async function nextMazoStep() {
+    const ms = mazoSession;
+    if (!ms) return runFlow();
+
+    // Fase 1: tarjetas
+    if (ms.phase === 'review') {
+      if (ms.index >= ms.words.length) {
+        ms.phase = 'practice'; ms.index = 0;
+        const pool = ms.words.map(w => w.ingles);
+        const opciones = (w) => buildOptions(w.ingles, pool.length >= 4 ? pool : [w.ingles, 'yes', 'no', 'time']);
+        // También aquí: los dos ejercicios por palabra, para que puedan dominarse.
+        const r1 = ms.words.filter(w => w.imagen).map(w => ({ word: w, type: 'select_by_image', options: opciones(w) }));
+        const r2 = ms.words.map(w => ({ word: w, type: 'write_by_audio', options: null }));
+        r1.sort(() => Math.random() - 0.5); r2.sort(() => Math.random() - 0.5);
+        ms.queue = [...r1, ...r2];
+        guardarMazoFlujo();
+        showEncouragement(() => nextMazoStep());
+        return;
+      }
+      const w = ms.words[ms.index];
+      updateProgressBar((ms.index / (ms.words.length * 2)) * 100);
+      appContainer.innerHTML = flashcardHTML(w, ms.index + 1, ms.words.length);
+      bindFlashcard(w, async (res) => {
+        await updateSRS(w.id, res, { type: 'flashcard' });
+        ms.index++;
+        guardarMazoFlujo();
+        nextMazoStep();
+      });
+      return;
+    }
+
+    // Fase 2: ejercicios
+    if (ms.index >= ms.queue.length) {
+      const c = ms.correct, f = ms.wrong, total = ms.words.length;
+      mazoSession = null;
+      await limpiarMazoFlujo();
+      const lbl = document.getElementById('nivel-label');
+      if (lbl) lbl.textContent = flujo.currentNivel;
+      playSound('complete'); triggerConfetti();
+      showModal({
+        icon: '🃏', title: '¡Mazo completado!',
+        body: `<span class="text-green-600 font-bold">${c} aciertos</span> · <span class="text-slate-400">${f} fallos</span> de ${total} palabras.<br>Ya entraron a tu ciclo de memoria espaciada. 🧠`,
+        dismissable: false,
+        actions: [
+          { label: 'Practicar de nuevo 🔁', onClick: async () => { closeModal(); const { words } = await cargarMazo(); startMazoPractice(words); } },
+          { label: 'Volver a mis lecciones', style: 'bg-slate-100 text-slate-500', onClick: () => { closeModal(); runFlow(); } }
+        ]
+      });
+      return;
+    }
+
+    const ex = ms.queue[ms.index];
+    updateProgressBar(((ms.words.length + ms.index) / (ms.words.length + ms.queue.length)) * 100);
+    const avanzar = async (ok, type) => {
+      if (ok) ms.correct++; else ms.wrong++;
+      await updateSRS(ex.word.id, ok ? 'practice_correct' : 'practice_wrong', { type });
+      ms.index++;
+      guardarMazoFlujo();
+      setTimeout(() => nextMazoStep(), ok ? 1000 : 2000);
+    };
+    if (ex.type === 'select_by_image') renderSelectImage(ex.word, ex.options, (ok) => avanzar(ok, 'select_by_image'));
+    else renderWriteAudio(ex.word, (ok) => avanzar(ok, 'write_by_audio'));
+  }
+
+  /* ============================================================
+     14. PANTALLAS AUXILIARES
+  ============================================================ */
+  function renderMessage(icon, title, html, actionLabel, onAction) {
+    appContainer.innerHTML = `
+      <div class="card-3d p-10 text-center animate-pop mt-6">
+        <div class="text-6xl mb-4">${icon}</div>
+        <h1 class="text-2xl font-heading font-bold text-slate-800 mb-2">${title}</h1>
+        <p class="text-slate-500 mb-6">${html}</p>
+        ${actionLabel ? `<button id="msg-action" class="btn-juice bg-[#FF7A00] text-white font-bold py-3 px-8 rounded-xl text-lg">${actionLabel}</button>` : ''}
+      </div>`;
+    if (actionLabel && onAction) document.getElementById('msg-action').onclick = onAction;
+  }
+
+  /* ============================================================
+     15. BARRA SUPERIOR (Pro + IA + Club + Perfil)
+  ============================================================ */
+  document.querySelectorAll('#top-bar button[data-tool]').forEach(btn => {
+    btn.onclick = () => {
+      const tool = btn.dataset.tool;
+      if (tool === 'ia') openAbuChat();
+      else showProModal(); // gramática / pronunciación / club / traductor
+    };
+  });
+  document.getElementById('nivel-btn').onclick = openNivelSelector;
+  //document.getElementById('mazo-btn').onclick = abrirMazoRapido;
+
+  // Menú de perfil (dropdown)
+  const profileBtn = document.getElementById('profile-menu-button');
+  const profileDropdown = document.getElementById('profile-menu-dropdown');
+  profileBtn.onclick = (e) => {
+    e.stopPropagation();
+    profileDropdown.classList.toggle('hidden');
+    ocultarPistaPerfil();   // ya entendió que aquí se abre el menú
+  };
+
+  // Globo de ayuda del avatar: se muestra una sola vez, hasta que lo abra.
+  function ocultarPistaPerfil(guardar = true) {
+    const hint = document.getElementById('profile-hint');
+    if (hint) hint.classList.add('hidden');
+    const caret = document.getElementById('profile-caret');
+    if (caret) caret.classList.remove('menu-hint');
+    if (guardar && flujo) {
+      if (!flujo.ui) flujo.ui = {};
+      if (!flujo.ui.menuHintSeen) { flujo.ui.menuHintSeen = true; updateUserFlow(); }
+    }
+  }
+  function mostrarPistaPerfil() {
+    if (flujo?.ui?.menuHintSeen) { ocultarPistaPerfil(false); return; }
+    const hint = document.getElementById('profile-hint');
+    if (!hint) return;
+    setTimeout(() => hint.classList.remove('hidden'), 900);
+    setTimeout(() => hint.classList.add('hidden'), 11000);   // no molesta para siempre
+  }
+  document.addEventListener('click', (e) => {
+    if (!profileDropdown.contains(e.target) && !profileBtn.contains(e.target)) profileDropdown.classList.add('hidden');
+  });
+
+  // Opciones del menú de perfil
+  document.querySelectorAll('[data-menu]').forEach(btn => {
+    btn.onclick = () => {
+      profileDropdown.classList.add('hidden');
+      const m = btn.dataset.menu;
+      if (m === 'ranking-global') openRankingGlobal();
+      else if (m === 'ranking-equipo') openRankingEquipo();
+      else if (m === 'progreso-nivel') openProgresoNivel();
+      else if (m === 'mazo') openMazo();
+      else if (m === 'soporte') openSoporte();
+    };
+  });
+  document.getElementById('logout-btn').onclick = async () => {
+    await dbClient.auth.signOut();
+    window.location.href = 'index.html';
+  };
+
+  // Rellena los datos del menú de perfil
+  function fillProfileMenu() {
+    const nombre = (userProfile.full_name || 'Mi Perfil');
+    document.getElementById('user-name-dropdown').textContent = nombre;
+    document.getElementById('user-email-dropdown').textContent = currentUser.email || '';
+    document.getElementById('user-points').textContent = userProfile.points || 0;
+    document.getElementById('user-lingots').textContent = userProfile.lingots || 0;
+  }
+
+  /* ============================================================
+     16. ARRANQUE
+  ============================================================ */
+  document.addEventListener('DOMContentLoaded', async () => {
+    try {
+      const { data: { session } } = await dbClient.auth.getSession();
+      if (!session) { window.location.href = 'index.html'; return; }
+      currentUser = session.user;
+
+      let { data: profile } = await dbClient.from('profiles').select('*').eq('id', currentUser.id).maybeSingle();
+
+      // Auto-reparación: si el perfil no existe todavía, lo creamos con los datos del registro.
+      if (!profile) {
+        const meta = currentUser.user_metadata || {};
+        const { data: creado, error: upErr } = await dbClient
+          .from('profiles')
+          .upsert({
+            id: currentUser.id,
+            full_name: meta.full_name || null,
+            phone: meta.phone || null,
+            english_group: meta.english_group || null,
+            nivel: meta.nivel || 'A1',
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'id' })
+          .select().single();
+
+        if (upErr || !creado) {
+          console.error('No se pudo crear/leer el perfil:', upErr);
+          renderMessage('⚠️', 'Perfil no encontrado',
+            'No pudimos crear tu perfil automáticamente. Probablemente faltan las políticas RLS de la tabla <b>profiles</b>. Aplica el SQL de configuración y vuelve a intentar.');
+          return;
         }
+        profile = creado;
+      }
 
-        async function initApp() {
-            // Verificar sesión
-            const { data: { session } } = await dbClient.auth.getSession();
-            if (!session) { window.location.href = 'index.html'; return; }
-            
-            currentUser = session.user;
+      userProfile = profile;
+      flujo = userProfile.flujo;
+      document.getElementById('user-points-display').textContent = userProfile.points || 0;
+      fillProfileMenu();
 
-            // PARALELIZACIÓN: Cargar Perfil y Datos Iniciales al mismo tiempo
-            // No esperamos al perfil para cargar la UI si es posible, pero aquí lo necesitamos para el Grupo
-            const profilePromise = dbClient.from('profiles').select('*').eq('id', currentUser.id).single();
-            
-            const [profileResult] = await Promise.all([profilePromise]);
-            
-            if (profileResult.error) {
-                console.error("Error perfil", profileResult.error);
-                return;
-            }
-
-            userProfile = profileResult.data;
-
-            // Actualizar HUD inmediatamente
-            DOM.pointsHud.classList.remove('hidden');
-            DOM.pointsDisplay.textContent = userProfile.points || 0;
-            const userNameNav = document.getElementById('user-name-nav');
-            if(userNameNav) userNameNav.textContent = userProfile.full_name || 'Estudiante';
-
-            // Iniciar flujo
-            await renderFlow1_Flashcards();
-        }
-
-        // Ejecutar inmediatamente al cargar
-        initApp();
-
-    </script>
-    
-    <script src="js/igual1.js" defer></script> 
+      await ensureFlujo();
+      updateStreakUI();
+      refreshMazoBadge();      // insignia del botón "M"
+      mostrarPistaPerfil();    // "toca tu foto" la primera vez
+      await runFlow();
+    } catch (e) {
+      console.error(e);
+      renderMessage('😵', 'Algo salió mal', 'Ocurrió un error al cargar tu sesión. Recarga la página.');
+    }
+  });
+</script>
 </body>
 </html>
