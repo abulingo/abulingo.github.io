@@ -206,6 +206,7 @@ function openAbuChat() {
 
   // Enlace para la conversión a Pro (mismo que usa la landing)
   const PRO_UPGRADE_URL = 'https://wa.me/573163748711';
+  const ABULINGO_URL = 'https://abulingo.github.io/';   // se usa al invitar y al compartir
 
   // Algoritmo de memorización espaciada (tipo SM-2 simplificado)
   const SRS_INTERVALS_DAYS = [0.007, 1, 2, 4, 8, 15, 30, 60]; // días por nivel de SRS
@@ -502,9 +503,65 @@ function openAbuChat() {
       title: 'Función Pro',
       body: 'Este espacio está reservado para los usuarios <b>Pro</b>. Mejora tu plan para desbloquear gramática guiada, análisis de pronunciación y traductor inteligente.',
       actions: [
-        { label: 'Ver planes Pro ✨', onClick: () => window.open(PRO_UPGRADE_URL, '_blank') },
+        { label: 'Ver planes Pro ✨', onClick: () => openPlanesPro('modal_pro') },
         { label: 'Ahora no', style: 'bg-slate-100 text-slate-500', onClick: closeModal }
       ]
+    });
+  }
+
+  /* ------------------------------------------------------------
+     PLANES PRO
+     Cada clic queda registrado en la tabla "pro_clicks" (usuario +
+     fecha + de dónde vino + qué plan miró), para saber cuánta gente
+     se interesa y por cuál plan.
+  ------------------------------------------------------------ */
+  async function registrarClickPro(origen, plan = null) {
+    if (!currentUser) return;
+    const { error } = await dbClient.from('pro_clicks').insert({
+      user_id: currentUser.id,
+      email: currentUser.email || null,
+      origen,          // de dónde salió el clic
+      plan,            // 'gratis' | 'plus' | 'pro' | null (solo abrió los planes)
+      nivel: flujo?.currentNivel || null,
+      puntos: userProfile?.points || 0
+    });
+    if (error) console.warn('[pro] no se pudo registrar el clic:', error.message);
+  }
+
+  function openPlanesPro(origen = 'menu') {
+    registrarClickPro(origen);   // se guarda aunque no elija ningún plan
+
+    const plan = (nombre, precio, subtitulo, extra) => `
+      <div class="rounded-2xl border-2 ${extra?.destacado ? 'border-[#FF7A00] relative' : 'border-slate-200'} bg-white p-4 text-left">
+        ${extra?.destacado ? '<span class="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-[#FF7A00] text-white text-[10px] font-black px-3 py-0.5 rounded-full whitespace-nowrap">MÁS POPULAR</span>' : ''}
+        <h3 class="font-heading font-bold text-xl text-slate-800">${nombre}</h3>
+        <p class="text-slate-400 text-xs mb-1">${subtitulo}</p>
+        ${extra?.nota ? `<p class="text-slate-400 text-[11px] mb-1">${extra.nota}</p>` : ''}
+        <p class="font-heading font-bold text-4xl text-slate-800 my-2">$${precio}<span class="text-sm text-slate-400 font-medium"> USD/mes</span></p>
+        <button class="plan-btn w-full py-2.5 rounded-xl font-bold ${extra?.destacado ? 'btn-juice bg-[#FF7A00] text-white' : 'border border-slate-300 text-slate-600 hover:bg-slate-50'} transition"
+          data-plan="${extra?.id}" data-url="${extra?.url || ''}">${extra?.cta}</button>
+      </div>`;
+
+    showModal({
+      icon: '✨', title: 'Planes de Abulingo', size: 'lg',
+      body: `
+        <p class="text-slate-500 text-sm text-center mb-4">Todos los precios están en <b>dólares estadounidenses (USD)</b>.</p>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center">
+          ${plan('Gratis', '0', 'Para empezar a explorar', { id: 'gratis', cta: 'Ya lo tienes ✓' })}
+          ${plan('Plus', '5', 'Para hablar con fluidez', { id: 'plus', cta: 'Elegir plan Plus', destacado: true, nota: 'Pago anual', url: PRO_UPGRADE_URL })}
+          ${plan('Pro', '20', 'Para dominar el idioma', { id: 'pro', cta: 'Contactar', url: PRO_UPGRADE_URL })}
+        </div>
+        <p class="text-[11px] text-slate-400 text-center mt-4">Al elegir un plan te escribimos por WhatsApp para activarlo.</p>`,
+      actions: [{ label: 'Ahora no', style: 'bg-slate-100 text-slate-500', onClick: closeModal }]
+    });
+
+    document.querySelectorAll('.plan-btn').forEach(b => {
+      b.onclick = () => {
+        const id = b.dataset.plan;
+        registrarClickPro(origen, id);
+        if (id === 'gratis') { closeModal(); return showToast('😄 Ya estás en el plan Gratis. ¡A seguir aprendiendo!'); }
+        if (b.dataset.url) window.open(b.dataset.url, '_blank', 'noopener');
+      };
     });
   }
 
@@ -1017,24 +1074,40 @@ function openAbuChat() {
   /* ============================================================
      9. PASO 2 — PRÁCTICA (audio→escribir  /  imagen→elegir)
   ============================================================ */
+  /*
+    CADA palabra lleva SUS DOS ejercicios: 👁️ Identifica la imagen y 👂 Escucha y escribe.
+    Esto es lo que permite marcarla como DOMINADA a la primera: updateSRS exige el
+    primer intento correcto de AMBOS tipos (más "Fácil" en la tarjeta y cero fallos).
+    Con un solo ejercicio por palabra ese requisito nunca se cumplía y casi nada
+    llegaba a "dominada".
+    Las palabras sin imagen solo llevan el de audio; para ellas el dominio no
+    exige el ejercicio de imagen.
+    Orden: primero la ronda de imágenes, después la de dictados. Así los dos
+    ejercicios de una misma palabra quedan separados, que es como mejor se fija.
+  */
   async function buildPracticeQueue(nivel, group) {
     const words = await getGroupWords(nivel, group);
     const englishPool = words.map(w => w.ingles);
 
-    const queue = words.map(w => {
-      const canImage = !!w.imagen;
-      // Si no hay imagen, forzamos "escribir por audio" (el audio tiene fallback por voz).
-      const type = (canImage && Math.random() > 0.5) ? 'select_by_image' : 'write_by_audio';
-      return {
-        word_id: w.id,
-        type,
-        options: type === 'select_by_image' ? buildOptions(w.ingles, englishPool) : null
-      };
-    }).sort(() => Math.random() - 0.5);
+    const ronda1 = [], ronda2 = [];
+    words.forEach(w => {
+      if (w.imagen) {
+        ronda1.push({ word_id: w.id, type: 'select_by_image', options: buildOptions(w.ingles, englishPool) });
+      }
+      // El audio tiene respaldo por voz del navegador, así que siempre se puede.
+      ronda2.push({ word_id: w.id, type: 'write_by_audio', options: null });
+    });
+    ronda1.sort(() => Math.random() - 0.5);
+    ronda2.sort(() => Math.random() - 0.5);
 
     const g = flujo.niveles[nivel].grupos[group];
-    g.practice = { done: false, queue, index: 0 };
+    g.practice = { done: false, queue: [...ronda1, ...ronda2], index: 0 };
     await updateUserFlow();
+  }
+
+  // Cuántos ejercicios debería tener el grupo con la regla de dos por palabra
+  function tamanoEsperadoCola(words) {
+    return words.length + words.filter(w => w.imagen).length;
   }
 
   function buildOptions(correct, pool) {
@@ -1051,8 +1124,11 @@ function openAbuChat() {
 
     // Construir la cola si no existe, o regenerarla si quedó obsoleta
     // (p. ej. word_id que ya no pertenecen a este grupo).
+    const colaCompleta = g.practice.queue && g.practice.queue.length >= tamanoEsperadoCola(words);
     const queueOk = g.practice.queue && g.practice.queue.length &&
-      g.practice.queue.every(ex => validIds.has(String(ex.word_id)));
+      g.practice.queue.every(ex => validIds.has(String(ex.word_id))) &&
+      // Colas viejas (una sola práctica por palabra): se rehacen si aún no empezó
+      (colaCompleta || (g.practice.index || 0) > 0);
     if (!queueOk) {
       console.warn(`[renderPractice] cola inválida/obsoleta en ${nivel}/${group} → regenerando`);
       g.practice.index = 0;
@@ -1332,6 +1408,7 @@ function openAbuChat() {
   let aiChat = [];                 // historial [{role:'user'|'assistant', content}]
   let chatWords = [];              // palabras objetivo de esta charla
   let chatSession = null;          // { nivel, group, counts, count, goal, used:Set, streak }
+  let chatModoLocalAvisado = false; // para avisar una sola vez si falla la Edge Function
 
   // Últimas N palabras estudiadas (con registro SRS), ordenadas por fecha de estudio.
   async function getStudiedWords(max = 10) {
@@ -1381,7 +1458,9 @@ function openAbuChat() {
         });
         let payload = null;
         try { payload = await resp.json(); } catch { /* respuesta no JSON */ }
-        if (!resp.ok || payload?.error) throw new Error(payload?.detail || payload?.error || `Error ${resp.status}`);
+        if (!resp.ok || payload?.error) {
+          throw new Error(`${payload?.error || 'HTTP ' + resp.status}${payload?.motivo ? ' · ' + payload.motivo : ''}`);
+        }
         const en = (payload?.reply?.en || '').trim();
         if (!en) throw new Error('respuesta vacía');
         return payload.reply;
@@ -1395,17 +1474,115 @@ function openAbuChat() {
     return null;
   }
 
-  // Respuesta local de respaldo: mantiene la charla viva si la red falla.
-  function abuFallback() {
-    const noUsadas = chatWords.filter(w => !chatSession?.used.has(norm(w)));
-    const w = (noUsadas[0] || chatWords[Math.floor(Math.random() * chatWords.length)] || 'English');
-    const opciones = [
-      { en: `Nice! Can you use "${w}" in a sentence?`, es: `¡Bien! ¿Puedes usar "${w}" en una frase?` },
-      { en: `Cool! Tell me more. Why?`, es: `¡Genial! Cuéntame más. ¿Por qué?` },
-      { en: `Great! And do you like "${w}"?`, es: `¡Muy bien! ¿Y te gusta "${w}"?` },
-      { en: `I like that! What do you do after that?`, es: `¡Me gusta! ¿Y qué haces después?` }
-    ];
-    return opciones[Math.floor(Math.random() * opciones.length)];
+  /*
+    Diagnóstico rápido. Abre la consola del navegador (F12) y escribe:
+        await pingAbu()
+    Te dice si la clave de DeepSeek existe, si responde y en cuántos ms.
+  */
+  window.pingAbu = async function () {
+    const { data: { session } } = await dbClient.auth.getSession();
+    const r = await fetch(`${SUPABASE_URL}/functions/v1/generar-dialogo`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${session?.access_token || SUPABASE_ANON_KEY}`
+      },
+      body: JSON.stringify({ mode: 'ping' })
+    });
+    const j = await r.json().catch(() => ({ error: 'respuesta no JSON', status: r.status }));
+    console.log(j.ok ? '✅ Abu responde bien:' : '❌ Abu no responde:', j);
+    return j;
+  };
+
+  /* ------------------------------------------------------------
+     GUION LOCAL DE ABU
+     Se usa cuando la Edge Function no contesta (sin conexión, API
+     caída o clave vencida). Antes soltaba frases sueltas y repetía
+     "¿te gusta 'we'?", que además no tiene sentido con pronombres.
+     Ahora es una conversación de verdad: reacciona a lo que escribió
+     el estudiante, nunca repite pregunta y cada 3 turnos le pide usar
+     una palabra del grupo en una frase.
+  ------------------------------------------------------------ */
+  const ABU_GUION = [
+    { id: 'today',   en: "What did you do today?",             es: "¿Qué hiciste hoy?",                       tips: ['I worked.', 'I studied English.', 'Nothing special 😅'] },
+    { id: 'family',  en: "Who do you live with?",              es: "¿Con quién vives?",                       tips: ['With my family.', 'I live alone.', 'With my friends.'] },
+    { id: 'work',    en: "Do you work or study?",              es: "¿Trabajas o estudias?",                   tips: ['I work.', 'I study.', 'Both! 😅'] },
+    { id: 'food',    en: "What food do you like?",             es: "¿Qué comida te gusta?",                   tips: ['I like pizza.', 'Rice and chicken.', 'Everything! 😄'] },
+    { id: 'weekend', en: "What do you do on weekends?",        es: "¿Qué haces los fines de semana?",         tips: ['I rest at home.', 'I go out.', 'I see my family.'] },
+    { id: 'city',    en: "Where are you from?",                es: "¿De dónde eres?",                         tips: ["I'm from Colombia.", 'From Bogotá.', 'A small town.'] },
+    { id: 'why',     en: "Why do you learn English?",          es: "¿Por qué aprendes inglés?",               tips: ['For my job.', 'To travel ✈️', 'I like it.'] },
+    { id: 'music',   en: "What music do you listen to?",       es: "¿Qué música escuchas?",                   tips: ['I like rock.', 'Reggaeton 🔥', 'All kinds.'] },
+    { id: 'travel',  en: "Where do you want to travel?",       es: "¿A dónde quieres viajar?",                tips: ['To the USA.', 'To Europe.', 'Anywhere! 😄'] },
+    { id: 'morning', en: "What time do you wake up?",          es: "¿A qué hora te levantas?",                tips: ['At six.', 'Very early 😴', 'Late on Sundays.'] },
+    { id: 'pet',     en: "Do you have a pet?",                 es: "¿Tienes mascota?",                        tips: ['Yes, a dog 🐶', "No, I don't.", 'I want one!'] },
+    { id: 'movie',   en: "What was the last movie you saw?",   es: "¿Cuál fue la última película que viste?", tips: ['A comedy.', "I don't remember 😅", 'A horror movie.'] },
+    { id: 'friend',  en: "Tell me about your best friend.",    es: "Cuéntame de tu mejor amigo.",             tips: ['He is funny.', 'She is very kind.', 'We study together.'] },
+    { id: 'dream',   en: "What is your dream job?",            es: "¿Cuál es el trabajo de tus sueños?",      tips: ['A doctor.', "I don't know yet.", 'Something with computers.'] },
+    { id: 'plans',   en: "What are your plans for tomorrow?",  es: "¿Qué planes tienes para mañana?",         tips: ['I work.', 'I rest.', 'I study English.'] }
+  ];
+
+  const alAzar = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+  // Reacción corta a lo último que escribió el estudiante (así se siente escuchado)
+  function reaccionAbu(texto, usadas) {
+    const t = (texto || '').toLowerCase().trim();
+    if (usadas && usadas.length) return { en: `Perfect use of "${usadas[0]}"! 🎯`, es: `¡Perfecto uso de "${usadas[0]}"! 🎯` };
+    if (/don'?t know|no s[eé]|idk|ni idea/.test(t))     return { en: 'No problem! 😄', es: '¡No pasa nada! 😄' };
+    if (/hard|difficult|dif[ií]cil/.test(t))            return { en: "I know, but you're doing great! 💪", es: '¡Lo sé, pero lo haces muy bien! 💪' };
+    if (/easy|f[aá]cil/.test(t))                        return { en: 'That’s the spirit! 🔥', es: '¡Ese es el ánimo! 🔥' };
+    if (/^(yes|yeah|yep|sure|of course)/.test(t))       return { en: 'Great! 😄', es: '¡Genial! 😄' };
+    if (/^(no|nope|not really|never)/.test(t))          return { en: 'Okay! 👌', es: '¡Está bien! 👌' };
+    if (t.split(/\s+/).length >= 6)                     return { en: 'Wow, great sentence! 🔥', es: '¡Wow, gran frase! 🔥' };
+    return alAzar([
+      { en: 'Nice!', es: '¡Bien!' }, { en: 'Cool!', es: '¡Genial!' },
+      { en: 'Love it!', es: '¡Me encanta!' }, { en: 'So good!', es: '¡Muy bien!' },
+      { en: 'Awesome!', es: '¡Excelente!' }
+    ]);
+  }
+
+  function abuFallback(textoUsuario = '', usadas = []) {
+    const cs = chatSession;
+    if (cs && !cs.guionUsado) cs.guionUsado = new Set();
+    const hechas = cs?.guionUsado || new Set();
+    const turno = cs?.count || 0;
+    const r = reaccionAbu(textoUsuario, usadas);
+
+    // Último mensaje: despedida, sin preguntas
+    if (cs && turno >= cs.goal) {
+      return {
+        en: `${r.en} You did an amazing job today. See you soon! 👋`,
+        es: `${r.es} Hiciste un trabajo increíble hoy. ¡Nos vemos pronto! 👋`,
+        tips: ['Thank you! 😄', 'See you, Abu!', 'Bye bye 👋']
+      };
+    }
+
+    // Cada 3 turnos: reto con una palabra del grupo. Se lleva registro de
+    // cuáles ya se pidieron para no repetir siempre la misma.
+    if (cs && !cs.retadas) cs.retadas = new Set();
+    const retadas = cs?.retadas || new Set();
+    const sinUsar = chatWords.filter(w => !cs?.used.has(norm(w)));
+    const libre = sinUsar.find(w => !retadas.has(norm(w))) || sinUsar[0];
+    if (libre && turno > 0 && turno % 3 === 0) {
+      retadas.add(norm(libre));
+      const reto = alAzar([
+        { en: `Now use "${libre}" in a sentence 💪`,        es: `Ahora usa "${libre}" en una frase 💪` },
+        { en: `Try a sentence with "${libre}" 👀`,          es: `Intenta una frase con "${libre}" 👀` },
+        { en: `Show me "${libre}" in a sentence! 🔥`,       es: `¡Muéstrame "${libre}" en una frase! 🔥` },
+        { en: `Your turn: a sentence with "${libre}" ✍️`,   es: `Te toca: una frase con "${libre}" ✍️` }
+      ]);
+      return {
+        en: `${r.en} ${reto.en}`,
+        es: `${r.es} ${reto.es}`,
+        tips: ['Let me try...', "It's hard 😅", 'Can you help me?']
+      };
+    }
+
+    // Siguiente pregunta del guion que todavía no se haya hecho
+    const pendientes = ABU_GUION.filter(q => !hechas.has(q.id));
+    const sig = pendientes.length ? alAzar(pendientes) : ABU_GUION[turno % ABU_GUION.length];
+    hechas.add(sig.id);
+    return { en: `${r.en} ${sig.en}`, es: `${r.es} ${sig.es}`, tips: sig.tips };
   }
 
   /*
@@ -1634,7 +1811,15 @@ function openAbuChat() {
         goal: cs.goal
       });
       typing.remove();
-      if (!reply) reply = abuFallback();
+      if (!reply) {
+        reply = abuFallback(text, nuevas);
+        // Aviso único: si sale, la Edge Function no está respondiendo.
+        if (!chatModoLocalAvisado) {
+          chatModoLocalAvisado = true;
+          console.warn('[Abu] sin respuesta de la Edge Function → guion local. Revisa los logs de generar-dialogo en Supabase.');
+          showToast('📴 Abu está respondiendo en modo básico.', 2600);
+        }
+      }
 
       addChatBubble('ai', { en: reply.en, es: reply.es || '', fix: reply.fix || '' });
       aiChat.push({ role: 'assistant', content: reply.en });
@@ -1782,8 +1967,14 @@ function openAbuChat() {
 
     const btnComp = document.getElementById('eq-compartir');
     if (btnComp) btnComp.onclick = async () => {
-      const texto = `¡Únete a mi equipo "${eq?.nombre_equipo || ''}" en Abulingo! 🛡️\nEntra a Ranking de Equipo y escribe este código: ${codigo}`;
-      if (navigator.share) { try { await navigator.share({ text: texto }); return; } catch { /* canceló */ } }
+      const texto = `¡Únete a mi equipo "${eq?.nombre_equipo || ''}" en Abulingo! 🛡️\n\n` +
+        `1. Entra a ${ABULINGO_URL}\n` +
+        `2. Abre "Ranking de Equipo" en tu perfil\n` +
+        `3. Escribe este código: ${codigo}\n\n` +
+        `¡Te espero para aprender inglés juntos! 🔥`;
+      if (navigator.share) {
+        try { await navigator.share({ title: 'Abulingo', text: texto, url: ABULINGO_URL }); return; } catch { /* canceló */ }
+      }
       try { await navigator.clipboard.writeText(texto); showToast('📋 Invitación copiada. ¡Pégala en WhatsApp!'); }
       catch { copiar(); }
     };
@@ -1926,12 +2117,6 @@ function openAbuChat() {
         <div class="bg-blue-50 rounded-xl p-3 text-center"><div class="text-2xl font-black text-blue-600">${estudiadas}</div><div class="text-[10px] font-bold text-slate-400 uppercase">Ya estudiadas</div></div>
         <div class="bg-green-50 rounded-xl p-3 text-center"><div class="text-2xl font-black text-green-600">${dominadas}</div><div class="text-[10px] font-bold text-slate-400 uppercase">Dominadas 🏅</div></div>
         <div class="bg-orange-50 rounded-xl p-3 text-center"><div class="text-2xl font-black text-[#FF7A00]">${pendientes}</div><div class="text-[10px] font-bold text-slate-400 uppercase">Por repasar hoy</div></div>
-      </div>
-      <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 mb-4 text-[11px] text-slate-500 space-y-1.5 leading-snug">
-        <p><b class="text-blue-600">Ya estudiadas</b> · palabras que ya viste al menos una vez, así que ya tienen ficha de memoria. Cuentan aunque las hayas fallado.</p>
-        <p><b class="text-green-600">Dominadas 🏅</b> · las que ya viven en tu memoria a largo plazo y <b>no vuelven a "¡Toca repasar!"</b>. Se logra de dos formas: acertando todo a la primera (tarjeta «Fácil» + imagen + dictado sin ningún fallo), o subiendo los ${SRS_INTERVALS_DAYS.length} escalones de repaso espaciado (hasta ${SRS_INTERVALS_DAYS[SRS_INTERVALS_DAYS.length - 1]} días entre repasos).</p>
-        <p><b class="text-[#FF7A00]">Por repasar hoy</b> · estudiadas a las que ya les toca refuerzo para que no se olviden.</p>
-        <p class="text-slate-400">Toda palabra dominada estuvo antes estudiada, por eso «dominadas» nunca supera a «estudiadas».</p>
       </div>
       <div class="mb-3">
         <div class="flex justify-between text-[10px] font-bold text-slate-400 mb-1"><span>DOMINADAS</span><span>${pctDom}% · te falta ${100 - pctDom}%</span></div>
@@ -2293,10 +2478,12 @@ function openAbuChat() {
       if (ms.index >= ms.words.length) {
         ms.phase = 'practice'; ms.index = 0;
         const pool = ms.words.map(w => w.ingles);
-        ms.queue = ms.words.map(w => {
-          const type = (w.imagen && Math.random() > 0.5) ? 'select_by_image' : 'write_by_audio';
-          return { word: w, type, options: type === 'select_by_image' ? buildOptions(w.ingles, pool.length >= 4 ? pool : [w.ingles, 'yes', 'no', 'time']) : null };
-        }).sort(() => Math.random() - 0.5);
+        const opciones = (w) => buildOptions(w.ingles, pool.length >= 4 ? pool : [w.ingles, 'yes', 'no', 'time']);
+        // También aquí: los dos ejercicios por palabra, para que puedan dominarse.
+        const r1 = ms.words.filter(w => w.imagen).map(w => ({ word: w, type: 'select_by_image', options: opciones(w) }));
+        const r2 = ms.words.map(w => ({ word: w, type: 'write_by_audio', options: null }));
+        r1.sort(() => Math.random() - 0.5); r2.sort(() => Math.random() - 0.5);
+        ms.queue = [...r1, ...r2];
         guardarMazoFlujo();
         showEncouragement(() => nextMazoStep());
         return;
@@ -2334,7 +2521,7 @@ function openAbuChat() {
     }
 
     const ex = ms.queue[ms.index];
-    updateProgressBar(((ms.words.length + ms.index) / (ms.words.length * 2)) * 100);
+    updateProgressBar(((ms.words.length + ms.index) / (ms.words.length + ms.queue.length)) * 100);
     const avanzar = async (ok, type) => {
       if (ok) ms.correct++; else ms.wrong++;
       await updateSRS(ex.word.id, ok ? 'practice_correct' : 'practice_wrong', { type });
