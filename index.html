@@ -36,7 +36,7 @@
 
     <header class="fixed top-0 left-0 w-full bg-white/80 backdrop-blur-lg py-4 z-50 border-b border-blue-100">
         <div class="container mx-auto flex justify-between items-center px-6">
-            <a href="#" class="text-3xl font-bold font-heading">Abulingo<span style="color: #FF7A00;">.</span></a>
+            <a href="#" class="text-2xl sm:text-3xl font-bold font-heading">Abulingo<span style="color: #FF7A00;">.</span></a>
             <nav class="hidden md:flex items-center space-x-6">
                 <a href="#features" class="text-slate-600 hover:text-[#0D47A1] transition font-semibold">Características</a>
                 <a href="#ciencia" class="text-slate-600 hover:text-[#0D47A1] transition font-semibold">Método</a>
@@ -51,9 +51,18 @@
                     <button id="logout-btn" class="bg-red-100 text-[#D32F2F] font-bold px-5 py-2 rounded-full text-sm hover:bg-red-200 transform transition">Salir</button>
                 </div>
             </nav>
-            <button id="menu-button" class="md:hidden text-[#0D47A1]" aria-label="Abrir menú" aria-expanded="false">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"/></svg>
-            </button>
+            <div class="flex items-center gap-2 md:hidden">
+                <div id="mobile-auth-buttons" class="flex items-center gap-2">
+                    <button class="auth-btn-login text-slate-600 hover:text-[#0D47A1] transition font-semibold text-sm whitespace-nowrap">Entrar</button>
+                    <button class="auth-btn-signup btn-primary px-3 py-2 rounded-full text-xs font-bold whitespace-nowrap">Registrarse</button>
+                </div>
+                <div id="mobile-user-badge" class="hidden items-center">
+                    <button id="mobile-logout-top" class="bg-red-100 text-[#D32F2F] font-bold px-3 py-2 rounded-full text-xs">Salir</button>
+                </div>
+                <button id="menu-button" class="text-[#0D47A1]" aria-label="Abrir menú" aria-expanded="false">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"/></svg>
+                </button>
+            </div>
         </div>
     </header>
 
@@ -328,7 +337,7 @@
                     </select>
                 </div>
                 <div>
-                    <label for="signup-email" class="block text-sm font-medium text-slate-600 mb-1">Correo (para verificar tu cuenta)</label>
+                    <label for="signup-email" class="block text-sm font-medium text-slate-600 mb-1">Correo Electrónico</label>
                     <input type="email" id="signup-email" autocomplete="email" class="w-full input-field" required>
                 </div>
                 <div>
@@ -368,6 +377,8 @@
         const userNameSpan = document.getElementById('user-name');
         const mobileMenu = document.getElementById('mobile-menu');
         const menuButton = document.getElementById('menu-button');
+        const mobileAuthButtons = document.getElementById('mobile-auth-buttons');
+        const mobileUserBadge = document.getElementById('mobile-user-badge');
 
         const openModal = (modal) => modal.classList.remove('hidden');
         const closeModal = (modal) => modal.classList.add('hidden');
@@ -435,26 +446,50 @@
                     }
                 });
 
-                if (error) {
-                    msgEl.textContent = `Error: ${error.message}`;
+                const showError = (texto) => {
+                    msgEl.textContent = texto;
                     msgEl.className = 'text-sm mt-4 text-center text-feedback-error';
+                };
+                const yaRegistrado = () => showError('Este correo ya está registrado. Inicia sesión con tu PIN.');
+
+                if (error) {
+                    const m = (error.message || '').toLowerCase();
+                    if (m.includes('already registered') || m.includes('already been registered') || m.includes('user already exists')) {
+                        yaRegistrado();
+                    } else {
+                        showError(`Error: ${error.message}`);
+                    }
                     return;
                 }
 
-                // Si la confirmación por correo está DESACTIVADA, hay sesión inmediata
-                // y podemos guardar el perfil ahora mismo. Si está ACTIVADA, el trigger
-                // de la base de datos (ver notas) creará el perfil al confirmar el correo.
-                if (data.session && data.user) {
-                    await upsertProfile(data.user, { full_name: name, phone, english_group: group });
+                // Supabase no siempre devuelve error cuando el correo ya existe:
+                // en ese caso regresa un usuario con la lista "identities" vacía.
+                if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+                    yaRegistrado();
+                    return;
                 }
 
-                msgEl.textContent = '¡Registro exitoso! Revisa tu correo para verificar la cuenta.';
+                // Ya no hay confirmación por correo: iniciamos sesión y entramos directo.
+                let session = data.session;
+                if (!session) {
+                    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+                        email: email,
+                        password: password
+                    });
+                    if (signInError) {
+                        showError('Cuenta creada, pero no se pudo entrar automáticamente. Inicia sesión manualmente.');
+                        return;
+                    }
+                    session = signInData.session;
+                }
+
+                if (session && session.user) {
+                    await upsertProfile(session.user, { full_name: name, phone, english_group: group });
+                }
+
+                msgEl.textContent = '¡Cuenta creada! Entrando...';
                 msgEl.className = 'text-sm mt-4 text-center text-feedback-success';
-                e.target.reset();
-                setTimeout(() => {
-                    closeModal(signupModal);
-                    msgEl.textContent = '';
-                }, 4000);
+                window.location.href = 'abulingo.html';
             });
 
             // INICIO DE SESIÓN
@@ -476,11 +511,7 @@
                 });
 
                 if (error) {
-                    if (error.message.includes("Email not confirmed")) {
-                         errEl.textContent = "Debes verificar tu correo antes de iniciar sesión.";
-                    } else {
-                         errEl.textContent = "Correo o PIN incorrectos.";
-                    }
+                    errEl.textContent = "Correo o PIN incorrectos.";
                     return;
                 }
 
@@ -498,6 +529,11 @@
             // GESTIÓN DE UI
             const updateUI = async (user) => {
                 const isLoggedIn = !!user;
+                if (mobileAuthButtons) mobileAuthButtons.classList.toggle('hidden', isLoggedIn);
+                if (mobileUserBadge) {
+                    mobileUserBadge.classList.toggle('hidden', !isLoggedIn);
+                    mobileUserBadge.classList.toggle('flex', isLoggedIn);
+                }
                 loggedOutNav.classList.toggle('hidden', isLoggedIn);
                 loggedInNav.classList.toggle('hidden', !isLoggedIn);
                 loggedInNav.classList.toggle('flex', isLoggedIn);
@@ -526,13 +562,15 @@
                         <button id="mobile-logout-btn" class="w-full bg-red-100 text-[#D32F2F] font-bold py-2 rounded-lg text-sm">Salir</button>`;
                 } else {
                     userNameSpan.textContent = '';
-                    mobileNavHTML += `
-                        <button class="auth-btn-login w-full text-slate-700 hover:text-[#0D47A1] transition py-2 font-semibold">Iniciar Sesión</button>
-                        <button class="auth-btn-signup w-full btn-primary font-bold py-2 rounded-lg text-sm">Registrarse</button>`;
                 }
                 mobileMenu.innerHTML = mobileNavHTML;
 
                 if (isLoggedIn) document.getElementById('mobile-logout-btn').addEventListener('click', () => supabase.auth.signOut());
+                const topLogout = document.getElementById('mobile-logout-top');
+                if (topLogout && !topLogout.dataset.bound) {
+                    topLogout.dataset.bound = '1';
+                    topLogout.addEventListener('click', () => supabase.auth.signOut());
+                }
                 mobileMenu.querySelectorAll('.auth-btn-login').forEach(btn => btn.addEventListener('click', () => { openModal(loginModal); mobileMenu.classList.add('hidden'); }));
                 mobileMenu.querySelectorAll('.auth-btn-signup').forEach(btn => btn.addEventListener('click', () => { openModal(signupModal); mobileMenu.classList.add('hidden'); }));
                 mobileMenu.querySelectorAll('a').forEach(a => a.addEventListener('click', () => mobileMenu.classList.add('hidden')));
