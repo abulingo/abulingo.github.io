@@ -214,6 +214,21 @@ function openAbuChat() {
   const GRADUATED_LEVEL = SRS_INTERVALS_DAYS.length - 1; // al llegar aquí la palabra se considera dominada
   const SRS_SESSION_MAX = 30;   // máximo de palabras por sesión de "¡Toca repasar!"
 
+  /* ── Control de repeticiones y palabras DIFÍCILES ─────────────
+     · SRS_MAX_SHOWS_PER_DAY: una misma palabra NO aparece en repaso
+       más de este número de veces el mismo día (antes "would" podía
+       salir 4+ veces y cansaba).
+     · Las palabras marcadas "Difícil" o con fallos se consideran
+       DIFÍCILES: vuelven en la MITAD del tiempo (se repiten más),
+       aunque completes bien las tres prácticas, hasta que las
+       aciertes DIFFICULT_CLEAR_STREAK veces seguidas.               */
+  const SRS_MAX_SHOWS_PER_DAY   = 2;    // máx. apariciones de la MISMA palabra por día
+  const SRS_FAIL_GAP_MIN        = 30;   // tras un fallo, espera mínima (minutos) para reaparecer
+  const SRS_OK_GAP_H            = 20;   // tras acertar (palabra normal), no vuelve antes de ~20 h
+  const SRS_OK_DIFFICULT_GAP_H  = 4;    // tras acertar una DIFÍCIL, puede volver el mismo día (a las 4 h)
+  const DIFFICULT_INTERVAL_FACTOR = 0.5; // las difíciles vuelven en la mitad del intervalo normal
+  const DIFFICULT_CLEAR_STREAK  = 3;    // aciertos seguidos para que deje de ser "difícil"
+
   /* ╔══════════════════════════════════════════════════════════════╗
      ║  LÍMITE DE PALABRAS NUEVAS  —  EDITA SOLO ESTAS DOS LÍNEAS   ║
      ╠══════════════════════════════════════════════════════════════╣
@@ -226,7 +241,7 @@ function openAbuChat() {
   const NEW_WORDS_PER_TANDA  = 1000;
   const NEW_WORDS_COOLDOWN_H = 12;
 
-  const CHAT_GOAL = 3;         // mensajes que debes enviar para completar la charla con Abu
+  const CHAT_GOAL = 10;         // mensajes que debes enviar para completar la charla con Abu
   const DAILY_GOAL_POINTS = 60; // meta diaria de puntos → recompensa (1 lingot)
   const CEFR_ORDER = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
   const NIVELES_FIJOS = ['A1', 'A2', 'B1', 'B2']; // siempre visibles en el selector
@@ -497,6 +512,53 @@ function openAbuChat() {
     });
   }
 
+  /* ------------------------------------------------------------
+     TUTORIAL DE BIENVENIDA (solo la primera vez)
+     Serie de modales que explican cómo funciona la página. Se marca
+     flujo.ui.tutorialSeen para no volver a mostrarlo.
+  ------------------------------------------------------------ */
+  const TUTORIAL_PASOS = [
+    { icon: '👋', title: '¡Bienvenido a Abulingo!',
+      body: `Aquí aprenderás inglés con un método de <b>memoria espaciada</b>: repasas cada palabra justo antes de que tu cerebro la olvide.<br><br>Te mostramos en <b>1 minuto</b> cómo funciona todo. 🚀` },
+    { icon: '✨', title: 'Paso 1 · Repaso',
+      body: `Verás <b>tarjetas</b> con cada palabra: su imagen, pronunciación 🔊 y significado.<br><br>Toca <b class="text-green-600">Fácil</b> si ya la conoces o <b class="text-red-500">Difícil</b> si te cuesta. Las difíciles se repetirán <b>más veces</b> hasta que las domines. 🧠` },
+    { icon: '👁️👂', title: 'Paso 2 · Práctica',
+      body: `Después vienen dos ejercicios <b>en orden aleatorio</b>:<br><br>👁️ <b>Identifica la imagen</b>: elige la palabra correcta (¡y escucha su pronunciación!).<br>👂 <b>Escucha y escribe</b>: escribe lo que oyes.<br><br>Si fallas, la palabra volverá más seguido para reforzarla. 💪` },
+    { icon: '💬', title: 'Paso 3 · Habla con Abu',
+      body: `Al final de cada grupo chateas con <b>Abu</b> 🦉.<br><br>Tus palabras nuevas aparecen <b>debajo de la caja de mensajes</b>: úsalas en tus respuestas y gana puntos extra. Abu también las usará y te corregirá con cariño. ✏️` },
+    { icon: '🧠', title: 'Tu memoria a largo plazo',
+      body: `Cuando toque repasar, verás <b>"¡Toca repasar!"</b>: son palabras que tu memoria está a punto de olvidar.<br><br>Domínalas completando bien los tres tipos de práctica y se <b>graduarán</b> 🎓.<br><br>🔥 Mantén tu <b>racha diaria</b> y cumple la <b>meta de puntos</b> para ganar 💎 lingots.` },
+    { icon: '🎯', title: '¡Todo listo!',
+      body: `Recuerda: constancia > cantidad. Con <b>10 minutos al día</b> tu inglés despega.<br><br>¿Empezamos con tus primeras palabras? 😄` }
+  ];
+
+  function mostrarTutorial(alTerminar) {
+    const finalizar = async () => {
+      if (!flujo.ui) flujo.ui = {};
+      flujo.ui.tutorialSeen = true;
+      await updateUserFlow();
+      closeModal();
+      if (alTerminar) alTerminar();
+    };
+    const paso = (i) => {
+      const p = TUTORIAL_PASOS[i];
+      const ultimo = i === TUTORIAL_PASOS.length - 1;
+      const dots = TUTORIAL_PASOS.map((_, j) =>
+        `<span class="inline-block w-2 h-2 rounded-full mx-0.5 ${j === i ? 'bg-[#FF7A00]' : 'bg-slate-200'}"></span>`).join('');
+      showModal({
+        icon: p.icon, title: p.title,
+        body: `${p.body}<div class="mt-5">${dots}</div>`,
+        dismissable: false,
+        actions: [
+          { label: ultimo ? '¡Empezar a aprender! 🚀' : 'Siguiente 👉', onClick: () => ultimo ? finalizar() : paso(i + 1) },
+          // SE ELIMINA LO DE SALTARSE EL TUTORIAL
+          //...(ultimo ? [] : [{ label: 'Saltar tutorial', style: 'bg-slate-100 text-slate-400', onClick: finalizar }])
+        ]
+      });
+    };
+    paso(0);
+  }
+
   function showProModal() {
     showModal({
       icon: '🔒',
@@ -568,10 +630,39 @@ function openAbuChat() {
   /* ============================================================
      4. PERSISTENCIA (flujo + puntos + SRS)
   ============================================================ */
+  /*
+    GUARDADO DEL AVANCE (a prueba de recargas):
+    · Cada cambio se respalda AL INSTANTE en localStorage (síncrono),
+      así aunque recargues o cierres antes de que termine el guardado
+      en la nube, tu avance NO se pierde ni vuelves al inicio.
+    · Luego se sube a Supabase con un reintento; si aun así falla,
+      se avisa con un toast (antes fallaba en silencio y al recargar
+      todo lo estudiado volvía a aparecer desde cero).
+    · Al arrancar, si el respaldo local es MÁS RECIENTE que lo que hay
+      en la nube, se restaura el local y se re-sube.
+  */
+  const flujoLSKey = () => `abulingo_flujo_${currentUser?.id || 'anon'}`;
+  function guardarFlujoLocal() {
+    if (!flujo || !currentUser) return;
+    try { localStorage.setItem(flujoLSKey(), JSON.stringify(flujo)); } catch { /* almacenamiento lleno */ }
+  }
+  // Respaldo extra al ocultar/cerrar la pestaña (síncrono: siempre alcanza a correr)
+  window.addEventListener('pagehide', guardarFlujoLocal);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') guardarFlujoLocal();
+  });
+
   async function updateUserFlow() {
+    flujo.savedAt = new Date().toISOString();
     userProfile.flujo = flujo;
-    const { error } = await dbClient.from('profiles').update({ flujo }).eq('id', currentUser.id);
-    if (error) console.error('Error guardando flujo:', error.message);
+    guardarFlujoLocal();   // respaldo inmediato: pase lo que pase, el avance queda
+    for (let intento = 0; intento < 2; intento++) {
+      const { error } = await dbClient.from('profiles').update({ flujo }).eq('id', currentUser.id);
+      if (!error) return;
+      console.error(`Error guardando flujo (intento ${intento + 1}):`, error.message);
+      if (intento === 0) await new Promise(r => setTimeout(r, 600));
+      else showToast('⚠️ No se pudo guardar tu avance en la nube. Quedó respaldado en este dispositivo.', 3500);
+    }
   }
 
   async function addPoints(points) {
@@ -619,9 +710,13 @@ function openAbuChat() {
     ensureDaily();
     const key = String(wordId);
     const isNew = !flujo.srs[key];
-    const s = flujo.srs[key] || { level: 0, ease: EASE_DEFAULT, reps: 0, lapses: 0, due: null, learned: false, easyFirst: false, first: {} };
+    const s = flujo.srs[key] || { level: 0, ease: EASE_DEFAULT, reps: 0, lapses: 0, due: null, learned: false, easyFirst: false, first: {}, difficult: false, okStreak: 0 };
     if (!s.first) s.first = {};
     if (isNew) flujo.daily.newWords = (flujo.daily.newWords || 0) + 1; // cuenta para el límite diario
+
+    // ── Contador de apariciones del día (evita "would" 4 veces en un día) ──
+    if (s.day !== todayStr()) { s.day = todayStr(); s.shownToday = 0; }
+    s.shownToday = (s.shownToday || 0) + 1;
 
     const ok = (result === 'easy' || result === 'correct' || result === 'practice_correct');
     const hard = (result === 'hard');
@@ -645,6 +740,12 @@ function openAbuChat() {
       s.reps++;
       s.ease = Math.min(EASE_MAX, s.ease + (result === 'easy' ? 0.15 : 0.08) + streakBonus);
       s.level = Math.min(s.level + 1, SRS_INTERVALS_DAYS.length - 1);
+      // Una DIFÍCIL deja de serlo tras varios aciertos seguidos.
+      s.okStreak = (s.okStreak || 0) + 1;
+      if (s.difficult && s.okStreak >= DIFFICULT_CLEAR_STREAK) {
+        s.difficult = false;
+        setTimeout(() => showToast('💪 ¡Le ganaste a una palabra difícil! Ya va a ritmo normal.'), 500);
+      }
       points = (result === 'easy' ? 12 : 10) + Math.min(sessionStreak, 8); // bono por racha
       if (Math.random() < 0.08) { points += 5; setTimeout(() => showToast('🎁 ¡Bonus sorpresa! +5 puntos extra'), 400); }
       playSound('correct'); triggerConfetti();
@@ -652,6 +753,8 @@ function openAbuChat() {
       s.reps++;
       s.ease = Math.max(EASE_MIN, s.ease - 0.15);
       // el nivel se mantiene
+      s.difficult = true;   // marcarla "Difícil" la mete al ciclo de refuerzo
+      s.okStreak = 0;
       points = 3;
     } else { // fallo
       sessionStreak = 0;
@@ -659,6 +762,8 @@ function openAbuChat() {
       s.lapses++;
       s.ease = Math.max(EASE_MIN, s.ease - 0.2);
       s.level = Math.max(0, s.level - 2); // retrocede 2 niveles (no castiga hasta cero: mejor experiencia)
+      s.difficult = true;   // fallar en cualquier práctica = necesita más repeticiones
+      s.okStreak = 0;
       points = 0;
       playSound('wrong');
     }
@@ -668,12 +773,14 @@ function openAbuChat() {
     const requiereImagen = word ? !!word.imagen : true;
     const imagenOk = !requiereImagen || s.first.select_by_image === true;
     const audioOk = s.first.write_by_audio === true;
-    if (!s.learned && s.easyFirst && imagenOk && audioOk && s.lapses === 0) {
+    // El dominio inmediato exige además NO estar marcada como difícil.
+    if (!s.learned && s.easyFirst && imagenOk && audioOk && s.lapses === 0 && !s.difficult) {
       s.learned = true;
       setTimeout(() => showToast('🏅 ¡Palabra dominada a la primera! No volverá a repaso.'), 600);
     }
     // Graduación normal: alcanzó el intervalo máximo del SRS.
-    if (!s.learned && s.level >= GRADUATED_LEVEL) {
+    // Las DIFÍCILES no se gradúan hasta demostrar aciertos seguidos (deja de ser difícil).
+    if (!s.learned && s.level >= GRADUATED_LEVEL && !s.difficult) {
       s.learned = true;
       setTimeout(() => showToast('🎓 ¡Palabra graduada! Ya vive en tu memoria a largo plazo.'), 600);
     }
@@ -682,8 +789,28 @@ function openAbuChat() {
       s.due = null; // dominada: fuera de "¡Toca repasar!" para siempre
     } else {
       const baseDays = SRS_INTERVALS_DAYS[s.level];
-      const days = Math.max(0.005, baseDays * (s.ease / EASE_DEFAULT));
-      s.due = new Date(Date.now() + days * 86400000).toISOString();
+      let days = Math.max(0.005, baseDays * (s.ease / EASE_DEFAULT));
+      // Las difíciles vuelven en la MITAD del tiempo: se repiten más
+      // aunque hayas completado bien ✨, 👁️ y 👂.
+      if (s.difficult) days = days * DIFFICULT_INTERVAL_FACTOR;
+
+      let dueMs = Date.now() + days * 86400000;
+
+      // Separación mínima para no ver la misma palabra en bucle:
+      //  · fallo → mínimo 30 min · acierto normal → ~20 h (mañana)
+      //  · acierto de una difícil → 4 h (puede reforzarse el mismo día, con tope)
+      const gapMs = ok
+        ? (s.difficult ? SRS_OK_DIFFICULT_GAP_H : SRS_OK_GAP_H) * 3600000
+        : SRS_FAIL_GAP_MIN * 60000;
+      dueMs = Math.max(dueMs, Date.now() + gapMs);
+
+      // Tope diario: si ya apareció SRS_MAX_SHOWS_PER_DAY veces hoy,
+      // se pospone hasta mañana en la mañana (aunque haya fallado).
+      if ((s.shownToday || 0) >= SRS_MAX_SHOWS_PER_DAY) {
+        const manana = new Date(); manana.setHours(24 + 7, 0, 0, 0); // mañana 7:00 am
+        dueMs = Math.max(dueMs, manana.getTime());
+      }
+      s.due = new Date(dueMs).toISOString();
     }
     s.updated = new Date().toISOString();
 
@@ -774,11 +901,16 @@ function openAbuChat() {
   // limita la sesión a SRS_SESSION_MAX (30) palabras.
   async function getDueReviews(nivel) {
     const now = Date.now();
+    const hoy = todayStr();
     const dueIds = Object.entries(flujo.srs)
       .filter(([, v]) => !v.learned && v.due && new Date(v.due).getTime() <= now)
+      // Tope diario: una palabra ya vista SRS_MAX_SHOWS_PER_DAY veces hoy no vuelve a salir hoy.
+      .filter(([, v]) => (v.day !== hoy) || ((v.shownToday || 0) < SRS_MAX_SHOWS_PER_DAY))
       .sort((a, b) => {
+        const da = a[1].difficult ? 1 : 0, db = b[1].difficult ? 1 : 0;
+        if (db !== da) return db - da; // primero las marcadas DIFÍCILES
         const la = a[1].lapses || 0, lb = b[1].lapses || 0;
-        if (lb !== la) return lb - la; // primero las que más cuestan
+        if (lb !== la) return lb - la; // luego las que más cuestan
         return new Date(a[1].due) - new Date(b[1].due); // luego las más vencidas
       })
       .map(([id]) => parseInt(id))
@@ -845,8 +977,12 @@ function openAbuChat() {
       if (s.learned === undefined) s.learned = false;
       if (!s.first) s.first = {};
       if (s.easyFirst === undefined) s.easyFirst = false;
-      // Palabras que ya alcanzaron el intervalo máximo se gradúan.
-      if (!s.learned && (s.level || 0) >= GRADUATED_LEVEL) { s.learned = true; s.due = null; }
+      // Campos nuevos del refuerzo de palabras difíciles y tope diario.
+      if (s.difficult === undefined) s.difficult = (s.lapses || 0) >= 2; // las que ya costaban entran al refuerzo
+      if (s.okStreak === undefined) s.okStreak = 0;
+      if (s.shownToday === undefined) { s.shownToday = 0; s.day = null; }
+      // Palabras que ya alcanzaron el intervalo máximo se gradúan (si no son difíciles).
+      if (!s.learned && (s.level || 0) >= GRADUATED_LEVEL && !s.difficult) { s.learned = true; s.due = null; }
     });
     if (flujo.version < 3) { flujo.version = 3; await updateUserFlow(); }
   }
@@ -1046,7 +1182,16 @@ function openAbuChat() {
           </button>
           <span id="txt-phonetic" class="hidden text-slate-500 font-mono text-base sm:text-lg bg-slate-100 px-3 py-1 rounded-lg border border-slate-200 tracking-wide">${fon}</span>
         </div>
-        <p class="text-xl sm:text-2xl text-slate-500 font-medium mb-4 border-b-2 border-slate-100 pb-3 inline-block px-8">${word.espanol}</p>
+
+        <!-- El significado en español también va OCULTO (como la fonética):
+             primero intentas recordarlo tú y luego lo revelas. Recordar
+             activamente fija mucho mejor la palabra. 🧠 -->
+        <div class="min-h-[3rem] mb-4 flex items-center justify-center border-b-2 border-slate-100 pb-3">
+          <button id="btn-show-es" class="text-slate-400 hover:text-slate-600 hover:bg-slate-100 text-xs font-bold border border-slate-200 rounded-full px-3 py-1 transition-all flex items-center gap-2">
+            <i class="fas fa-eye"></i> Ver en español
+          </button>
+          <span id="txt-es" class="hidden text-xl sm:text-2xl text-slate-500 font-medium px-8">${word.espanol}</span>
+        </div>
 
         <div class="grid grid-cols-2 gap-3">
           <button id="btn-hard" class="btn-juice bg-red-50 text-red-500 hover:bg-red-100 border-red-200 font-bold py-3 rounded-xl text-base sm:text-lg flex flex-col items-center gap-1">
@@ -1067,6 +1212,10 @@ function openAbuChat() {
     const btnP = document.getElementById('btn-show-phonetic');
     const txtP = document.getElementById('txt-phonetic');
     if (btnP && txtP) btnP.onclick = (e) => { e.stopPropagation(); btnP.classList.add('hidden'); txtP.classList.remove('hidden'); txtP.classList.add('animate-pop'); };
+    // Revelar el significado en español (mismo mecanismo que la fonética)
+    const btnEs = document.getElementById('btn-show-es');
+    const txtEs = document.getElementById('txt-es');
+    if (btnEs && txtEs) btnEs.onclick = (e) => { e.stopPropagation(); btnEs.classList.add('hidden'); txtEs.classList.remove('hidden'); txtEs.classList.add('animate-pop'); };
     document.getElementById('btn-easy').onclick = () => onRate('easy');
     document.getElementById('btn-hard').onclick = () => onRate('hard');
   }
@@ -1097,12 +1246,45 @@ function openAbuChat() {
       // El audio tiene respaldo por voz del navegador, así que siempre se puede.
       ronda2.push({ word_id: w.id, type: 'write_by_audio', options: null });
     });
-    ronda1.sort(() => Math.random() - 0.5);
-    ronda2.sort(() => Math.random() - 0.5);
-
+    // Ya NO va primero toda la ronda de imágenes y luego toda la de dictados:
+    // los dos tipos se INTERCALAN al azar, cuidando que los dos ejercicios de
+    // una misma palabra no queden pegados (así se fija mejor).
     const g = flujo.niveles[nivel].grupos[group];
-    g.practice = { done: false, queue: [...ronda1, ...ronda2], index: 0 };
+    g.practice = { done: false, queue: mezclarEjercicios([...ronda1, ...ronda2]), index: 0 };
     await updateUserFlow();
+  }
+
+  /*
+    Mezcla aleatoria de ejercicios evitando que la MISMA palabra
+    aparezca dos veces seguidas (sus dos ejercicios quedan separados).
+  */
+  function mezclarEjercicios(lista) {
+    const arr = [...lista];
+    // Fisher–Yates
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    // Separar repetidos adyacentes (varias pasadas y sin crear nuevos choques)
+    const idDe = (e) => String(e.word_id ?? e.word?.id ?? '');
+    for (let pasada = 0; pasada < 4; pasada++) {
+      let hubo = false;
+      for (let i = 1; i < arr.length; i++) {
+        if (idDe(arr[i]) !== idDe(arr[i - 1])) continue;
+        // Buscar en cualquier posición un candidato que no genere nueva adyacencia
+        const k = arr.findIndex((e, idx) => {
+          if (idx === i || idx === i - 1) return false;
+          if (idDe(e) === idDe(arr[i - 1])) return false;
+          const prev = arr[idx - 1], next = arr[idx + 1];
+          if (prev && idDe(prev) === idDe(arr[i])) return false;
+          if (next && idx + 1 !== i && idDe(next) === idDe(arr[i])) return false;
+          return true;
+        });
+        if (k !== -1) { [arr[i], arr[k]] = [arr[k], arr[i]]; hubo = true; }
+      }
+      if (!hubo) break;
+    }
+    return arr;
   }
 
   // Cuántos ejercicios debería tener el grupo con la regla de dos por palabra
@@ -1190,6 +1372,9 @@ function openAbuChat() {
       btn.onclick = (e) => {
         document.querySelectorAll('.option-btn').forEach(b => b.disabled = true);
         const val = e.currentTarget.dataset.val;
+        // Al elegir (bien o mal) se escucha la pronunciación de la palabra correcta:
+        // así el oído también aprende en este ejercicio.
+        setTimeout(() => playWordAudio(word), 350);
         if (val === word.ingles) {
           e.currentTarget.className = 'w-full bg-green-500 text-white font-bold text-lg py-4 rounded-xl shadow-lg border-none transform scale-105 transition mb-3';
           e.currentTarget.innerHTML = `${val} <i class='fas fa-check ml-2'></i>`;
@@ -1281,13 +1466,24 @@ function openAbuChat() {
       setTimeout(() => nextSrsReview(), fueBien ? 1000 : 2000);
     };
 
-    // Mezcla de formatos: tarjeta ✨ Repaso, imagen o dictado.
-    const r = Math.random();
-    if (esDebil || r < 0.34) {
-      // Tarjeta ✨ Repaso (flashcard) también dentro de "¡Toca repasar!"
+    /*
+      Mezcla ALEATORIA de formatos dentro de "¡Toca repasar!":
+      tarjeta ✨ Repaso, 👁️ Identifica la imagen y 👂 Escucha y escribe
+      salen al azar (sin un orden fijo). Así el usuario también puede
+      completar los ejercicios que le faltan para DOMINAR la palabra.
+      Si la palabra está muy débil, la tarjeta tiene un poco más de
+      probabilidad para volver a estudiarla, pero nunca es lo único.
+    */
+    const modos = ['flashcard', 'write_by_audio'];
+    if (word.imagen) modos.push('select_by_image');
+    let modo;
+    if (esDebil && Math.random() < 0.5) modo = 'flashcard';
+    else modo = modos[Math.floor(Math.random() * modos.length)];
+
+    if (modo === 'flashcard') {
       appContainer.innerHTML = flashcardHTML(word, srsSession.index + 1, srsSession.queue.length);
       bindFlashcard(word, (res) => avanzar(res, 'flashcard', res === 'easy'));
-    } else if (word.imagen && r < 0.67) {
+    } else if (modo === 'select_by_image') {
       const pool = (groupCache.list.length ? groupCache.list : srsSession.queue).map(w => w.ingles);
       renderSelectImage(word, buildOptions(word.ingles, pool.length >= 4 ? pool : [word.ingles, 'yes', 'no', 'time']),
         (ok) => avanzar(ok ? 'practice_correct' : 'practice_wrong', 'select_by_image', ok));
@@ -1388,22 +1584,9 @@ function openAbuChat() {
      Respuestas: Edge Function "generar-dialogo" (mode:"chat").
   ============================================================ */
   function chatPracticeIntro(nivel, group) {
-  showModal({
-    icon: '💬',
-    title: '¡Hora de hablar!',
-    body: 'Es momento de poner en práctica lo que aprendiste. Conversa con Abu e intenta usar las palabras de este grupo.',
-    dismissable: false,
-    actions: [
-      { 
-        label: 'Empezar a chatear 👉', 
-        onClick: () => {
-          // Llama a la función principal del chat pasando 'true' para que cuente el progreso
-          startChatPractice(nivel, group, true); 
-        } 
-      }
-    ]
-  });
-}
+    // Sin modal previo: la charla arranca de una vez.
+    startChatPractice(nivel, group, true);
+  }
   const CHAT_TIMEOUT_MS = 20000;   // con "thinking" desactivado la respuesta llega en 1-3 s
   let aiChat = [];                 // historial [{role:'user'|'assistant', content}]
   let chatWords = [];              // palabras objetivo de esta charla
@@ -1524,6 +1707,40 @@ function openAbuChat() {
 
   const alAzar = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
+  /* ------------------------------------------------------------
+     CORRECTOR LOCAL ✏️
+     Garantiza que SIEMPRE haya corrección cuando el estudiante
+     comete un error típico, aunque la Edge Function no responda
+     (la IA corrige mejor, pero esto es la red de seguridad).
+     Se muestra en la cajita ámbar "✏️" de la burbuja de Abu.
+  ------------------------------------------------------------ */
+  const CORRECCIONES_LOCALES = [
+    { re: /\bi\s+(is|are)\b/i,                         fix: 'Se dice "I am", no "I is / I are".' },
+    { re: /\bi\s+has\b/i,                              fix: 'Se dice "I have", no "I has".' },
+    { re: /\b(he|she|it)\s+have\b/i,                   fix: 'Con he/she/it es "has", no "have".' },
+    { re: /\b(he|she|it)\s+don'?t\b/i,                 fix: 'Con he/she/it es "doesn\'t", no "don\'t".' },
+    { re: /\bi\s+am\s+agree\b/i,                       fix: 'Se dice "I agree" (sin "am").' },
+    { re: /\bpeoples\b/i,                              fix: '"People" ya es plural: no lleva "s".' },
+    { re: /\bmore\s+(better|worse|bigger|easier|faster)\b/i, fix: 'El comparativo va solo: "better", "bigger"... sin "more".' },
+    { re: /\bfor\s+to\s+[a-z]/i,                       fix: 'Se dice "to + verbo", no "for to".' },
+    { re: /\bdont\b/i,                                 fix: 'No olvides el apóstrofo: "don\'t".' },
+    { re: /\bcant\b/i,                                 fix: 'No olvides el apóstrofo: "can\'t".' },
+    { re: /\bdoesnt\b/i,                               fix: 'No olvides el apóstrofo: "doesn\'t".' },
+    { re: /\bim\b/i,                                   fix: 'Se escribe "I\'m" (mayúscula y apóstrofo).' },
+    { re: /(^|\s)i(\s|[,.!?]|$)/,                      fix: 'El pronombre "I" siempre va en mayúscula.' },
+    { re: /\b(que|pero|porque|hola|gracias|bueno|entonces|también|tambien|estoy|tengo)\b/i, fix: 'Vi palabras en español: intenta escribirlo todo en inglés 😉' }
+  ];
+  function corregirLocal(texto) {
+    const t = (texto || '').trim();
+    if (!t) return '';
+    const errores = [];
+    for (const c of CORRECCIONES_LOCALES) {
+      if (c.re.test(t)) errores.push(c.fix);
+      if (errores.length >= 2) break;   // máximo 2 para no abrumar
+    }
+    return errores.join(' ');
+  }
+
   // Reacción corta a lo último que escribió el estudiante (así se siente escuchado)
   function reaccionAbu(texto, usadas) {
     const t = (texto || '').toLowerCase().trim();
@@ -1557,32 +1774,47 @@ function openAbuChat() {
       };
     }
 
-    // Cada 3 turnos: reto con una palabra del grupo. Se lleva registro de
-    // cuáles ya se pidieron para no repetir siempre la misma.
+    /*
+      Ya NO se le "ordena" al estudiante hacer una frase suelta
+      ("Try a sentence with X 👀"): eso rompía el hilo de la charla.
+      Ahora, cada 2 turnos, ABU MISMO usa una palabra pendiente dentro
+      de una frase natural y hace una pregunta relacionada, invitando
+      (no obligando) a responder con esa misma palabra. Las sugerencias
+      rápidas incluyen una respuesta lista que la usa, para que el flujo
+      de la conversación tenga sentido lógico.
+    */
     if (cs && !cs.retadas) cs.retadas = new Set();
     const retadas = cs?.retadas || new Set();
     const sinUsar = chatWords.filter(w => !cs?.used.has(norm(w)));
     const libre = sinUsar.find(w => !retadas.has(norm(w))) || sinUsar[0];
-    if (libre && turno > 0 && turno % 3 === 0) {
+    if (libre && turno > 0 && turno % 2 === 0) {
       retadas.add(norm(libre));
-      const reto = alAzar([
-        { en: `Now use "${libre}" in a sentence 💪`,        es: `Ahora usa "${libre}" en una frase 💪` },
-        { en: `Try a sentence with "${libre}" 👀`,          es: `Intenta una frase con "${libre}" 👀` },
-        { en: `Show me "${libre}" in a sentence! 🔥`,       es: `¡Muéstrame "${libre}" en una frase! 🔥` },
-        { en: `Your turn: a sentence with "${libre}" ✍️`,   es: `Te toca: una frase con "${libre}" ✍️` }
+      const charla = alAzar([
+        { en: `You know, I think learning English is never "${libre}" — it always surprises me 😄. What about you: is English "${libre}" for you?`,
+          es: `¿Sabes? Creo que aprender inglés nunca es "${libre}", siempre me sorprende 😄. ¿Y tú? ¿El inglés es "${libre}" para ti?`,
+          tips: [`Yes, it's very "${libre}" for me.`, `No, it's not "${libre}" at all.`, `Sometimes it feels "${libre}" 😅`] },
+        { en: `Today my coffee was really "${libre}" ☕😄. Can you describe something in your day with the word "${libre}"?`,
+          es: `Hoy mi café estuvo muy "${libre}" ☕😄. ¿Puedes describir algo de tu día con la palabra "${libre}"?`,
+          tips: [`My morning was "${libre}".`, `My work is "${libre}" today.`, `Nothing "${libre}" today 😅`] },
+        { en: `I love the word "${libre}" — I use it a lot when I talk about my week. How was your week? You can use "${libre}" in your answer 😉`,
+          es: `Me encanta la palabra "${libre}", la uso mucho cuando hablo de mi semana. ¿Cómo estuvo tu semana? Puedes usar "${libre}" en tu respuesta 😉`,
+          tips: [`My week was "${libre}"!`, `It was good, and very "${libre}".`, `A "${libre}" week, honestly.`] }
       ]);
       return {
-        en: `${r.en} ${reto.en}`,
-        es: `${r.es} ${reto.es}`,
-        tips: ['Let me try...', "It's hard 😅", 'Can you help me?']
+        en: `${r.en} ${charla.en}`,
+        es: `${r.es} ${charla.es}`,
+        tips: charla.tips
       };
     }
 
-    // Siguiente pregunta del guion que todavía no se haya hecho
+    // Siguiente pregunta del guion que todavía no se haya hecho.
+    // Una de las sugerencias siempre trae una palabra pendiente ya integrada.
     const pendientes = ABU_GUION.filter(q => !hechas.has(q.id));
     const sig = pendientes.length ? alAzar(pendientes) : ABU_GUION[turno % ABU_GUION.length];
     hechas.add(sig.id);
-    return { en: `${r.en} ${sig.en}`, es: `${r.es} ${sig.es}`, tips: sig.tips };
+    const tips = [...sig.tips];
+    if (libre) tips[tips.length - 1] = `It was "${libre}", I think 😄`;
+    return { en: `${r.en} ${sig.en}`, es: `${r.es} ${sig.es}`, tips };
   }
 
   /*
@@ -1608,8 +1840,17 @@ function openAbuChat() {
     else if (/\bwhat\b/.test(t))                           base = ['I like it.', "I'm not sure 🤔", 'Tell me more.'];
     else if (/\b(do|did|does|are|is|was|can|have|had|would|will) you\b/.test(t)) base = ['Yes, I do! 😄', "No, I don't.", 'Sometimes.'];
     else                                                    base = ['Yes! 😄', 'Really?', 'Tell me more.'];
-    // Una sugerencia siempre empuja a usar una palabra del grupo
-    if (libre) base = [...base.slice(0, 2), `What about "${libre}"?`];
+    // Una sugerencia siempre es una FRASE COMPLETA que usa una palabra
+    // pendiente del grupo, con sentido dentro de la conversación
+    // (antes era "What about X?", que no la usaba de verdad).
+    if (libre) {
+      const conPalabra = alAzar([
+        `For me, it's "${libre}".`,
+        `I think it was "${libre}".`,
+        `Honestly, quite "${libre}" 😄`
+      ]);
+      base = [...base.slice(0, 2), conPalabra];
+    }
     return base;
   }
 
@@ -1655,12 +1896,6 @@ function openAbuChat() {
           <button id="chat-exit" title="Salir" class="shrink-0 w-6 h-6 rounded-full text-slate-300 hover:text-slate-500 hover:bg-slate-100 transition text-sm">&times;</button>
         </div>
 
-        ${chips ? `
-        <div class="flex items-center gap-2 mb-2">
-          <div id="chat-chips" class="no-bar flex-1 flex gap-1.5 overflow-x-auto whitespace-nowrap py-0.5">${chips}</div>
-          <span class="text-[10px] font-bold text-slate-400 shrink-0"><span id="chat-usadas">0</span>/${chatWords.length}</span>
-        </div>` : ''}
-
         <div id="ai-messages" class="chat-scroll h-[46vh] min-h-[220px] overflow-y-auto p-2 space-y-2 mb-2 bg-slate-50 rounded-xl border border-slate-100"></div>
 
         <div id="chat-quick" class="no-bar flex gap-1.5 overflow-x-auto whitespace-nowrap mb-2 min-h-[26px]"></div>
@@ -1670,21 +1905,31 @@ function openAbuChat() {
             class="flex-1 min-w-0 bg-white border-2 border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-[#FF7A00] text-slate-700 font-medium">
           <button id="ai-send" class="btn-juice bg-[#FF7A00] text-white font-bold px-4 py-2 rounded-xl shrink-0"><i class="fas fa-paper-plane"></i></button>
         </div>
+
+        ${chips ? `
+        <div class="flex items-center gap-2 mt-2">
+          <div id="chat-chips" class="no-bar flex-1 flex gap-1.5 overflow-x-auto whitespace-nowrap py-0.5">${chips}</div>
+          <span class="text-[10px] font-bold text-slate-400 shrink-0"><span id="chat-usadas">0</span>/${chatWords.length}</span>
+        </div>` : ''}
       </div>`;
 
     bindChatPractice();
     pintarProgresoChat();
 
-    // Saludo de Abu (local: no gasta tokens y aparece al instante)
-    const muestra = chatWords.slice(0, 2).join(', ');
-    const saludo = chatWords.length
-      ? { en: `Hey! I'm Abu 👋 Let's talk about "${muestra}". How are you today?`,
-          es: `¡Hey! Soy Abu 👋 Hablemos de "${muestra}". ¿Cómo estás hoy?` }
-      : { en: `Hey! I'm Abu 👋 How are you today?`,
-          es: `¡Hey! Soy Abu 👋 ¿Cómo estás hoy?` };
+    // Abu empieza DE UNA VEZ con una pregunta directa (sin discurso largo).
+    // La instrucción de usar las palabras va en un toast breve, no en el mensaje.
+    let saludo;
+    if (chatWords.length) {
+      const q = alAzar(ABU_GUION);
+      chatSession.guionUsado = new Set([q.id]);
+      saludo = { en: `Hi! I'm Abu 👋 ${q.en}`, es: `¡Hola! Soy Abu 👋 ${q.es}`, tips: q.tips };
+      setTimeout(() => showToast('💡 Usa las palabras de abajo en tus respuestas: dan puntos extra.'), 800);
+    } else {
+      saludo = { en: `Hi! I'm Abu 👋 How are you today?`, es: `¡Hola! Soy Abu 👋 ¿Cómo estás hoy?` };
+    }
     addChatBubble('ai', saludo);
     aiChat.push({ role: 'assistant', content: saludo.en });
-    pintarSugerencias(saludo.en);   // sugerencias acordes al saludo
+    pintarSugerencias(saludo.tips || saludo.en);   // sugerencias acordes al saludo
     speak(saludo.en);
   }
 
@@ -1783,9 +2028,17 @@ function openAbuChat() {
       cs.streak++;
       let pts = 3;
       const nuevas = marcarPalabrasUsadas(text);
+      const fixLocal = corregirLocal(text);   // red de seguridad de correcciones
       if (nuevas.length) pts += 6 * nuevas.length;
       if (text.split(/\s+/).length >= 6) pts += 2;      // premio a frases largas
       pintarProgresoChat();
+
+      // El avance del chat se guarda EN CADA MENSAJE (antes solo al salir con la X:
+      // si recargabas a mitad de charla, el contador volvía a cero).
+      if (cs.counts && cs.group && flujo.niveles[cs.nivel]?.grupos?.[cs.group]) {
+        flujo.niveles[cs.nivel].grupos[cs.group].chat.count = cs.count;
+      }
+      await updateUserFlow();
       await addPoints(pts);
       touchStreak();
       if (nuevas.length) showToast(`🎯 ¡Usaste "${nuevas[0]}"! +${6 * nuevas.length} puntos`);
@@ -1807,6 +2060,7 @@ function openAbuChat() {
         nivel: chatSession?.nivel || flujo.currentNivel,
         messages: aiChat.slice(-8),           // contexto suficiente para que la charla tenga hilo
         words: chatWords.slice(0, 8),
+        used: [...cs.used],                    // palabras ya usadas → la IA se enfoca en las pendientes
         turn: cs.count,                        // Abu sabe si está empezando o cerrando
         goal: cs.goal
       });
@@ -1820,6 +2074,10 @@ function openAbuChat() {
           showToast('📴 Abu está respondiendo en modo básico.', 2600);
         }
       }
+
+      // Corrección garantizada: si la IA no marcó nada pero el corrector
+      // local detectó un error, se muestra igual la cajita ✏️.
+      if (!reply.fix && fixLocal) reply.fix = fixLocal;
 
       addChatBubble('ai', { en: reply.en, es: reply.es || '', fix: reply.fix || '' });
       aiChat.push({ role: 'assistant', content: reply.en });
@@ -2482,8 +2740,8 @@ function openAbuChat() {
         // También aquí: los dos ejercicios por palabra, para que puedan dominarse.
         const r1 = ms.words.filter(w => w.imagen).map(w => ({ word: w, type: 'select_by_image', options: opciones(w) }));
         const r2 = ms.words.map(w => ({ word: w, type: 'write_by_audio', options: null }));
-        r1.sort(() => Math.random() - 0.5); r2.sort(() => Math.random() - 0.5);
-        ms.queue = [...r1, ...r2];
+        // Intercalado aleatorio 👁️/👂 (los dos ejercicios de una palabra no van pegados)
+        ms.queue = mezclarEjercicios([...r1, ...r2]);
         guardarMazoFlujo();
         showEncouragement(() => nextMazoStep());
         return;
@@ -2654,6 +2912,23 @@ function openAbuChat() {
 
       userProfile = profile;
       flujo = userProfile.flujo;
+
+      // Restauración anti-pérdida: si el respaldo local es más reciente que la
+      // nube (p. ej. la recarga interrumpió el guardado), se usa el local y se
+      // vuelve a subir. Así lo ya estudiado NO reaparece desde el inicio.
+      try {
+        const local = JSON.parse(localStorage.getItem(`abulingo_flujo_${currentUser.id}`) || 'null');
+        const tLocal = new Date(local?.savedAt || 0).getTime();
+        const tNube = new Date(flujo?.savedAt || 0).getTime();
+        if (local && local.version && tLocal > tNube) {
+          console.warn('[flujo] respaldo local más reciente que la nube → restaurando avance local');
+          flujo = local;
+          userProfile.flujo = local;
+          dbClient.from('profiles').update({ flujo: local }).eq('id', currentUser.id)
+            .then(({ error }) => { if (error) console.error('No se pudo re-subir el respaldo:', error.message); });
+        }
+      } catch { /* respaldo corrupto: se ignora */ }
+
       document.getElementById('user-points-display').textContent = userProfile.points || 0;
       fillProfileMenu();
 
@@ -2661,7 +2936,13 @@ function openAbuChat() {
       updateStreakUI();
       refreshMazoBadge();      // insignia del botón "M"
       mostrarPistaPerfil();    // "toca tu foto" la primera vez
-      await runFlow();
+
+      // Tutorial de bienvenida: solo la primera vez que entra el usuario.
+      if (!flujo.ui?.tutorialSeen) {
+        mostrarTutorial(() => runFlow());
+      } else {
+        await runFlow();
+      }
     } catch (e) {
       console.error(e);
       renderMessage('😵', 'Algo salió mal', 'Ocurrió un error al cargar tu sesión. Recarga la página.');
