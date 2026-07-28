@@ -43,8 +43,8 @@
                 <a href="#pricing" class="text-slate-600 hover:text-[#0D47A1] transition font-semibold">Planes</a>
                 <a href="#faq" class="text-slate-600 hover:text-[#0D47A1] transition font-semibold">FAQ</a>
                 <div id="logged-out-nav" class="flex items-center space-x-4">
-                    <button class="auth-btn-login text-slate-600 hover:text-[#0D47A1] transition font-semibold">Iniciar Sesión</button>
-                    <button class="auth-btn-signup btn-primary px-5 py-2 rounded-full text-sm font-bold">Registrarse</button>
+                    <button id="desktop-login-btn" class="auth-btn-login text-slate-600 hover:text-[#0D47A1] transition font-semibold">Iniciar Sesión</button>
+                    <button id="desktop-signup-btn" class="auth-btn-signup btn-primary px-5 py-2 rounded-full text-sm font-bold">Registrarse</button>
                 </div>
                 <div id="logged-in-nav" class="hidden items-center space-x-4">
                     <span id="user-name" class="text-slate-500 text-sm font-semibold"></span>
@@ -53,8 +53,8 @@
             </nav>
             <div class="flex items-center gap-2 md:hidden">
                 <div id="mobile-auth-buttons" class="flex items-center gap-2">
-                    <button class="auth-btn-login text-slate-600 hover:text-[#0D47A1] transition font-semibold text-sm whitespace-nowrap">Entrar</button>
-                    <button class="auth-btn-signup btn-primary px-3 py-2 rounded-full text-xs font-bold whitespace-nowrap">Registrarse</button>
+                    <button id="mobile-login-btn" class="auth-btn-login text-slate-600 hover:text-[#0D47A1] transition font-semibold text-sm whitespace-nowrap">Entrar</button>
+                    <button id="mobile-signup-btn" class="auth-btn-signup btn-primary px-3 py-2 rounded-full text-xs font-bold whitespace-nowrap">Registrarse</button>
                 </div>
                 <div id="mobile-user-badge" class="hidden items-center">
                     <button id="mobile-logout-top" class="bg-red-100 text-[#D32F2F] font-bold px-3 py-2 rounded-full text-xs">Salir</button>
@@ -78,7 +78,7 @@
                 Combinamos la <span class="highlight-yellow">ciencia del aprendizaje</span> —como la repetición espaciada— con la <span class="highlight-yellow">psicología del color</span> para que memorices de forma efectiva y mantengas la concentración y la motivación.
             </p>
             <div class="animate-on-scroll" style="transition-delay: 0.4s;">
-                <button class="auth-btn-signup btn-primary inline-block px-10 py-4 rounded-full text-lg font-bold">
+                <button id="hero-signup-btn" class="auth-btn-signup btn-primary inline-block px-10 py-4 rounded-full text-lg font-bold">
                     Empieza tu Aventura Gratis
                 </button>
             </div>
@@ -308,7 +308,7 @@
                     <label for="login-pin" class="block text-sm font-medium text-slate-600 mb-1">PIN (4 dígitos)</label>
                     <input type="password" id="login-pin" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" minlength="4" autocomplete="current-password" placeholder="••••" class="w-full input-field pin-field" required>
                 </div>
-                <button type="submit" class="w-full btn-primary font-bold py-3 rounded-lg">Entrar</button>
+                <button type="submit" id="login-submit-btn" class="w-full btn-primary font-bold py-3 rounded-lg">Entrar</button>
             </form>
             <div id="login-error" class="text-sm mt-4 text-center h-4 text-feedback-error"></div>
         </div>
@@ -345,7 +345,7 @@
                     <input type="password" id="signup-pin" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" minlength="4" autocomplete="new-password" placeholder="••••" class="w-full input-field pin-field" required>
                     <p class="text-xs text-slate-400 mt-1">Usarás este PIN de 4 dígitos para entrar. Sencillo de recordar.</p>
                 </div>
-                <button type="submit" class="w-full btn-primary font-bold py-3 rounded-lg !mt-6">Crear Cuenta</button>
+                <button type="submit" id="signup-submit-btn" class="w-full btn-primary font-bold py-3 rounded-lg !mt-6">Crear Cuenta</button>
             </form>
             <div id="signup-message" class="text-sm mt-4 text-center h-4"></div>
         </div>
@@ -393,6 +393,54 @@
         // Cerrar el modal al hacer clic fuera de la tarjeta
         [loginModal, signupModal].forEach(modal => {
             modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(modal); });
+        });
+
+        // Registra eventos de analítica en Supabase sin interrumpir la UX si falla.
+        const trackEvent = async (table, payload) => {
+            if (!supabase) return;
+            try {
+                const { error } = await supabase.from(table).insert(payload);
+                if (error) console.warn(`No se pudo registrar evento en "${table}":`, error.message);
+            } catch (err) {
+                console.warn(`No se pudo registrar evento en "${table}":`, err);
+            }
+        };
+
+        // Detecta el tipo de dispositivo a partir del ancho de pantalla y el user agent.
+        const getDeviceType = () => {
+            const ua = navigator.userAgent || '';
+            const isTablet = /iPad|Tablet|(Android(?!.*Mobile))/i.test(ua) || (window.innerWidth >= 768 && window.innerWidth <= 1024 && 'ontouchstart' in window);
+            const isMobile = !isTablet && /Mobi|Android|iPhone|iPod|Windows Phone|BlackBerry/i.test(ua);
+            if (isMobile) return 'mobile';
+            if (isTablet) return 'tablet';
+            return 'desktop';
+        };
+
+        // Registra la visita a la página (una vez por carga).
+        if (supabase) {
+            trackEvent('page_visits', {
+                path: window.location.pathname,
+                referrer: document.referrer || null,
+                user_agent: navigator.userAgent,
+                device_type: getDeviceType(),
+                screen_width: window.innerWidth,
+                screen_height: window.innerHeight
+            });
+        }
+
+        // Registra los clics en los botones de autenticación clave.
+        const trackedButtons = [
+            { id: 'desktop-login-btn', name: 'desktop_iniciar_sesion' },
+            { id: 'desktop-signup-btn', name: 'desktop_registrarse' },
+            { id: 'mobile-login-btn', name: 'mobile_entrar' },
+            { id: 'mobile-signup-btn', name: 'mobile_registrarse' },
+            { id: 'hero-signup-btn', name: 'hero_empieza_aventura' },
+            { id: 'signup-submit-btn', name: 'crear_cuenta' },
+            { id: 'login-submit-btn', name: 'entrar_form' }
+        ];
+        trackedButtons.forEach(({ id, name }) => {
+            const btn = document.getElementById(id);
+            if (btn) btn.addEventListener('click', () => trackEvent('button_clicks', { button_name: name }));
         });
 
         // Guarda / actualiza el perfil del usuario en la tabla "profiles".
