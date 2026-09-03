@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Abulingo · Admin</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Work+Sans:wght@400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+  <link rel="icon" href="icono.png" type="image/x-icon">
+
+  <style>
+    body { background-color: #f0f4f8; font-family: 'Work Sans', sans-serif; }
+    .font-heading { font-family: 'Space Grotesk', sans-serif; }
+
+    .card-3d {
+      background: white; border-radius: 20px;
+      box-shadow: 0 8px 0 #cbd5e1, 0 8px 18px rgba(0,0,0,0.08);
+      border: 2px solid #e2e8f0;
+    }
+    .btn-juice { transition: all 0.1s; border-bottom: 5px solid rgba(0,0,0,0.2); transform: translateY(0); }
+    .btn-juice:active { transform: translateY(5px); border-bottom-width: 0; box-shadow: inset 0 5px 8px rgba(0,0,0,0.15); }
+
+    .modal-overlay { position: fixed; inset: 0; background: rgba(15,23,42,0.55); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; padding: 1rem; z-index: 200; }
+    @keyframes popIn { 0% { transform: scale(0.94); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+    .animate-pop { animation: popIn 0.25s ease-out forwards; }
+
+    .toast {
+      position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(20px);
+      background: #1e293b; color: #fff; font-weight: 700; padding: 10px 18px; border-radius: 14px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.25); z-index: 300; opacity: 0;
+      transition: opacity .25s, transform .25s; pointer-events: none; max-width: 90vw; text-align: center;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    .grupo-chip { transition: all .12s; }
+    .grupo-chip:active { transform: scale(0.95); }
+
+    table.admin-table { border-collapse: separate; border-spacing: 0; width: 100%; }
+    table.admin-table th { position: sticky; top: 0; background: #f8fafc; z-index: 5; }
+    table.admin-table th, table.admin-table td { padding: 10px 12px; text-align: left; white-space: nowrap; border-bottom: 1px solid #eef2f7; }
+    table.admin-table tbody tr:hover { background: #f8fafc; }
+
+    .wa-float {
+      position: fixed; right: 18px; bottom: 18px; z-index: 250;
+      width: 56px; height: 56px; border-radius: 50%; background: #25D366; color: #fff;
+      display: flex; align-items: center; justify-content: center; font-size: 1.6rem;
+      box-shadow: 0 6px 16px rgba(0,0,0,0.25); transition: transform .15s;
+    }
+    .wa-float:active { transform: scale(0.92); }
+
+    #login-pin { letter-spacing: 0.35em; }
+  </style>
+</head>
+<body class="min-h-screen">
+
+  <!-- ============================================================
+       LOGIN — usuario (correo) + PIN de 8 dígitos. Sin registro,
+       sin "olvidé mi PIN". Solo entran cuentas con role='admin'
+       (columna en "profiles", asignada a mano desde Supabase).
+  ============================================================ -->
+  <div id="login-screen" class="min-h-screen flex items-center justify-center px-4">
+    <div class="card-3d max-w-sm w-full p-7 text-center animate-pop">
+      <div class="text-5xl mb-3">🛡️</div>
+      <h1 class="font-heading font-black text-2xl text-slate-800 mb-1">Abulingo <span style="color:#0D47A1;">Admin</span></h1>
+      <p class="text-slate-400 text-sm mb-6">Panel interno · solo administradores</p>
+      <form id="login-form" class="text-left space-y-3">
+        <div>
+          <label class="text-[11px] font-black text-slate-400 uppercase">Usuario</label>
+          <input id="login-usuario" type="email" required autocomplete="username" placeholder="tu@correo.com"
+            class="w-full mt-1 bg-white border-2 border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-[#FF7A00] text-slate-700 font-medium">
+        </div>
+        <div>
+          <label class="text-[11px] font-black text-slate-400 uppercase">PIN (8 dígitos)</label>
+          <input id="login-pin" type="password" inputmode="numeric" pattern="\d{8}" maxlength="8" required autocomplete="current-password" placeholder="········"
+            class="w-full mt-1 bg-white border-2 border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-[#FF7A00] text-slate-700 font-medium text-center">
+        </div>
+        <p id="login-error" class="hidden text-red-500 text-sm font-bold text-center"></p>
+        <button id="login-btn" type="submit" class="w-full btn-juice bg-[#FF7A00] text-white font-bold py-3 rounded-xl text-lg mt-2">Entrar</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       APP DE ADMIN (oculta hasta confirmar sesión + role='admin')
+  ============================================================ -->
+  <div id="admin-app" class="hidden min-h-screen flex flex-col">
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-40">
+      <div class="max-w-6xl mx-auto flex items-center gap-3 px-4 h-16">
+        <div class="font-heading font-black text-lg text-slate-800 shrink-0">Abulingo <span style="color:#0D47A1;">Admin</span></div>
+        <div class="flex-1"></div>
+        <span id="admin-nombre" class="text-sm font-bold text-slate-500 hidden sm:inline"></span>
+        <button id="logout-btn" class="btn-juice bg-slate-100 text-slate-500 font-bold text-sm px-4 py-2 rounded-xl">Cerrar sesión</button>
+      </div>
+    </header>
+
+    <main class="max-w-6xl w-full mx-auto px-4 py-6 flex-1">
+
+      <!-- Grupos -->
+      <section class="card-3d p-4 sm:p-5 mb-5">
+        <div class="flex items-center justify-between mb-1">
+          <h2 class="font-heading font-bold text-slate-800 text-lg">Grupos de inglés</h2>
+          <button id="btn-crear-grupo" class="btn-juice bg-[#FF7A00] text-white font-bold text-xs px-3 py-2 rounded-xl">+ Crear grupo</button>
+        </div>
+        <p id="grupos-alcance" class="text-[11px] text-slate-400 mb-3"></p>
+        <div id="grupos-lista" class="flex flex-wrap gap-2"></div>
+      </section>
+
+      <!-- Buscador + tabla -->
+      <section class="card-3d p-4 sm:p-5">
+        <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mb-4">
+          <div class="relative flex-1">
+            <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-300"></i>
+            <input id="buscador" type="text" placeholder="Buscar por nombre..."
+              class="w-full bg-white border-2 border-slate-200 rounded-xl pl-9 pr-3 py-2.5 focus:outline-none focus:border-[#FF7A00] text-slate-700 font-medium">
+          </div>
+          <button id="btn-calcular-avance" class="btn-juice bg-slate-800 text-white font-bold text-xs px-3 py-2 rounded-xl shrink-0" title="Calcula el % global de cada alumno visible">
+            <i class="fas fa-chart-line mr-1"></i>Calcular avance
+          </button>
+          <span id="contador-usuarios" class="text-xs font-bold text-slate-400 shrink-0 self-center sm:self-auto"></span>
+        </div>
+
+        <div class="overflow-x-auto -mx-4 sm:mx-0">
+          <div class="max-h-[65vh] overflow-y-auto px-4 sm:px-0">
+            <table class="admin-table text-sm">
+              <thead>
+                <tr class="text-[10px] font-black text-slate-400 uppercase">
+                  <th>Nombre</th>
+                  <th>Correo</th>
+                  <th>Grupo</th>
+                  <th>Nivel</th>
+                  <th>Puntos</th>
+                  <th>Lingots</th>
+                  <th>Racha</th>
+                  <th>Dominadas</th>
+                  <th>Estudiadas</th>
+                  <th>Avance total</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="usuarios-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+        <p id="usuarios-vacio" class="hidden text-center text-slate-400 py-8">No se encontraron usuarios.</p>
+      </section>
+    </main>
+  </div>
+
+  <!-- WhatsApp flotante -->
+  <a id="wa-float" class="wa-float" href="https://wa.me/573163748711" target="_blank" rel="noopener" title="Soporte por WhatsApp">
+    <i class="fab fa-whatsapp"></i>
+  </a>
+
+  <div id="modal-root"></div>
+
+<script type="module">
+  const SUPABASE_URL = 'https://eylwewhqeaaqkgcxhgyv.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV5bHdld2hxZWFhcWtnY3hoZ3l2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQzMzAxODgsImV4cCI6MjA5OTkwNjE4OH0.Ji8huj-ny2VcMT5UQSjOuwUKz4k23quNS0fLk-gZr7A';
+  const NIVELES = ['A1', 'A2', 'B1', 'B2'];
+
+  const { createClient } = supabase;
+  const dbClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  let currentUser = null;
+  let currentProfile = null;
+  let grupos = [];
+  let usuarios = [];
+  let filtroGrupo = null;   // null = todos
+  let buscarTimer = null;
+
+  const escapeHTML = (s) => (s ?? '').toString()
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+
+  function showToast(msg, ms = 2600) {
+    let t = document.getElementById('admin-toast');
+    if (!t) { t = document.createElement('div'); t.id = 'admin-toast'; t.className = 'toast'; document.body.appendChild(t); }
+    t.textContent = msg;
+    requestAnimationFrame(() => t.classList.add('show'));
+    clearTimeout(t._timer);
+    t._timer = setTimeout(() => t.classList.remove('show'), ms);
+  }
+
+  /* ---------- Modal genérico (mismo patrón que abulingo.html) ---------- */
+  const modalRoot = document.getElementById('modal-root');
+  function closeModal() { modalRoot.innerHTML = ''; }
+  function showModal({ icon, title, body, actions = [], size = 'md' }) {
+    const maxW = size === 'lg' ? 'max-w-lg' : 'max-w-sm';
+    const actionsHTML = actions.map((a, i) =>
+      `<button data-idx="${i}" class="modal-action w-full btn-juice ${a.style || 'bg-[#FF7A00] text-white'} font-bold py-3 rounded-xl">${a.label}</button>`
+    ).join('');
+    /* El detalle del alumno es muy alto: la tarjeta se limita al 90 % de la
+       pantalla y el CUERPO es lo que hace scroll. La X y los botones quedan
+       siempre fijos y visibles (antes el modal crecía hacia abajo y tapaba
+       tanto el botón de cerrar como el final de la información). */
+    modalRoot.innerHTML = `
+      <div class="modal-overlay">
+        <div class="card-3d ${maxW} w-full animate-pop relative flex flex-col" style="max-height:90vh;">
+          <button id="modal-close" class="absolute top-3 right-4 text-slate-300 hover:text-slate-500 text-2xl z-10 bg-white/90 rounded-full w-8 h-8 leading-none">&times;</button>
+          <div class="px-6 pt-6 shrink-0">
+            ${icon ? `<div class="text-5xl mb-2 text-center">${icon}</div>` : ''}
+            ${title ? `<h2 class="text-xl font-heading font-bold text-slate-800 mb-3 text-center pr-8">${title}</h2>` : ''}
+          </div>
+          <div class="text-slate-600 px-6 flex-1 min-h-0 overflow-y-auto overscroll-contain">${body || ''}</div>
+          ${actionsHTML ? `<div class="space-y-2 px-6 py-4 shrink-0 border-t border-slate-100 bg-white rounded-b-[20px]">${actionsHTML}</div>` : '<div class="pb-4"></div>'}
+        </div>
+      </div>`;
+    document.getElementById('modal-close').onclick = closeModal;
+    modalRoot.querySelector('.modal-overlay').addEventListener('click', (e) => { if (e.target.classList.contains('modal-overlay')) closeModal(); });
+    actions.forEach((a, i) => {
+      const btn = modalRoot.querySelector(`.modal-action[data-idx="${i}"]`);
+      if (btn) btn.onclick = () => { if (a.onClick) a.onClick(); };
+    });
+  }
+
+  /* ============================================================
+     LOGIN
+  ============================================================ */
+  function mostrarErrorLogin(msg) {
+    const el = document.getElementById('login-error');
+    el.textContent = msg;
+    el.classList.remove('hidden');
+  }
+  function ocultarErrorLogin() {
+    document.getElementById('login-error').classList.add('hidden');
+  }
+
+  document.getElementById('login-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    ocultarErrorLogin();
+    const usuario = document.getElementById('login-usuario').value.trim();
+    const pin = document.getElementById('login-pin').value.trim();
+    const btn = document.getElementById('login-btn');
+    btn.disabled = true; btn.textContent = 'Entrando...';
+    try {
+      const { data, error } = await dbClient.auth.signInWithPassword({ email: usuario, password: pin });
+      if (error || !data?.user) {
+        mostrarErrorLogin('Usuario o PIN incorrecto.');
+        return;
+      }
+      await verificarAdminYEntrar(data.user);
+    } finally {
+      btn.disabled = false; btn.textContent = 'Entrar';
+    }
+  });
+
+  async function verificarAdminYEntrar(user) {
+    const { data: perfil, error } = await dbClient.from('profiles').select('id, full_name, role').eq('id', user.id).maybeSingle();
+    if (error || !perfil || !['admin', 'super_admin'].includes(perfil.role)) {
+      mostrarErrorLogin('Esta cuenta no tiene permisos de administrador.');
+      showModal({
+        icon: '🔒', title: 'Sin permisos',
+        body: 'Esta cuenta existe en Abulingo pero no tiene permisos de administrador. Si crees que es un error, contacta a alguien con acceso a Supabase para que te asigne el rol.',
+        actions: [{ label: 'Cerrar sesión', style: 'bg-slate-100 text-slate-500', onClick: async () => { closeModal(); await dbClient.auth.signOut(); } }]
+      });
+      return;
+    }
+    currentUser = user;
+    currentProfile = perfil;
+    mostrarApp();
+  }
+
+  document.getElementById('logout-btn').onclick = async () => {
+    await dbClient.auth.signOut();
+    window.location.reload();
+  };
+
+  function mostrarApp() {
+    document.getElementById('login-screen').classList.add('hidden');
+    document.getElementById('admin-app').classList.remove('hidden');
+    const esSuper = currentProfile.role === 'super_admin';
+    document.getElementById('admin-nombre').innerHTML =
+      `${escapeHTML(currentProfile.full_name || currentUser.email)} ${esSuper ? '<span class="ml-1 bg-orange-100 text-[#FF7A00] text-[10px] font-black px-2 py-0.5 rounded-full uppercase align-middle">Super Admin</span>' : ''}`;
+    document.getElementById('grupos-alcance').textContent = esSuper
+      ? 'Como Super Admin ves todos los grupos y usuarios de la plataforma.'
+      : 'Solo ves los grupos que tú creaste y sus usuarios.';
+    cargarGrupos();
+    cargarUsuarios();
+  }
+
+  /* ============================================================
+     GRUPOS DE INGLÉS
+  ============================================================ */
+  async function cargarGrupos() {
+    const { data, error } = await dbClient.from('grupos_ingles').select('*').order('nombre');
+    if (error) { console.warn('[grupos]', error.message); return; }
+    grupos = data || [];
+    pintarGrupos();
+  }
+
+  function pintarGrupos() {
+    const el = document.getElementById('grupos-lista');
+    const conteos = {};
+    usuarios.forEach(u => { const g = u.english_group || null; if (g) conteos[g] = (conteos[g] || 0) + 1; });
+
+    const chipTodos = `<button data-grupo="" class="grupo-chip btn-juice ${filtroGrupo === null ? 'bg-[#FF7A00] text-white' : 'bg-slate-100 text-slate-600'} font-bold text-xs px-3 py-1.5 rounded-xl">Todos (${usuarios.length})</button>`;
+    const chips = grupos.map(g => {
+      const activo = filtroGrupo === g.nombre;
+      const n = conteos[g.nombre] || 0;
+      return `<button data-grupo="${escapeHTML(g.nombre)}" class="grupo-chip btn-juice ${activo ? 'bg-[#FF7A00] text-white' : 'bg-slate-100 text-slate-600'} font-bold text-xs px-3 py-1.5 rounded-xl">${escapeHTML(g.nombre)} (${n})</button>`;
+    }).join('');
+
+    el.innerHTML = chipTodos + chips + (grupos.length ? '' : `<span class="text-xs text-slate-400 self-center">Todavía no has creado ningún grupo.</span>`);
+    el.querySelectorAll('.grupo-chip').forEach(b => {
+      b.onclick = () => { filtroGrupo = b.dataset.grupo || null; pintarGrupos(); pintarTabla(); };
+    });
+  }
+
+  document.getElementById('btn-crear-grupo').onclick = () => {
+    showModal({
+      icon: '👥', title: 'Crear grupo de inglés',
+      body: `<input id="nuevo-grupo-nombre" type="text" placeholder="Nombre del grupo (ej. Martes 6pm)"
+              class="w-full bg-white border-2 border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-[#FF7A00] text-slate-700 font-medium">`,
+      actions: [
+        { label: 'Crear', onClick: crearGrupo },
+        { label: 'Cancelar', style: 'bg-slate-100 text-slate-500', onClick: closeModal }
+      ]
+    });
+    setTimeout(() => document.getElementById('nuevo-grupo-nombre')?.focus(), 50);
+  };
+
+  async function crearGrupo() {
+    const input = document.getElementById('nuevo-grupo-nombre');
+    const nombre = (input?.value || '').trim();
+    if (!nombre) return showToast('⚠️ Escribe un nombre para el grupo.');
+    const { error } = await dbClient.from('grupos_ingles').insert({ nombre });
+    if (error) {
+      showToast(error.code === '23505' ? '⚠️ Ya existe un grupo con ese nombre.' : '⚠️ No se pudo crear el grupo.');
+      return;
+    }
+    closeModal();
+    showToast(`✅ Grupo "${nombre}" creado.`);
+    await cargarGrupos();
+  }
+
+  /* ============================================================
+     USUARIOS
+  ============================================================ */
+  async function cargarUsuarios(busqueda = '') {
+    const tbody = document.getElementById('usuarios-tbody');
+    tbody.innerHTML = `<tr><td colspan="11" class="text-center text-slate-400 py-8">Cargando...</td></tr>`;
+    const { data, error } = await dbClient.rpc('admin_listar_usuarios', { busqueda: busqueda || null });
+    if (error) {
+      console.error('[admin_listar_usuarios]', error.message);
+      tbody.innerHTML = `<tr><td colspan="11" class="text-center text-red-500 py-8">No se pudo cargar la lista de usuarios.<br><span class="text-xs text-slate-400">${escapeHTML(error.message)} — revisa que ejecutaste migracion_admin.sql</span></td></tr>`;
+      return;
+    }
+    usuarios = data || [];
+    pintarGrupos();
+    pintarTabla();
+  }
+
+  function pintarTabla() {
+    const tbody = document.getElementById('usuarios-tbody');
+    const vacio = document.getElementById('usuarios-vacio');
+    const contador = document.getElementById('contador-usuarios');
+    const lista = filtroGrupo ? usuarios.filter(u => u.english_group === filtroGrupo) : usuarios;
+
+    contador.textContent = `${lista.length} usuario${lista.length === 1 ? '' : 's'}`;
+    vacio.classList.toggle('hidden', lista.length > 0);
+
+    tbody.innerHTML = lista.map(u => `
+      <tr>
+        <td class="font-bold text-slate-700">${escapeHTML(u.full_name || '(sin nombre)')}</td>
+        <td class="text-slate-500">${escapeHTML(u.email || '—')}</td>
+        <td>
+          <select data-id="${u.id}" class="grupo-select bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-600">
+            <option value="">Sin grupo</option>
+            ${grupos.map(g => `<option value="${escapeHTML(g.nombre)}" ${u.english_group === g.nombre ? 'selected' : ''}>${escapeHTML(g.nombre)}</option>`).join('')}
+          </select>
+        </td>
+        <td><span class="bg-orange-100 text-[#FF7A00] text-[10px] font-black px-2 py-1 rounded-full uppercase">${escapeHTML(u.nivel || '—')}</span></td>
+        <td class="font-bold text-slate-700"><i class="fas fa-star text-yellow-400 mr-1"></i>${u.points || 0}</td>
+        <td class="font-bold text-slate-700"><i class="fas fa-coins text-yellow-600 mr-1"></i>${u.lingots || 0}</td>
+        <td class="font-bold text-orange-500"><i class="fas fa-fire mr-1"></i>${u.racha_dias || 0}</td>
+        <td class="font-bold text-green-600">${u.palabras_dominadas || 0} 🏅</td>
+        <td class="avance-celda" data-id="${u.id}">${avanceHTML(u.id)}</td>
+        <td><button class="ver-detalle btn-juice bg-slate-100 text-slate-600 font-bold text-xs px-3 py-1.5 rounded-lg" data-id="${u.id}" data-nombre="${escapeHTML(u.full_name || u.email || '')}">Ver</button></td>
+      </tr>`).join('');
+
+    tbody.querySelectorAll('.grupo-select').forEach(sel => {
+      sel.onchange = () => asignarGrupo(sel.dataset.id, sel.value || null);
+    });
+    tbody.querySelectorAll('.ver-detalle').forEach(b => {
+      b.onclick = () => verDetalleUsuario(b.dataset.id, b.dataset.nombre);
+    });
+  }
+
+  async function asignarGrupo(userId, nombreGrupo) {
+    const { error } = await dbClient.from('profiles').update({ english_group: nombreGrupo }).eq('id', userId);
+    if (error) { showToast('⚠️ No se pudo cambiar el grupo.'); return; }
+    const u = usuarios.find(x => x.id === userId);
+    if (u) u.english_group = nombreGrupo;
+    pintarGrupos();
+    showToast('✅ Grupo actualizado.');
+  }
+
+  document.getElementById('buscador').addEventListener('input', (e) => {
+    clearTimeout(buscarTimer);
+    const valor = e.target.value.trim();
+    buscarTimer = setTimeout(() => cargarUsuarios(valor), 350);
+  });
+
+  /* ============================================================
+     PROGRESO COMPLETO DEL ALUMNO
+     ------------------------------------------------------------
+     Es el mismo desglose que el estudiante ve en "Progreso nivel"
+     dentro de la app: por cada nivel (A1 · A2 · B1 · B2), cuánto
+     lleva dominado en las CINCO áreas, con su porcentaje:
+
+       🃏 Palabras       → tarjetas graduadas / palabras del nivel
+       💬 Frases         → marcadas con ✅ / frases del nivel
+       🎭 Conversaciones → con 5 estrellas / conversaciones del nivel
+       📘 Gramática      → temas con 3 ★ / temas del nivel
+       🏆 Dominar        → subsecciones completadas / 32
+
+     Todo lo calcula Postgres en admin_progreso_completo() porque el
+     avance vive en profiles.flujo y las políticas RLS impiden que un
+     usuario lea las filas de otro (ver admin-progreso.sql).
+  ============================================================ */
+  const AREAS_PROGRESO = [
+    { key: 'palabras',       icon: '🃏', label: 'Palabras',       color: '#3b82f6' },
+    { key: 'frases',         icon: '💬', label: 'Frases',         color: '#FF7A00' },
+    { key: 'conversaciones', icon: '🎭', label: 'Conversaciones', color: '#a855f7' },
+    { key: 'gramatica',      icon: '📘', label: 'Gramática',      color: '#0ea5e9' },
+    { key: 'dominar',        icon: '🏆', label: 'Dominar',        color: '#22c55e' }
+  ];
+
+  const pctDe = (h, t) => (t > 0 ? Math.round((h / t) * 100) : 0);
+  const barra = (p, color) =>
+    `<div class="h-2 rounded-full bg-slate-100 overflow-hidden"><div class="h-full rounded-full" style="width:${p}%; background:${color};"></div></div>`;
+
+  // Caché de porcentajes globales ya calculados, para la columna "Avance".
+  let avances = {};   // { userId: pct }
+
+  function avanceHTML(userId) {
+    const p = avances[userId];
+    if (p === undefined) return '<span class="text-slate-300 text-xs">—</span>';
+    const color = p >= 70 ? '#22c55e' : (p >= 35 ? '#FF7A00' : '#94a3b8');
+    return `<span class="font-black" style="color:${color}">${p}%</span>`;
+  }
+
+  document.getElementById('btn-calcular-avance').onclick = async (e) => {
+    const btn = e.currentTarget;
+    const lista = filtroGrupo ? usuarios.filter(u => u.english_group === filtroGrupo) : usuarios;
+    if (!lista.length) return showToast('No hay usuarios en la lista.');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-circle-notch fa-spin mr-1"></i>Calculando...';
+    const { data, error } = await dbClient.rpc('admin_progreso_lote', { p_user_ids: lista.map(u => u.id) });
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-chart-line mr-1"></i>Calcular avance';
+    if (error) {
+      console.error('[admin_progreso_lote]', error.message);
+      showToast('⚠️ Falta ejecutar admin-progreso.sql en Supabase.', 4000);
+      return;
+    }
+    (data || []).forEach(f => { avances[f.user_id] = f.pct; });
+    document.querySelectorAll('.avance-celda').forEach(td => { td.innerHTML = avanceHTML(td.dataset.id); });
+    showToast(`✅ Avance calculado para ${(data || []).length} alumno(s).`);
+  };
+
+  /* ---------- Modal de detalle ---------- */
+  async function verDetalleUsuario(userId, nombre) {
+    showModal({
+      icon: '📊', title: escapeHTML(nombre), size: 'lg',
+      body: `<div id="detalle-body" class="text-center py-6"><i class="fas fa-circle-notch fa-spin text-2xl text-[#FF7A00]"></i></div>`,
+      actions: [{ label: 'Cerrar', style: 'bg-slate-100 text-slate-500', onClick: closeModal }]
+    });
+
+    const { data, error } = await dbClient.rpc('admin_progreso_completo', { p_user_id: userId });
+    const el = document.getElementById('detalle-body');
+    if (!el) return;
+
+    if (error) {
+      console.error('[admin_progreso_completo]', error.message);
+      // Respaldo: si todavía no se ejecutó admin-progreso.sql, se muestra al
+      // menos el detalle antiguo para no dejar el modal vacío.
+      return detalleAntiguo(el, userId, error.message);
+    }
+
+    avances[userId] = data?.resumen?.pct ?? avances[userId];
+    document.querySelectorAll(`.avance-celda[data-id="${userId}"]`).forEach(td => { td.innerHTML = avanceHTML(userId); });
+
+    const r = data?.resumen || { hecho: 0, total: 0, pct: 0 };
+    const niveles = Array.isArray(data?.niveles) ? data.niveles : [];
+
+    // Totales por área sumando los cuatro niveles
+    const glob = {};
+    AREAS_PROGRESO.forEach(a => {
+      glob[a.key] = niveles.reduce((acc, n) => ({
+        hecho: acc.hecho + (n[a.key]?.hecho || 0),
+        total: acc.total + (n[a.key]?.total || 0)
+      }), { hecho: 0, total: 0 });
+    });
+
+    const filaArea = (a, d) => `
+      <div class="mb-2.5">
+        <div class="flex items-baseline gap-1.5 mb-1">
+          <span class="text-sm">${a.icon}</span>
+          <span class="text-[11px] font-black uppercase tracking-wide text-slate-500 flex-1">${a.label}</span>
+          <span class="text-[11px] font-black text-slate-700">${d.hecho || 0}<span class="text-slate-300"> / ${d.total || '—'}</span></span>
+          <span class="text-[11px] font-black w-9 text-right" style="color:${a.color}">${pctDe(d.hecho || 0, d.total || 0)}%</span>
+        </div>
+        ${barra(pctDe(d.hecho || 0, d.total || 0), a.color)}
+      </div>`;
+
+    el.innerHTML = `
+      <div class="text-left">
+        <div class="bg-gradient-to-br from-[#FF7A00] to-orange-600 text-white rounded-2xl p-4 mb-4 text-center">
+          <p class="text-[10px] font-black uppercase tracking-widest text-orange-100">Avance total en Abulingo</p>
+          <p class="font-heading font-black text-4xl leading-tight">${r.pct}%</p>
+          <p class="text-xs font-bold text-orange-100">${r.hecho} de ${r.total} elementos dominados · racha de ${r.racha || 0} día(s)</p>
+          <div class="h-2.5 rounded-full bg-white/25 overflow-hidden mt-3"><div class="h-full rounded-full bg-white" style="width:${r.pct}%"></div></div>
+        </div>
+
+        <p class="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 text-center">Total dominado por área</p>
+        <div class="grid grid-cols-5 gap-1.5 mb-5">
+          ${AREAS_PROGRESO.map(a => `
+            <div class="bg-slate-50 border border-slate-200 rounded-xl py-2 px-1 text-center">
+              <div class="text-base leading-none mb-1">${a.icon}</div>
+              <div class="font-heading font-black text-sm text-slate-700 leading-none">${glob[a.key].hecho}</div>
+              <div class="text-[9px] font-bold text-slate-400 leading-tight">de ${glob[a.key].total || '—'}</div>
+              <div class="text-[10px] font-black mt-0.5" style="color:${a.color}">${pctDe(glob[a.key].hecho, glob[a.key].total)}%</div>
+            </div>`).join('')}
+        </div>
+
+        ${niveles.map(n => `
+          <div class="border-2 border-slate-100 rounded-2xl p-3.5 mb-3">
+            <div class="flex items-center gap-2 mb-3">
+              <span class="w-10 h-10 rounded-xl bg-[#FF7A00] text-white font-heading font-black flex items-center justify-center shrink-0">${escapeHTML(n.nivel)}</span>
+              <div class="flex-1 min-w-0">
+                <p class="text-[11px] font-black uppercase tracking-wide text-slate-400">Nivel ${escapeHTML(n.nivel)}</p>
+                <p class="text-xs font-bold text-slate-500">${n.hecho} de ${n.total || '—'} dominados · ${n.palabras?.estudiadas || 0} palabras vistas</p>
+              </div>
+              <span class="font-heading font-black text-2xl text-slate-800 shrink-0">${n.pct}<span class="text-sm text-slate-300">%</span></span>
+            </div>
+            ${barra(n.pct, '#FF7A00')}
+            <div class="mt-3">${AREAS_PROGRESO.map(a => filaArea(a, n[a.key] || {})).join('')}</div>
+            <p class="text-[11px] text-slate-400 border-t border-slate-100 pt-2 mt-1">
+              Va por la subsección <b class="text-slate-600">${n.dominar?.subseccion_actual || 1}/32</b> de “Dominar”${n.conversaciones_creadas ? ` · creó <b class="text-slate-600">${n.conversaciones_creadas}</b> conversación(es) con IA en este nivel` : ''}.
+            </p>
+          </div>`).join('')}
+
+        <p class="text-[11px] text-slate-400 leading-snug">
+          Criterios: palabra dominada al graduarla en las tarjetas · frase, al marcarla con ✅ en Pronunciación ·
+          conversación, al llegar a 5 ★ · tema de gramática, al sacar 3 ★ · subsección de “Dominar”, al completarla.
+          ${r.guardado ? `Último guardado del alumno: ${escapeHTML(new Date(r.guardado).toLocaleString('es'))}.` : ''}
+        </p>
+      </div>`;
+  }
+
+  /* Respaldo con la función vieja, por si admin-progreso.sql aún no se ha
+     ejecutado en Supabase. */
+  async function detalleAntiguo(el, userId, motivo) {
+    el.innerHTML = `
+      <div class="bg-amber-50 border border-amber-200 rounded-xl p-3 text-left mb-3">
+        <p class="text-sm font-bold text-amber-700">Falta instalar el desglose completo</p>
+        <p class="text-xs text-amber-600 mt-1">Ejecuta <b>admin-progreso.sql</b> en Supabase → SQL Editor para ver frases, conversaciones y gramática aquí.</p>
+        <p class="text-[10px] text-slate-400 mt-1">${escapeHTML(motivo || '')}</p>
+      </div>
+      <div class="text-center py-4"><i class="fas fa-circle-notch fa-spin text-xl text-[#FF7A00]"></i></div>`;
+    const { data, error } = await dbClient.rpc('admin_detalle_usuario', { p_user_id: userId });
+    if (error) { el.innerHTML += `<p class="text-red-500 text-sm text-center">Tampoco se pudo leer el detalle antiguo.</p>`; return; }
+    const filas = data || [];
+    el.innerHTML = el.innerHTML.replace(/<div class="text-center py-4">[\s\S]*?<\/div>/, `
+      <table class="admin-table text-sm w-full">
+        <thead><tr class="text-[10px] font-black text-slate-400 uppercase">
+          <th>Nivel</th><th>Estudiadas</th><th>Dominadas</th><th>Dominar</th>
+        </tr></thead>
+        <tbody>
+          ${filas.map(f => `
+            <tr>
+              <td class="font-bold text-slate-700">${escapeHTML(f.nivel)}</td>
+              <td class="text-blue-600 font-bold">${f.palabras_estudiadas || 0}</td>
+              <td class="text-green-600 font-bold">${f.palabras_dominadas || 0} 🏅</td>
+              <td class="text-slate-500">Sub. ${f.dominar_subseccion_actual || 1}/32 · ${f.dominar_subs_completadas || 0} completadas</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>`);
+  }
+
+  /* ============================================================
+     ARRANQUE — si ya hay una sesión guardada, se intenta entrar
+     directo (y se valida el role igual que en el login manual).
+  ============================================================ */
+  (async function arrancar() {
+    const { data: { session } } = await dbClient.auth.getSession();
+    if (session?.user) await verificarAdminYEntrar(session.user);
+  })();
+</script>
+</body>
+</html>

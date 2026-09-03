@@ -1,0 +1,8 @@
+# robots.txt de Abulingo — súbelo a la raíz del sitio (junto a index.html)
+User-agent: *
+Allow: /
+
+# El panel interno no debe aparecer en Google
+Disallow: /admin.html
+
+Sitemap: https://abulingo.github.io/sitemap.xml

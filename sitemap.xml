@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Sitemap de Abulingo. Súbelo a la raíz del sitio y regístralo en Google
+     Search Console (Sitemaps → añadir "sitemap.xml").
+
+     Solo va la portada: abulingo.html, gramatica.html y pronunciacion.html
+     redirigen a index.html cuando no hay sesión iniciada, así que Google las
+     vería como páginas vacías y eso perjudica más de lo que ayuda. Cuando
+     publiques páginas públicas de contenido (por ejemplo un blog o fichas de
+     gramática abiertas), añádelas aquí. -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://abulingo.github.io/</loc>
+    <lastmod>2026-09-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+</urlset>
