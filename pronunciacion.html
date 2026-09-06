@@ -1035,8 +1035,17 @@
   function pintarFraseLista() {
     const wrap = document.getElementById('pz-frase-lista-wrap');
     if (!wrap) return;
+    // Guardamos dónde estaba desplazada la lista ANTES de reconstruirla:
+    // esta función se llama también en segundo plano (al guardar una
+    // puntuación, justo después de grabarse) mientras el modal de
+    // práctica sigue abierto, así que si no restauramos el scroll la
+    // persona vuelve siempre al tope de la lista al cerrar "Continuar".
+    const listaVieja = document.getElementById('pz-frase-lista');
+    const scrollPrevio = listaVieja ? listaVieja.scrollTop : 0;
     wrap.innerHTML = pzFraseListaHTML();
     bindFraseListaButtons();
+    const listaNueva = document.getElementById('pz-frase-lista');
+    if (listaNueva) listaNueva.scrollTop = scrollPrevio;
   }
 
   // ¿Ya la dominó alguna vez este usuario? (se guarda en flujo.frasesDominadas)
@@ -2078,6 +2087,14 @@
     const conv = pzConvActual;
     const promedio = Object.values(pzConvPuntajes).length
       ? Math.round(Object.values(pzConvPuntajes).reduce((a, b) => a + b, 0) / Object.values(pzConvPuntajes).length) : 0;
+    // Igual que con la lista de frases: esta función se vuelve a llamar
+    // (vía pzVolverA) cuando se cierra "Continuar" tras practicar una
+    // línea, cuando se cambia de personaje o cuando se muestra/oculta la
+    // traducción. Sin esto, cada una de esas acciones reconstruye TODO
+    // el chat y lo deja siempre arriba, perdiendo la línea en la que
+    // ibas — hay que leer el scroll ANTES de reemplazar el HTML viejo.
+    const mensajesViejo = document.getElementById('pz-conv-mensajes');
+    const scrollPrevio = mensajesViejo ? mensajesViejo.scrollTop : null;
     document.getElementById('modal-root').innerHTML = `
       <div class="modal-overlay">
         <div class="card-3d max-w-md w-full p-5 relative animate-pop" style="max-height:90vh; display:flex; flex-direction:column;">
@@ -2095,7 +2112,7 @@
             </button>
             <button id="conv-cerrar" class="w-8 h-8 rounded-full bg-slate-100 text-slate-400 hover:bg-slate-200 flex items-center justify-center shrink-0"><i class="fas fa-times"></i></button>
           </div>
-          <div class="flex-1 min-h-0 overflow-y-auto space-y-2.5 pr-1">
+          <div id="pz-conv-mensajes" class="flex-1 min-h-0 overflow-y-auto space-y-2.5 pr-1">
             ${conv.mensajes.map((m, i) => pzBurbujaHTML(m, i)).join('')}
           </div>
         </div>
@@ -2125,6 +2142,12 @@
         abrirPractica({ text: m.en, es: m.es, nivel: conv.nivel, conversacion: conv, msgIndex: i, audioUrl: m.audio_url || null, rol: m.rol });
       };
     });
+
+    // Restaurar el scroll: si es la primera pintura (no había contenedor
+    // viejo) dejamos el chat arriba; si es un repintado, volvemos exacto
+    // al mismo punto en el que estaba la persona.
+    const mensajesNuevo = document.getElementById('pz-conv-mensajes');
+    if (mensajesNuevo && scrollPrevio != null) mensajesNuevo.scrollTop = scrollPrevio;
   }
 
   function pzBurbujaHTML(m, i) {

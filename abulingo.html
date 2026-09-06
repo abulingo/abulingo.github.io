@@ -2506,11 +2506,12 @@ function openAbuChat() {
       const resp = await fetch(`${SUPABASE_URL}/functions/v1/generar-dialogo`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ words, nivel, grupo })
+        body: JSON.stringify({ words, nivel, grupo, evitar: abuEvitarLista() })
       });
       const payload = await resp.json().catch(() => null);
       if (!resp.ok) manejarRechazoIA(payload);
       if (!resp.ok || !payload || !Array.isArray(payload.lines) || !payload.lines.length) return null;
+      if (payload.title) registrarAbuEvitar(payload.title);
       return payload;
     } catch (err) { console.warn('[Diálogo grupo]', err?.message || err); return null; }
   }
@@ -2723,12 +2724,31 @@ function openAbuChat() {
     devuelve null para que la charla continúe con una respuesta local
     (nunca se corta la práctica con "no pude responder").
   */
+  // Guarda las últimas líneas que Abu ya usó (en "Conversa con Abu", en
+  // Dominar y en el diálogo con palabras del grupo) para poder pedirle a
+  // la IA que no las repita la próxima vez. Vive en `flujo`, así que
+  // sobrevive entre sesiones y dispositivos — antes esto no se guardaba
+  // en ningún lado y la función Edge nunca recibía un "evitar" real.
+  function registrarAbuEvitar(texto) {
+    if (!texto || !flujo) return;
+    if (!Array.isArray(flujo.abuEvitar)) flujo.abuEvitar = [];
+    const limpio = String(texto).trim().slice(0, 140);
+    if (!limpio || flujo.abuEvitar.includes(limpio)) return;
+    flujo.abuEvitar.push(limpio);
+    if (flujo.abuEvitar.length > 20) flujo.abuEvitar = flujo.abuEvitar.slice(-20);
+    updateUserFlow(); // en segundo plano: no hace falta esperar a que termine
+  }
+  function abuEvitarLista(max = 8) {
+    return Array.isArray(flujo?.abuEvitar) ? flujo.abuEvitar.slice(-max) : [];
+  }
+
   async function callChatFunction(body, reintentos = 1) {
     // Plan Gratis/Plus: sin acceso a funciones Edge de IA. Se devuelve null
     // de una vez (sin llamar a la red) para que la charla siga con las
     // respuestas locales que ya existen como respaldo — la misma ruta que
     // se usa cuando la función Edge falla o tarda demasiado.
     if (!puedeIA()) return null;
+    if (!body.evitar) body.evitar = abuEvitarLista();
     for (let intento = 0; intento <= reintentos; intento++) {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), CHAT_TIMEOUT_MS);
@@ -2750,6 +2770,7 @@ function openAbuChat() {
         }
         const en = (payload?.reply?.en || '').trim();
         if (!en) throw new Error('respuesta vacía');
+        registrarAbuEvitar(en);
         return payload.reply;
       } catch (err) {
         console.warn(`[Abu] intento ${intento + 1}:`, err?.name === 'AbortError' ? 'tardó demasiado' : (err?.message || err));
