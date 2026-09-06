@@ -663,7 +663,7 @@
         <div class="bg-white p-6 sm:p-8 rounded-2xl shadow-2xl w-full max-w-2xl relative max-h-[85vh] overflow-y-auto">
             <button class="close-modal-btn absolute top-4 right-4 text-slate-400 hover:text-slate-800 text-2xl" aria-label="Cerrar">&times;</button>
             <h2 class="text-2xl font-bold font-heading mb-1">Política de Privacidad y Tratamiento de Datos</h2>
-            <p class="text-xs text-slate-400 mb-6">Última actualización: 6 de septiembre de 2026</p>
+            <p class="text-xs text-slate-400 mb-6">Última actualización: [COMPLETAR FECHA]</p>
 
             <div class="space-y-5 text-sm text-slate-600 leading-relaxed">
                 <div>
@@ -679,7 +679,7 @@
                 <div>
                     <h3 class="font-heading font-bold text-slate-800 mb-1">3. Qué datos recogemos</h3>
                     <ul class="list-disc pl-5 space-y-1">
-                        <li><strong>Datos de cuenta</strong> (si te registras): nombre, correo, teléfono, grupo de inglés, nivel, plan, progreso y puntos. Si marcaste la casilla de contacto al registrarte, también guardamos esa elección (aceptaste o no ser contactado por correo/WhatsApp) y la fecha en que la diste.</li>
+                        <li><strong>Datos de cuenta</strong> (si te registras): nombre, correo, teléfono, grupo de inglés, nivel, plan, progreso y puntos. Si marcaste la casilla de contacto al registrarte, también guardamos esa elección (aceptaste o no ser contactado por correo/WhatsApp y ser agregado a un grupo de WhatsApp de estudiantes) y la fecha en que la diste.</li>
                         <li><strong>Datos técnicos y de dispositivo</strong>: tipo y modelo de dispositivo, sistema operativo, navegador, tamaño de pantalla, idioma, batería y tipo de conexión.</li>
                         <li><strong>Ubicación aproximada</strong>: a partir de tu dirección IP obtenemos país, ciudad y proveedor de internet (no tu ubicación GPS exacta).</li>
                         <li><strong>Datos de navegación</strong>: páginas que visitas, de dónde vienes (referido, campaña), cuánto tiempo pasas, qué botones tocas y tu progreso dentro de los cursos.</li>
@@ -704,6 +704,7 @@
                         <li><strong>Supabase</strong>: aloja la base de datos, la autenticación y las funciones del servidor.</li>
                         <li><strong>Google Cloud (Vertex AI / Text-to-Speech)</strong>: procesa los ejercicios de conversación, corrección y audio generados con inteligencia artificial.</li>
                         <li><strong>ipwho.is / ip-api.com</strong>: resuelven país/ciudad aproximados a partir de la IP.</li>
+                        <li><strong>WhatsApp (Meta)</strong>: si aceptaste la casilla de contacto, te escribimos o te agregamos a un grupo de estudiantes desde ahí. Ten en cuenta que dentro de un grupo de WhatsApp, tu número y tu nombre de perfil quedan visibles para los demás miembros del grupo — no solo para nosotros.</li>
                     </ul>
                 </div>
 
@@ -748,7 +749,7 @@
         <div class="bg-white p-6 sm:p-8 rounded-2xl shadow-2xl w-full max-w-2xl relative max-h-[85vh] overflow-y-auto">
             <button class="close-modal-btn absolute top-4 right-4 text-slate-400 hover:text-slate-800 text-2xl" aria-label="Cerrar">&times;</button>
             <h2 class="text-2xl font-bold font-heading mb-1">Términos y Condiciones</h2>
-            <p class="text-xs text-slate-400 mb-6">Última actualización: 6 de septiembre de 2026</p>
+            <p class="text-xs text-slate-400 mb-6">Última actualización: [COMPLETAR FECHA]</p>
 
             <div class="space-y-5 text-sm text-slate-600 leading-relaxed">
                 <div>
@@ -766,7 +767,7 @@
                     <ol class="list-decimal pl-5 space-y-1">
                         <li>Eliges un plan de pago y nos contactas por WhatsApp desde el botón correspondiente.</li>
                         <li>Coordinamos contigo el método y la confirmación del pago.</li>
-                        <li>Una vez confirmado el pago, activamos tu plan manualmente en tu cuenta en menos de 24 horas hábiles.</li>
+                        <li>Una vez confirmado el pago, activamos tu plan manualmente en tu cuenta. [COMPLETAR: plazo real de activación, por ejemplo "en menos de 24 horas hábiles"].</li>
                         <li>Al ser un servicio digital, no hay envío físico: el "tiempo de entrega" es el tiempo de activación del plan en tu cuenta descrito arriba.</li>
                     </ol>
                 </div>
@@ -872,7 +873,7 @@
                 </div>
                 <label class="flex items-start gap-2 text-xs text-slate-500 leading-snug">
                     <input type="checkbox" id="signup-consiente-contacto" class="mt-0.5 w-4 h-4 shrink-0 accent-[#FF7A00]">
-                    <span>Acepto que Abulingo me contacte por email o WhatsApp (por ejemplo, para avisos sobre mi cuenta o novedades del curso) y para que te agreguemos al grupo de WhatsApp. Es opcional — puedo crear mi cuenta sin marcar esto. Ver <button type="button" id="signup-ver-privacidad" class="underline hover:text-[#0D47A1]">política de privacidad</button>.</span>
+                    <span>Acepto que Abulingo me contacte por correo o WhatsApp (por ejemplo, para avisos sobre mi cuenta o novedades del curso) y que me agreguen a un grupo de WhatsApp de estudiantes, donde mi número y nombre serán visibles para los demás miembros. Es opcional — puedo crear mi cuenta sin marcar esto. Ver <button type="button" id="signup-ver-privacidad" class="underline hover:text-[#0D47A1]">política de privacidad</button>.</span>
                 </label>
                 <button type="submit" id="signup-submit-btn" class="w-full btn-primary font-bold py-3 rounded-lg !mt-6">Crear Cuenta</button>
             </form>
