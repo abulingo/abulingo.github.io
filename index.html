@@ -160,6 +160,109 @@
 </head>
 <body class="overflow-x-hidden">
 
+    <!-- ============================================================
+         AVISO DE COOKIES: banner simple (Aceptar / Rechazar) + pantalla
+         de bloqueo si se rechaza. Va lo más arriba posible del <body>
+         para decidir esto ANTES de que el resto de la página sea
+         interactiva. Responsable: Cesar Santana · abulingo.help@gmail.com
+
+         Cómo funciona:
+           - Sin elección guardada  → se muestra el banner.
+           - "Aceptar"              → se guarda, se avisa a AbuTrack (el
+             script de analítica más abajo) para que recién ahí empiece
+             a recoger datos — antes de aceptar, AbuTrack NO se inicia.
+           - "Rechazar"             → se guarda y se cubre toda la
+             página con una pantalla que no se puede cerrar; solo se
+             puede volver a aceptar desde ahí mismo.
+    ============================================================ -->
+    <div id="cookie-banner" class="fixed bottom-0 left-0 w-full z-[70] bg-white border-t-2 border-[#FF7A00] shadow-[0_-4px_20px_rgba(0,0,0,0.12)] p-4 sm:p-5 hidden">
+        <div class="container mx-auto flex flex-col sm:flex-row items-center gap-4 max-w-4xl">
+            <p class="text-sm text-slate-600 flex-1 text-center sm:text-left">
+                🍪 Usamos cookies y almacenamiento local para que la web funcione y para entender cómo se usa, y así mejorarla. No los usamos para publicidad.
+                <button type="button" id="cookie-mas-info" class="text-[#0D47A1] underline font-semibold">Más información</button>
+            </p>
+            <div class="flex gap-2 shrink-0">
+                <button type="button" id="cookie-rechazar" class="px-4 py-2 rounded-lg border border-slate-300 text-slate-600 font-semibold text-sm hover:bg-slate-100">Rechazar</button>
+                <button type="button" id="cookie-aceptar" class="px-5 py-2 rounded-lg btn-primary font-bold text-sm">Aceptar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="cookie-bloqueo" class="fixed inset-0 z-[80] bg-[#0D47A1] flex items-center justify-center p-6 hidden">
+        <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md text-center">
+            <p class="text-4xl mb-3">🍪</p>
+            <h2 class="text-xl font-bold font-heading mb-3">Necesitamos tu consentimiento para continuar</h2>
+            <p class="text-sm text-slate-600 mb-5">Rechazaste el uso de cookies y del rastreo de navegación. Como esta web depende de ese análisis básico para funcionar y mejorar, no podemos dejarte continuar navegando sin aceptarlo.</p>
+            <button type="button" id="cookie-aceptar-bloqueo" class="w-full py-3 rounded-lg btn-primary font-bold mb-3">Aceptar y continuar</button>
+            <p class="text-xs text-slate-400">¿Dudas sobre el uso de tus datos? Escribe a <a href="mailto:abulingo.help@gmail.com" class="text-[#0D47A1] underline">abulingo.help@gmail.com</a> (responsable: Cesar Santana).</p>
+        </div>
+    </div>
+
+    <script>
+    (function () {
+        'use strict';
+        var CLAVE = 'abu_consentimiento'; // 'aceptado' | 'rechazado'
+
+        function guardar(valor) {
+            try { localStorage.setItem(CLAVE, valor); } catch (e) { /* modo privado: no se puede recordar la elección */ }
+        }
+        function leer() {
+            try { return localStorage.getItem(CLAVE); } catch (e) { return null; }
+        }
+
+        var banner = document.getElementById('cookie-banner');
+        var bloqueo = document.getElementById('cookie-bloqueo');
+
+        function mostrarBanner() {
+            bloqueo.classList.add('hidden');
+            banner.classList.remove('hidden');
+        }
+        function mostrarBloqueo() {
+            banner.classList.add('hidden');
+            bloqueo.classList.remove('hidden');
+        }
+        function ocultarTodo() {
+            banner.classList.add('hidden');
+            bloqueo.classList.add('hidden');
+        }
+
+        function aceptar() {
+            guardar('aceptado');
+            ocultarTodo();
+            // AbuTrack se define más abajo, en el script de analítica; para
+            // cuando el usuario llega a tocar este botón esa parte del
+            // documento ya se ejecutó, así que window.AbuTrack ya existe.
+            if (window.AbuTrack && typeof window.AbuTrack.iniciarConConsentimiento === 'function') {
+                window.AbuTrack.iniciarConConsentimiento();
+            }
+        }
+        function rechazar() {
+            guardar('rechazado');
+            mostrarBloqueo();
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            document.getElementById('cookie-aceptar').addEventListener('click', aceptar);
+            document.getElementById('cookie-aceptar-bloqueo').addEventListener('click', aceptar);
+            document.getElementById('cookie-rechazar').addEventListener('click', rechazar);
+            document.getElementById('cookie-mas-info').addEventListener('click', function () {
+                var modal = document.getElementById('privacy-modal');
+                if (modal) modal.classList.remove('hidden');
+            });
+
+            var eleccion = leer();
+            if (eleccion === 'rechazado') mostrarBloqueo();
+            else if (eleccion !== 'aceptado') mostrarBanner();
+            // Si ya había "aceptado", no se muestra nada — AbuTrack arranca
+            // solo, más abajo, porque ya encuentra el consentimiento guardado.
+        });
+
+        // API pública: la usa el enlace "Preferencias de cookies" del footer
+        // para poder cambiar de opinión más tarde.
+        window.AbuCookies = { mostrarBanner: mostrarBanner, estado: leer };
+    })();
+    </script>
+
     <header class="fixed top-0 left-0 w-full bg-white/80 backdrop-blur-lg py-4 z-50 border-b border-blue-100">
         <div class="container mx-auto flex justify-between items-center px-6">
             <a href="#" class="text-2xl sm:text-3xl font-bold font-heading">Abulingo<span style="color: #FF7A00;">.</span></a>
@@ -513,7 +616,7 @@
 
     <footer class="bg-white border-t border-blue-100 py-12">
         <div class="container mx-auto px-6 text-slate-500">
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-8 max-w-4xl mx-auto mb-8 text-sm">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 max-w-5xl mx-auto mb-8 text-sm">
                 <div>
                     <h2 class="font-heading font-bold text-base mb-2">Abulingo</h2>
                     <p>Plataforma para aprender inglés online desde cero, del nivel A1 al B2, con repetición espaciada y práctica de pronunciación con inteligencia artificial.</p>
@@ -535,10 +638,171 @@
                         <li><a href="https://wa.me/573163748711" target="_blank" rel="noopener" class="hover:text-[#0D47A1] font-semibold">Contáctanos por WhatsApp</a></li>
                     </ul>
                 </div>
+                <div>
+                    <h2 class="font-heading font-bold text-base mb-2">Legal</h2>
+                    <ul class="space-y-1">
+                        <li><button type="button" id="open-privacy-link" class="hover:text-[#0D47A1] font-semibold text-left">Política de privacidad</button></li>
+                        <li><button type="button" id="open-terms-link" class="hover:text-[#0D47A1] font-semibold text-left">Términos y condiciones</button></li>
+                        <li><button type="button" id="open-cookie-prefs-link" class="hover:text-[#0D47A1] font-semibold text-left">Preferencias de cookies</button></li>
+                        <li><a href="mailto:abulingo.help@gmail.com" class="hover:text-[#0D47A1] font-semibold">abulingo.help@gmail.com</a></li>
+                    </ul>
+                </div>
             </div>
             <p class="text-center">&copy; 2025 Abulingo. Diseñado para un aprendizaje positivo y efectivo.</p>
         </div>
     </footer>
+
+    <!-- ============================================================
+         POLÍTICA DE PRIVACIDAD Y TRATAMIENTO DE DATOS
+         Se abre desde el enlace del footer y desde el banner/aviso de
+         cookies. Los datos descritos aquí son los que de verdad recoge
+         abu-analitica.js + la Edge Function "analitica": no es un texto
+         genérico de plantilla.
+    ============================================================ -->
+    <div id="privacy-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 hidden">
+        <div class="bg-white p-6 sm:p-8 rounded-2xl shadow-2xl w-full max-w-2xl relative max-h-[85vh] overflow-y-auto">
+            <button class="close-modal-btn absolute top-4 right-4 text-slate-400 hover:text-slate-800 text-2xl" aria-label="Cerrar">&times;</button>
+            <h2 class="text-2xl font-bold font-heading mb-1">Política de Privacidad y Tratamiento de Datos</h2>
+            <p class="text-xs text-slate-400 mb-6">Última actualización: [COMPLETAR FECHA]</p>
+
+            <div class="space-y-5 text-sm text-slate-600 leading-relaxed">
+                <div>
+                    <h3 class="font-heading font-bold text-slate-800 mb-1">1. Responsable del tratamiento</h3>
+                    <p>El responsable del tratamiento de los datos recogidos en Abulingo (<a href="https://abulingo.github.io" class="text-[#0D47A1] underline">abulingo.github.io</a>) es <strong>Cesar Santana</strong>. Para cualquier consulta, solicitud o ejercicio de derechos sobre tus datos personales, puedes escribir a <a href="mailto:abulingo.help@gmail.com" class="text-[#0D47A1] underline">abulingo.help@gmail.com</a>.</p>
+                </div>
+
+                <div>
+                    <h3 class="font-heading font-bold text-slate-800 mb-1">2. Para qué usamos tus datos</h3>
+                    <p>Los datos que recogemos se usan <strong>exclusivamente para mejorar la página web</strong>: entender qué secciones funcionan bien, detectar errores, medir tiempos de carga y mejorar la experiencia de estudio. No vendemos, alquilamos ni compartimos tus datos con terceros con fines publicitarios, y no mostramos anuncios de terceros en la plataforma.</p>
+                </div>
+
+                <div>
+                    <h3 class="font-heading font-bold text-slate-800 mb-1">3. Qué datos recogemos</h3>
+                    <ul class="list-disc pl-5 space-y-1">
+                        <li><strong>Datos de cuenta</strong> (si te registras): nombre, correo, teléfono, grupo de inglés, nivel, plan, progreso y puntos.</li>
+                        <li><strong>Datos técnicos y de dispositivo</strong>: tipo y modelo de dispositivo, sistema operativo, navegador, tamaño de pantalla, idioma, batería y tipo de conexión.</li>
+                        <li><strong>Ubicación aproximada</strong>: a partir de tu dirección IP obtenemos país, ciudad y proveedor de internet (no tu ubicación GPS exacta).</li>
+                        <li><strong>Datos de navegación</strong>: páginas que visitas, de dónde vienes (referido, campaña), cuánto tiempo pasas, qué botones tocas y tu progreso dentro de los cursos.</li>
+                    </ul>
+                </div>
+
+                <div>
+                    <h3 class="font-heading font-bold text-slate-800 mb-1">4. Cookies y almacenamiento local</h3>
+                    <p>Usamos cookies propias / almacenamiento local del navegador (localStorage) para:</p>
+                    <ul class="list-disc pl-5 space-y-1">
+                        <li>Mantener tu sesión iniciada.</li>
+                        <li>Reconocerte como visitante recurrente y medir visitas (sin identificarte por nombre si no tienes cuenta).</li>
+                        <li>Recordar tu elección sobre este aviso de cookies.</li>
+                    </ul>
+                    <p class="mt-1">No usamos cookies de publicidad ni de rastreo entre sitios de terceros (redes sociales, anunciantes).</p>
+                </div>
+
+                <div>
+                    <h3 class="font-heading font-bold text-slate-800 mb-1">5. Con quién compartimos tus datos</h3>
+                    <p>Para operar Abulingo usamos los siguientes proveedores, que procesan datos en nuestro nombre bajo sus propias políticas de seguridad:</p>
+                    <ul class="list-disc pl-5 space-y-1">
+                        <li><strong>Supabase</strong>: aloja la base de datos, la autenticación y las funciones del servidor.</li>
+                        <li><strong>Google Cloud (Vertex AI / Text-to-Speech)</strong>: procesa los ejercicios de conversación, corrección y audio generados con inteligencia artificial.</li>
+                        <li><strong>ipwho.is / ip-api.com</strong>: resuelven país/ciudad aproximados a partir de la IP.</li>
+                    </ul>
+                </div>
+
+                <div>
+                    <h3 class="font-heading font-bold text-slate-800 mb-1">6. Cuánto tiempo guardamos tus datos</h3>
+                    <p>Los datos de tu cuenta se conservan mientras mantengas tu cuenta activa. Los datos de navegación y de dispositivo se conservan el tiempo necesario para el análisis de uso de la web. Puedes pedir la eliminación de tus datos en cualquier momento (ver sección 7).</p>
+                </div>
+
+                <div>
+                    <h3 class="font-heading font-bold text-slate-800 mb-1">7. Tus derechos</h3>
+                    <p>De acuerdo con la normativa de protección de datos aplicable, puedes solicitar en cualquier momento, escribiendo a <a href="mailto:abulingo.help@gmail.com" class="text-[#0D47A1] underline">abulingo.help@gmail.com</a>:</p>
+                    <ul class="list-disc pl-5 space-y-1">
+                        <li><strong>Acceso</strong> a los datos que tenemos sobre ti.</li>
+                        <li><strong>Rectificación</strong> de datos incorrectos o desactualizados.</li>
+                        <li><strong>Eliminación</strong> de tu cuenta y tus datos.</li>
+                        <li><strong>Oposición</strong> al tratamiento de tus datos para análisis de uso.</li>
+                        <li><strong>Portabilidad</strong> de tus datos en un formato reutilizable.</li>
+                    </ul>
+                </div>
+
+                <div>
+                    <h3 class="font-heading font-bold text-slate-800 mb-1">8. Menores de edad</h3>
+                    <p>Si eres menor de edad según la legislación de tu país, necesitas el permiso de tu padre, madre o tutor para crear una cuenta en Abulingo.</p>
+                </div>
+
+                <div>
+                    <h3 class="font-heading font-bold text-slate-800 mb-1">9. Cambios a esta política</h3>
+                    <p>Podemos actualizar esta política cuando cambien las funciones de la plataforma. Si el cambio es relevante, lo anunciaremos dentro de la propia web.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================
+         TÉRMINOS Y CONDICIONES
+         Redactados según lo que hoy aparece en #pricing y en la FAQ
+         ("puedes cancelar cuando quieras"): cancelar detiene los cobros
+         futuros, pero NO da derecho a devolución de lo ya pagado — eso
+         se deja explícito abajo para que no choque con nada del sitio.
+    ============================================================ -->
+    <div id="terms-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 hidden">
+        <div class="bg-white p-6 sm:p-8 rounded-2xl shadow-2xl w-full max-w-2xl relative max-h-[85vh] overflow-y-auto">
+            <button class="close-modal-btn absolute top-4 right-4 text-slate-400 hover:text-slate-800 text-2xl" aria-label="Cerrar">&times;</button>
+            <h2 class="text-2xl font-bold font-heading mb-1">Términos y Condiciones</h2>
+            <p class="text-xs text-slate-400 mb-6">Última actualización: [COMPLETAR FECHA]</p>
+
+            <div class="space-y-5 text-sm text-slate-600 leading-relaxed">
+                <div>
+                    <h3 class="font-heading font-bold text-slate-800 mb-1">1. Quiénes somos</h3>
+                    <p>Abulingo es operado por <strong>Cesar Santana</strong>. Al crear una cuenta o usar la plataforma, aceptas estos Términos y Condiciones. Para dudas, escribe a <a href="mailto:abulingo.help@gmail.com" class="text-[#0D47A1] underline">abulingo.help@gmail.com</a>.</p>
+                </div>
+
+                <div>
+                    <h3 class="font-heading font-bold text-slate-800 mb-1">2. El servicio</h3>
+                    <p>Abulingo es una plataforma educativa en línea para aprender inglés, con un plan Gratis y planes de pago (Plus, Pro, Super Pro) descritos en la sección <a href="#pricing" class="text-[#0D47A1] underline">Planes</a>, cada uno con sus propias funciones incluidas.</p>
+                </div>
+
+                <div>
+                    <h3 class="font-heading font-bold text-slate-800 mb-1">3. Cómo se procesa una compra</h3>
+                    <ol class="list-decimal pl-5 space-y-1">
+                        <li>Eliges un plan de pago y nos contactas por WhatsApp desde el botón correspondiente.</li>
+                        <li>Coordinamos contigo el método y la confirmación del pago.</li>
+                        <li>Una vez confirmado el pago, activamos tu plan manualmente en tu cuenta. [COMPLETAR: plazo real de activación, por ejemplo "en menos de 24 horas hábiles"].</li>
+                        <li>Al ser un servicio digital, no hay envío físico: el "tiempo de entrega" es el tiempo de activación del plan en tu cuenta descrito arriba.</li>
+                    </ol>
+                </div>
+
+                <div>
+                    <h3 class="font-heading font-bold text-slate-800 mb-1">4. Cancelación de tu suscripción</h3>
+                    <p>Puedes cancelar tu suscripción a un plan de pago en cualquier momento desde tu panel de control, sin preguntas ni complicaciones. Al cancelar, dejas de generar cobros futuros, pero conservas el acceso al plan pagado hasta el final del período ya cubierto por tu último pago.</p>
+                </div>
+
+                <div>
+                    <h3 class="font-heading font-bold text-slate-800 mb-1">5. Política de no devoluciones</h3>
+                    <p><strong>Todos los pagos son definitivos. No se realizan devoluciones ni reembolsos de dinero</strong> por planes ya pagados, incluyendo casos de cambio de opinión, no uso del servicio, o cancelación después de haber pagado un período. Al confirmar tu pago, aceptas expresamente esta condición.</p>
+                </div>
+
+                <div>
+                    <h3 class="font-heading font-bold text-slate-800 mb-1">6. Garantías del servicio</h3>
+                    <p>Nos comprometemos a ofrecer las funciones descritas para cada plan mientras tu suscripción esté activa. Si detectas una falla del servicio atribuible a Abulingo (por ejemplo, una función paga que no funciona), contáctanos por <a href="mailto:abulingo.help@gmail.com" class="text-[#0D47A1] underline">abulingo.help@gmail.com</a> para resolverla o, si corresponde, extender tu período activo — esto no constituye una devolución de dinero.</p>
+                </div>
+
+                <div>
+                    <h3 class="font-heading font-bold text-slate-800 mb-1">7. Uso aceptable</h3>
+                    <p>Tu cuenta es personal e intransferible. No está permitido compartir credenciales, usar el servicio para fines distintos al aprendizaje de inglés, ni intentar vulnerar la seguridad de la plataforma.</p>
+                </div>
+
+                <div>
+                    <h3 class="font-heading font-bold text-slate-800 mb-1">8. Cambios en precios y funciones</h3>
+                    <p>Podemos ajustar precios o funciones de los planes hacia adelante. Los cambios de precio no afectan un período ya pagado.</p>
+                </div>
+
+                <div>
+                    <h3 class="font-heading font-bold text-slate-800 mb-1">9. Ley aplicable</h3>
+                    <p>[COMPLETAR: país/jurisdicción bajo la que operas legalmente el negocio, por ejemplo Ecuador].</p>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <div id="login-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 hidden">
         <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md relative">
@@ -698,6 +962,17 @@
         const closeModal = (modal) => modal.classList.add('hidden');
         document.querySelectorAll('.auth-btn-login').forEach(btn => btn.addEventListener('click', () => openModal(loginModal)));
         document.querySelectorAll('.auth-btn-signup').forEach(btn => btn.addEventListener('click', () => openModal(signupModal)));
+
+        // Enlaces legales del footer (política de privacidad / términos).
+        const privacyModal = document.getElementById('privacy-modal');
+        const termsModal = document.getElementById('terms-modal');
+        document.getElementById('open-privacy-link')?.addEventListener('click', () => openModal(privacyModal));
+        document.getElementById('open-terms-link')?.addEventListener('click', () => openModal(termsModal));
+        // "Preferencias de cookies": vuelve a mostrar el banner para poder
+        // cambiar la elección ya guardada.
+        document.getElementById('open-cookie-prefs-link')?.addEventListener('click', () => {
+            if (window.AbuCookies) window.AbuCookies.mostrarBanner();
+        });
         document.querySelectorAll('.close-modal-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 // Cierra el modal que contiene este botón (funciona para cualquier modal).
@@ -1408,15 +1683,38 @@
   document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') cerrar(); });
   window.addEventListener('pagehide', cerrar);
 
+  var yaIniciado = false;
+  function iniciarUnaVez() {
+    if (yaIniciado) return;
+    yaIniciado = true;
+    iniciar();
+  }
+
   window.AbuTrack = {
     clic: clic,
     vista: function (nombre) { clic('vista_' + nombre, { texto: nombre }); },
     datos: function () { return cacheDatos; },
-    visitId: function () { return visitId; }
+    visitId: function () { return visitId; },
+    // La llama el banner de cookies (más arriba en el <body>) cuando el
+    // usuario toca "Aceptar". Es segura de llamar más de una vez.
+    iniciarConConsentimiento: iniciarUnaVez
   };
 
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar);
-  else iniciar();
+  // ⚠️ Ya NO arranca solo: antes esta línea llamaba a iniciar() sin
+  // preguntar nada, así que la analítica recogía datos del visitante
+  // desde el primer instante, sin su consentimiento. Ahora solo arranca
+  // si ya existe un "aceptado" guardado por el banner de cookies (por
+  // ejemplo, en una visita posterior a la primera). Si todavía no hay
+  // elección o el usuario rechazó, no se llama a iniciar() en absoluto
+  // hasta que toque "Aceptar".
+  function haiConsentimientoGuardado() {
+    try { return localStorage.getItem('abu_consentimiento') === 'aceptado'; } catch (e) { return false; }
+  }
+  function arrancarSiHayConsentimiento() {
+    if (haiConsentimientoGuardado()) iniciarUnaVez();
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', arrancarSiHayConsentimiento);
+  else arrancarSiHayConsentimiento();
 })();
   </script>
 </body>
