@@ -1541,7 +1541,6 @@
         ${dicho ? `<p class="text-[11px] text-slate-500 mt-1.5 pt-1.5 border-t border-orange-200"><span class="font-black uppercase text-[9px] text-slate-400">Dijiste</span><br>${escapeHTML(dicho)}</p>` : ''}
         <div class="flex items-center gap-2 mt-1.5">
           <button class="vivo-repetir w-7 h-7 rounded-full bg-white border border-slate-200 text-slate-500 flex items-center justify-center" title="Escuchar"><i class="fas fa-volume-up text-[10px]"></i></button>
-          ${puntaje ? pzMiniEstrellas(puntaje) : ''}
         </div>
       </div>`;
     div.querySelector('.vivo-repetir').onclick = (e) => pzReproducirLinea(pzVivo.conv, m, e.currentTarget);
@@ -1607,9 +1606,18 @@
     btn.onclick = () => pzVivoGrabar(btn, msg, m);
   }
 
-  /* Micrófono del modo en vivo: arranque y parada manual, igual que en
-     "Ahora, a conversar". No graba audio, solo usa el reconocimiento de voz
-     del navegador para saber qué dijo la persona. */
+  /* Micrófono del modo en vivo: arranque manual, PARADA AUTOMÁTICA por
+     silencio (igual que en Dominar). No graba audio, solo usa el
+     reconocimiento de voz del navegador para saber qué dijo la persona.
+
+     Mismo cuidado que en abulingo.html: en celular Chrome ignora
+     "continuous" y eso duplicaba texto, así que ahí se usa continuous
+     false + se reanuda sola en cada corte natural, acumulando lo dicho
+     en sesiones separadas (limpiarRepeticionesVoz quita el eco que deja
+     unir sesiones). En escritorio si se puede dejar continuous true y
+     que decida el temporizador de silencio de abajo. */
+  const PZ_VIVO_SILENCIO_MS = 2200;
+  const pzVivoEsMovil = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
   function pzVivoGrabar(btn, msg, m) {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) {
@@ -1617,36 +1625,55 @@
       document.getElementById('vivo-continuar-sin').onclick = () => { pzVivo.idx++; pzVivoPaso(); };
       return;
     }
-    // Segundo toque = parar
-    if (pzVivoRec) { try { pzVivoRec.stop(); } catch {} return; }
+    // Segundo toque = parar antes de que actúe el silencio automático
+    if (pzVivoRec) { try { pzVivoRec.detenerYa(); } catch {} return; }
 
-    let texto = '';
+    let previo = '';    // lo dicho en sesiones YA cerradas (cortes naturales en celular)
+    let sesion = '';    // lo de la sesión de reconocimiento en curso
+    const textoTotal = () => limpiarRepeticionesVoz((previo + ' ' + sesion).trim());
+    let detenido = false;
+    let temporizador = null;
+    const t0 = Date.now();
+
     const rec = new SR();
     pzVivoRec = rec;
     rec.lang = 'en-US';
     rec.interimResults = true;
     rec.maxAlternatives = 1;
-    rec.continuous = false;
+    rec.continuous = !pzVivoEsMovil;
 
     btn.classList.add('recording');
-    msg.textContent = 'Escuchando... toca otra vez para terminar 🎙️';
+    msg.textContent = 'Escuchando... habla y se enviará solo 🎙️';
+
+    const limpiarTemporizador = () => { if (temporizador) { clearTimeout(temporizador); temporizador = null; } };
+    const reprogramarAutoDetener = () => {
+      limpiarTemporizador();
+      if (!sesion.trim()) return; // no cuenta silencio antes de la primera palabra
+      temporizador = setTimeout(() => { detenido = true; try { rec.stop(); } catch {} }, PZ_VIVO_SILENCIO_MS);
+    };
 
     rec.onresult = (e) => {
-      let interim = '';
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const t = e.results[i][0].transcript;
-        if (e.results[i].isFinal) texto += t + ' '; else interim += t;
-      }
-      msg.textContent = (texto + interim).trim() || 'Escuchando...';
+      let texto = '';
+      for (let i = 0; i < e.results.length; i++) texto += e.results[i][0].transcript + ' ';
+      sesion = texto.trim();
+      msg.textContent = sesion || 'Escuchando...';
+      reprogramarAutoDetener();
     };
     rec.onerror = () => { /* onend se encarga */ };
     rec.onend = () => {
+      if (sesion) { previo = (previo + ' ' + sesion).trim(); sesion = ''; }
+      if (!detenido && Date.now() - t0 < 120000) {
+        // Corte natural del navegador (típico en celular): se reanuda sin perder lo dicho.
+        try { rec.start(); return; } catch {}
+      }
+      limpiarTemporizador();
       pzVivoRec = null;
       btn.classList.remove('recording');
-      const dicho = texto.trim();
+      const dicho = textoTotal();
       if (!dicho) { msg.textContent = 'No te escuché, inténtalo otra vez 🎙️'; return; }
       pzVivoResolverTurno(m, dicho, msg);
     };
+    rec.detenerYa = () => { detenido = true; limpiarTemporizador(); try { rec.stop(); } catch {} };
     try { rec.start(); } catch (err) { pzVivoRec = null; btn.classList.remove('recording'); console.warn('[vivo] micrófono:', err); }
   }
 
@@ -1679,12 +1706,9 @@
     pzVivoProgreso();
     const turno = document.getElementById('vivo-turno');
     if (!turno) return;
-    const vals = Object.values(pzVivo.puntajes).map(Number).filter(Boolean);
-    const prom = vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : 0;
-    if (prom >= 4 && window.confetti) confetti({ particleCount: 110, spread: 70, origin: { y: 0.6 }, colors: ['#FF7A00', '#3b82f6', '#fbbf24'] });
+    if (window.confetti) confetti({ particleCount: 110, spread: 70, origin: { y: 0.6 }, colors: ['#FF7A00', '#3b82f6', '#fbbf24'] });
     turno.innerHTML = `
       <p class="text-center text-sm font-bold text-green-600">🎉 ¡Conversación terminada!</p>
-      ${prom ? `<div class="text-xl">${pzMiniEstrellas(prom)}</div>` : ''}
       <div class="flex gap-2 w-full mt-1">
         <button id="vivo-otra" class="flex-1 btn-juice bg-white border-2 border-slate-200 text-slate-600 font-bold py-2.5 rounded-xl text-sm"><i class="fas fa-rotate-right mr-1"></i>Repetir</button>
         <button id="vivo-listo" class="flex-1 btn-juice bg-[#FF7A00] text-white font-bold py-2.5 rounded-xl text-sm">Listo 👍</button>
@@ -2283,14 +2307,38 @@
     document.getElementById('pz-mic').onclick = () => { pzRecording ? pzDetenerGrabacion() : pzIniciarGrabacion(); };
   }
 
+  // Deja visible, sin saltos violentos, el elemento de la lista/chat que
+  // se acaba de practicar. Se reintenta unas cuantas veces porque a veces
+  // el repintado (al guardar la puntuación, que es una llamada async a
+  // Supabase) llega un poco DESPUÉS de que este modal ya se cerró.
+  function pzScrollAlElemento(selector, intentos = 12) {
+    const el = document.querySelector(selector);
+    if (el) { el.scrollIntoView({ block: 'center', behavior: 'auto' }); return; }
+    if (intentos > 0) setTimeout(() => pzScrollAlElemento(selector, intentos - 1), 120);
+  }
+
   function cerrarPractica() {
     if (pzRecording) pzDetenerGrabacion();
     stopSpeaking();
+    // Guardamos a qué frase/línea pertenecía esta práctica ANTES de que
+    // pzVolverA/pzCurrentTarget se limpien, para poder volver a dejarla
+    // a la vista exacta al cerrar (antes solo se restauraba el mismo
+    // scrollTop, que no bastaba si la lista cambiaba de tamaño).
+    const target = pzCurrentTarget;
     // Si esta práctica se abrió desde una línea de una conversación
     // (modo "Conversar"), al cerrar volvemos a esa conversación en vez
     // de cerrar todo.
-    if (pzVolverA) { const volver = pzVolverA; pzVolverA = null; volver(); return; }
+    if (pzVolverA) {
+      const volver = pzVolverA; pzVolverA = null; volver();
+      if (target && target.conversacion && typeof target.msgIndex === 'number') {
+        pzScrollAlElemento(`.pz-conv-practicar-linea[data-i="${target.msgIndex}"]`);
+      }
+      return;
+    }
     document.getElementById('modal-root').innerHTML = '';
+    if (target && target.id != null) {
+      pzScrollAlElemento(`.pz-frase-practicar[data-id="${target.id}"]`);
+    }
   }
 
   function pzMostrarCalificacionLocal(puntaje) {

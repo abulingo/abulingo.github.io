@@ -1109,7 +1109,7 @@ function openAbuChat() {
       lang: 'es-MX',
       onFinal: (texto) => { if (texto) tutorAbuEnviar(texto); else micMsg.textContent = 'No escuché nada, intenta de nuevo 🎙️'; },
       onError: (err) => { micMsg.textContent = err === 'no-soportado' ? 'Tu navegador no reconoce voz — escribe tu duda 😉' : 'No te escuché, intenta de nuevo'; },
-      textoEscuchando: 'Escuchando… toca de nuevo para enviar'
+      textoEscuchando: 'Escuchando… habla y se enviará solo (o toca para terminar antes)'
     });
     input.focus();
 
@@ -2648,7 +2648,7 @@ function openAbuChat() {
     bindMicManual(micBtn, msg, {
       onFinal: (texto) => { if (texto) dgResponder(idx, texto); else msg.textContent = 'No escuché nada — habla de nuevo o escribe 🎙️'; },
       onError: (err) => { msg.textContent = err === 'no-soportado' ? 'Tu navegador no reconoce voz — escribe tu respuesta 😉' : 'No te escuché, intenta de nuevo'; },
-      textoEscuchando: 'Escuchando… toca de nuevo para enviar'
+      textoEscuchando: 'Escuchando… habla y se enviará solo (o toca para terminar antes)'
     });
   }
 
@@ -3773,10 +3773,16 @@ function openAbuChat() {
     rec.maxAlternatives = 1;
     return rec;
   }
-  // Grabación con inicio/parada MANUAL: el usuario toca el micrófono para
-  // empezar y lo vuelve a tocar para parar y enviar lo que dijo (antes se
-  // detenía solo apenas detectaba una pausa, y a veces cortaba a mitad de
-  // frase). onFinal(texto) se dispara una sola vez, al terminar de parar.
+  // Grabación con inicio MANUAL y parada AUTOMÁTICA por silencio: el
+  // usuario toca el micrófono para empezar, y en cuanto deja de hablar
+  // unos segundos se envía solo. También se puede tocar el botón de
+  // nuevo para cortar antes, sin esperar el silencio.
+  // (Antes la parada era 100% manual porque el auto-stop NATIVO del
+  // navegador cortaba a mitad de frase apenas detectaba una pausa corta.
+  // Ese riesgo lo evita el temporizador de abajo: solo cuenta silencio
+  // DESPUÉS de que ya se dijo algo, y con un margen generoso — así no se
+  // corta a media frase, pero tampoco hace falta tocar dos veces.)
+  const SILENCIO_AUTO_DETENER_MS = 2200;
   function iniciarGrabacionVoz({ onFinal, onError, lang }) {
     // Mata cualquier grabación anterior que haya quedado viva.
     if (recActivoGlobal) { try { recActivoGlobal.abort(); } catch {} recActivoGlobal = null; }
@@ -3789,12 +3795,24 @@ function openAbuChat() {
     const textoTotal = () => limpiarRepeticionesVoz((previo + ' ' + sesion).trim());
     let detenidoManual = false;
     let cerrado = false;       // onFinal/onError se disparan UNA sola vez
+    let temporizadorSilencio = null;
     const t0 = Date.now();
     const MAX_MS = 120000;     // tope duro de 2 min por grabación
+
+    const limpiarTemporizador = () => { if (temporizadorSilencio) { clearTimeout(temporizadorSilencio); temporizadorSilencio = null; } };
+    // Se reprograma en cada resultado nuevo: si pasan SILENCIO_AUTO_DETENER_MS
+    // sin que llegue nada más, se envía solo. Antes de que se diga la
+    // primera palabra no cuenta silencio — se espera lo que haga falta.
+    const reprogramarAutoDetener = () => {
+      limpiarTemporizador();
+      if (!sesion.trim()) return;
+      temporizadorSilencio = setTimeout(() => { if (!detenidoManual) rec.detener(); }, SILENCIO_AUTO_DETENER_MS);
+    };
 
     const cerrar = (fn, arg) => {
       if (cerrado) return;
       cerrado = true;
+      limpiarTemporizador();
       if (recActivoGlobal === rec) recActivoGlobal = null;
       fn && fn(arg);
     };
@@ -3805,6 +3823,7 @@ function openAbuChat() {
       let texto = '';
       for (let i = 0; i < e.results.length; i++) texto += e.results[i][0].transcript + ' ';
       sesion = texto.trim();
+      reprogramarAutoDetener();
     };
 
     rec.onerror = (e) => {
@@ -3821,13 +3840,17 @@ function openAbuChat() {
 
     rec.onend = () => {
       if (cerrado) return;
+      limpiarTemporizador();
       // Se cierra la sesión: lo suyo pasa a 'previo' y la siguiente
       // empieza limpia (e.results se reinicia en cada sesión).
       if (sesion) { previo = (previo + ' ' + sesion).trim(); sesion = ''; }
       if (detenidoManual) { cerrar(onFinal, textoTotal()); return; }
       // Chrome corta solo tras unos segundos de silencio aunque continuous
       // sea true: se reanuda sin perder lo dicho, para que el botón nunca
-      // quede trabado en "stop" y las pausas no corten la frase.
+      // quede trabado en "stop" y las pausas no corten la frase. (El
+      // auto-detener de arriba normalmente ya habrá actuado antes de que
+      // esto ocurra; esto es solo la red de seguridad si el navegador
+      // corta primero por su cuenta.)
       if (Date.now() - t0 < MAX_MS) {
         try { rec.start(); return; } catch {}
       }
@@ -3836,6 +3859,7 @@ function openAbuChat() {
 
     rec.detener = () => {
       detenidoManual = true;
+      limpiarTemporizador();
       try { rec.stop(); } catch { cerrar(onFinal, textoTotal()); }
     };
 
@@ -3853,7 +3877,7 @@ function openAbuChat() {
   }
   // Prende/apaga la UI del botón de micrófono con este patrón manual: un
   // solo listener que alterna entre "grabar" y "detener y enviar".
-  function bindMicManual(btn, msg, { onFinal, onError, lang = 'en-US', textoEscuchando = 'Escuchando… toca de nuevo para enviar' }) {
+  function bindMicManual(btn, msg, { onFinal, onError, lang = 'en-US', textoEscuchando = 'Escuchando… habla y se enviará solo (o toca para terminar antes)' }) {
     if (!btn) return;
     let grabacion = null;
     let watchdog = null;
@@ -4223,7 +4247,7 @@ function openAbuChat() {
       onError: (err) => {
         msg.textContent = err === 'no-soportado' ? 'Tu navegador no reconoce voz 😕' : 'No te escuché, intenta de nuevo';
       },
-      textoEscuchando: 'Escuchando… toca de nuevo para enviar'
+      textoEscuchando: 'Escuchando… habla y se enviará solo (o toca para terminar antes)'
     });
   }
   async function domEnviarAbu(text) {
