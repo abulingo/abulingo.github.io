@@ -714,6 +714,11 @@ function openAbuChat() {
   window.playAudioUrl = (url) => { if (url) new Audio(url).play().catch(() => {}); };
 
   // Síntesis de voz (Text-to-Speech) en inglés
+  // VOZ_VELOCIDAD manda tanto en la voz REAL de Google Cloud (se envía a
+  // la Edge Function) como en la del navegador, que es el respaldo: así
+  // el ritmo es el mismo se oiga una u otra. 0.85 ≈ 15 % más lento que
+  // el normal, que es lo que un principiante alcanza a seguir.
+  const VOZ_VELOCIDAD = 0.85;
   let ttsVoices = [];
   function loadVoices() { ttsVoices = window.speechSynthesis ? window.speechSynthesis.getVoices() : []; }
   if (window.speechSynthesis) {
@@ -729,69 +734,157 @@ function openAbuChat() {
     const u = new SpeechSynthesisUtterance(text);
     const v = pickEnglishVoice();
     if (v) u.voice = v;
-    u.lang = 'en-US'; u.rate = 0.95;
+    u.lang = 'en-US'; u.rate = VOZ_VELOCIDAD;
     if (onend) u.onend = onend;
     window.speechSynthesis.speak(u);
   }
-  function stopSpeaking() { if (window.speechSynthesis) window.speechSynthesis.cancel(); }
-
-  /* ------------------------------------------------------------
-     Voz real de Abu en "Conversa con Abu" (Dominar): en vez de la
-     síntesis del navegador (speak()), pide el audio ya generado con
-     voces WaveNet de Google Cloud a la Edge Function
-     "generar-audio-abu" (requiere sesión — mismo portero/plan que
-     "generar-dialogo") y lo reproduce, para que la charla se sienta
-     más fluida. Si el plan no alcanza, no hay sesión o la función
-     falla, cae automáticamente a speak() como hasta ahora, así que
-     "Conversa con Abu" nunca se queda muda.
-
-     domAbuAudioCache guarda el audio (base64) ya obtenido de Google
-     Cloud, por texto exacto, mientras dura la charla actual — así,
-     al tocar 🔊 para reescuchar una burbuja ya dicha, se reproduce
-     ESE mismo audio real en vez de volver a sintetizar con la voz
-     del navegador (y sin gastar cupo de la Edge Function otra vez).
-     Se vacía cada vez que arranca una nueva charla (domIniciarAbu).
-  ------------------------------------------------------------ */
-  let abuAudioActual = null;
-  const domAbuAudioCache = new Map(); // texto -> audioContent (base64 mp3)
-  function domResetAudioCache() { domAbuAudioCache.clear(); }
-
-  function domReproducirAudioBase64(audioContent, onend) {
-    const audio = new Audio(`data:audio/mp3;base64,${audioContent}`);
-    abuAudioActual = audio;
-    audio.onended = () => { abuAudioActual = null; if (onend) onend(); };
-    audio.onerror = () => { abuAudioActual = null; if (onend) onend(); };
-    audio.play().catch(() => { abuAudioActual = null; if (onend) onend(); });
-    return audio;
+  function stopSpeaking() {
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
+    // También corta el audio REAL que esté sonando: antes stopSpeaking()
+    // solo silenciaba la voz del navegador, así que si estaba sonando un
+    // mp3 de Google Cloud se montaba encima de la línea siguiente.
+    detenerVozReal();
   }
 
-  async function speakAbu(text, onend) {
-    stopSpeaking();
-    if (abuAudioActual) { try { abuAudioActual.pause(); } catch {} abuAudioActual = null; }
+  /* ------------------------------------------------------------
+     MOTOR DE VOZ REAL — lo usan TODOS los chats en inglés de esta
+     página: "Conversa con Abu" (Dominar), el chat de vocabulario y el
+     diálogo con las palabras del grupo. En vez de la síntesis del
+     navegador (speak(), que es la que suena robótica), pide el mp3 a la
+     Edge Function "generar-audio-abu", que genera con voces Chirp 3: HD
+     de Google Cloud y a velocidad VOZ_VELOCIDAD (más lenta que la
+     nativa, para principiantes).
 
-    const cacheado = domAbuAudioCache.get(text);
-    if (cacheado) { domReproducirAudioBase64(cacheado, onend); return; }
+     ÚNICA EXCEPCIÓN a propósito: "Ahora, a conversar" de Dominar sigue
+     usando los audios ya grabados en Supabase (linea.audio) — esos son
+     audios reales que no hay por qué reemplazar.
+
+     · vozCache guarda por VOZ + TEXTO lo ya generado, así reescuchar una
+       burbuja no vuelve a gastar cupo ni a llamar a Google.
+     · precargarVoces() trae un diálogo entero en UNA sola llamada
+       (un solo crédito) antes de empezar a reproducirlo.
+     · Si no hay sesión, el plan no alcanza o la función falla, se cae a
+       speak() como siempre: ninguna línea se queda muda.
+  ------------------------------------------------------------ */
+  let abuAudioActual = null;
+  let vozAvisoDado = false;                 // el aviso del servidor se muestra una vez
+  const vozCache = new Map();               // "voz|texto" -> audioContent (base64 mp3)
+  function domResetAudioCache() { vozCache.clear(); }
+
+  // Etiquetas de voz que entiende la Edge Function (allá se traducen a
+  // voces Chirp 3: HD concretas). Persona A y Persona B tienen timbres
+  // distintos para que un diálogo no suene como una sola persona.
+  const VOZ_ABU = 'abu';
+  const vozDePersonaje = (p) => (String(p || '').toUpperCase() === 'B' ? 'b' : 'a');
+  const claveVoz = (voz, texto) => `${voz}|${texto}`;
+
+  function detenerVozReal() {
+    if (abuAudioActual) { try { abuAudioActual.pause(); } catch {} abuAudioActual = null; }
+  }
+
+  function reproducirBase64(audioContent, onend) {
+    detenerVozReal();
+    const audio = new Audio(`data:audio/mp3;base64,${audioContent}`);
+    abuAudioActual = audio;
+    const fin = () => { if (abuAudioActual === audio) abuAudioActual = null; if (onend) onend(); };
+    audio.onended = fin;
+    audio.onerror = fin;
+    audio.play().catch(fin);
+    return audio;
+  }
+  // Nombre viejo, por si queda alguna llamada suelta.
+  function domReproducirAudioBase64(audioContent, onend) { return reproducirBase64(audioContent, onend); }
+
+  /* ---------- Precarga en LOTE ----------
+     Pide de una sola vez (una llamada = un crédito) el audio de varias
+     líneas: [{texto, voz}]. Se usa al abrir un diálogo, así las burbujas
+     suenan al instante en vez de esperar una llamada por línea. */
+  async function precargarVoces(lineas) {
+    if (!puedeIA()) return false;
+    const pendientes = (lineas || [])
+      .map(l => ({ texto: String(l?.texto || '').trim(), voz: l?.voz || VOZ_ABU }))
+      .filter(l => l.texto && !vozCache.has(claveVoz(l.voz, l.texto)))
+      .slice(0, 14);
+    if (!pendientes.length) return true;
+    try {
+      const headers = await cabecerasIA();
+      if (!headers) return false;
+      const resp = await fetch(`${SUPABASE_URL}/functions/v1/generar-audio-abu`, {
+        method: 'POST', headers,
+        body: JSON.stringify({ lineas: pendientes, velocidad: VOZ_VELOCIDAD })
+      });
+      const payload = await resp.json().catch(() => null);
+      if (!resp.ok || !Array.isArray(payload?.audios)) { avisarVoz(payload); return false; }
+      // El servidor puede saltarse una línea que falle, así que se
+      // emparejan por TEXTO y no por posición.
+      const porTexto = new Map();
+      pendientes.forEach(p => {
+        if (!porTexto.has(p.texto)) porTexto.set(p.texto, []);
+        porTexto.get(p.texto).push(p);
+      });
+      payload.audios.forEach(a => {
+        const lista = porTexto.get(String(a?.texto || ''));
+        const p = lista && lista.shift();
+        if (p && a?.audioContent) vozCache.set(claveVoz(p.voz, p.texto), a.audioContent);
+      });
+      return true;
+    } catch (err) {
+      console.warn('[voz] precarga fallida:', err?.message || err);
+      return false;
+    }
+  }
+
+  function avisarVoz(payload) {
+    if (vozAvisoDado || !payload?.codigo) return;
+    vozAvisoDado = true;                    // una sola vez por sesión
+    manejarRechazoIA(payload);
+  }
+
+  /* ---------- Voz REAL para cualquier línea en inglés ----------
+     Pide el mp3 a la Edge Function "generar-audio-abu" (voces Chirp 3:
+     HD, ritmo VOZ_VELOCIDAD) y lo reproduce. Guarda lo ya generado en
+     vozCache por voz+texto, así reescuchar una burbuja no vuelve a
+     gastar cupo. Si no hay plan/sesión o la función falla, cae a la voz
+     del navegador para que ninguna línea quede muda. */
+  async function vozReal(texto, opciones = {}) {
+    const t = String(texto || '').trim();
+    const cfg = (typeof opciones === 'string') ? { voz: opciones } : (opciones || {});
+    const voz = cfg.voz || VOZ_ABU;
+    const onend = cfg.onend || null;
+    if (!t) { if (onend) onend(); return; }
+
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
+    detenerVozReal();
+
+    const clave = claveVoz(voz, t);
+    const cacheado = vozCache.get(clave);
+    if (cacheado) { reproducirBase64(cacheado, onend); return; }
 
     if (puedeIA()) {
       try {
         const headers = await cabecerasIA();
         if (headers) {
           const resp = await fetch(`${SUPABASE_URL}/functions/v1/generar-audio-abu`, {
-            method: 'POST', headers, body: JSON.stringify({ texto: text })
+            method: 'POST', headers,
+            body: JSON.stringify({ texto: t, voz, velocidad: VOZ_VELOCIDAD })
           });
           const payload = await resp.json().catch(() => null);
           if (resp.ok && payload?.audioContent) {
-            domAbuAudioCache.set(text, payload.audioContent);
-            domReproducirAudioBase64(payload.audioContent, onend);
+            vozCache.set(clave, payload.audioContent);
+            reproducirBase64(payload.audioContent, onend);
             return;
           }
+          avisarVoz(payload);
         }
       } catch (err) {
-        console.warn('[Abu] audio real no disponible, uso voz del navegador:', err?.message || err);
+        console.warn('[voz] audio real no disponible, uso voz del navegador:', err?.message || err);
       }
     }
-    speak(text, onend);
+    speak(t, onend);
   }
+
+  // Abu siempre habla con SU voz; el resto de los chats pasan la suya.
+  function speakAbu(text, onend) { return vozReal(text, { voz: VOZ_ABU, onend }); }
 
   function triggerConfetti() {
     if (window.confetti) confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 }, colors: ['#FF7A00', '#3b82f6', '#fbbf24'] });
@@ -2566,7 +2659,18 @@ function openAbuChat() {
         <div id="dg-turno" class="flex flex-col items-center gap-1.5"></div>
       </div>`;
     dgBind();
-    dgPaso(0);
+    // Se precargan TODAS las voces del diálogo antes de empezar: una sola
+    // llamada (un crédito) en vez de una por línea, y sin pausas raras
+    // entre burbuja y burbuja.
+    dgPrepararAudios().then(() => dgPaso(0));
+  }
+
+  async function dgPrepararAudios() {
+    const info = domDialogoActual;
+    if (!info || !puedeIA()) return;
+    const turno = document.getElementById('dg-turno');
+    if (turno) turno.innerHTML = `<p class="text-xs font-bold text-slate-400"><i class="fas fa-circle-notch fa-spin mr-1"></i>Preparando las voces…</p>`;
+    await precargarVoces(info.data.lines.map(l => ({ texto: l.en, voz: vozDePersonaje(l.speaker) })));
   }
 
   function dgBind() {
@@ -2574,7 +2678,7 @@ function openAbuChat() {
     if (!box) return;
     box.addEventListener('click', (e) => {
       const say = e.target.closest('[data-say]');
-      if (say) { stopSpeaking(); speak(decodeURIComponent(say.dataset.say || '')); return; }
+      if (say) { vozReal(decodeURIComponent(say.dataset.say || ''), { voz: say.dataset.voz || 'a' }); return; }
       const tr = e.target.closest('[data-toggle-tr]');
       if (tr) { const el = document.getElementById(tr.dataset.toggleTr); if (el) el.classList.toggle('hidden'); }
     });
@@ -2584,7 +2688,10 @@ function openAbuChat() {
     const box = document.getElementById('dg-messages');
     if (!box) return;
     const idTr = 'dg-tr-' + Math.random().toString(36).slice(2, 9);
-    const btnSay = `<button data-say="${encodeURIComponent(en)}" title="Escuchar" class="shrink-0 w-8 h-8 rounded-full bg-white border border-slate-200 text-slate-400 hover:text-[#FF7A00] hover:border-[#FF7A00] active:scale-90 transition flex items-center justify-center"><i class="fas fa-volume-up text-[11px]"></i></button>`;
+    // data-voz: la burbuja recuerda con qué voz debe sonar (Persona A o
+    // Persona B), para que el 🔊 no las mezcle al reescuchar.
+    const vozLinea = vozDePersonaje(role === 'user' ? (domDialogoActual?.personaje || 'A') : role);
+    const btnSay = `<button data-say="${encodeURIComponent(en)}" data-voz="${vozLinea}" title="Escuchar" class="shrink-0 w-8 h-8 rounded-full bg-white border border-slate-200 text-slate-400 hover:text-[#FF7A00] hover:border-[#FF7A00] active:scale-90 transition flex items-center justify-center"><i class="fas fa-volume-up text-[11px]"></i></button>`;
     const div = document.createElement('div');
     if (role === 'user') {
       div.className = 'flex justify-end items-end gap-1.5';
@@ -2619,8 +2726,17 @@ function openAbuChat() {
     if (!esMio) {
       turno.innerHTML = `<div class="text-center text-slate-300"><i class="fas fa-volume-up fa-lg"></i></div>`;
       dgBubble(linea.speaker, linea.en, linea.es);
-      speak(linea.en);
-      setTimeout(() => dgPaso(idx + 1), Math.max(1400, linea.en.length * 55));
+      // Se avanza cuando TERMINA el audio, no a los N milisegundos que
+      // salían de contar letras: con la voz real (más lenta) ese cálculo
+      // cortaba la línea a la mitad. El temporizador queda solo de red de
+      // seguridad por si el audio nunca llega a sonar.
+      let avanzado = false;
+      const avanzar = () => { if (avanzado) return; avanzado = true; setTimeout(() => dgPaso(idx + 1), 700); };
+      const respaldo = setTimeout(avanzar, Math.max(3000, linea.en.length * 95));
+      vozReal(linea.en, {
+        voz: vozDePersonaje(linea.speaker),
+        onend: () => { clearTimeout(respaldo); avanzar(); }
+      });
       return;
     }
 
@@ -4183,10 +4299,10 @@ function openAbuChat() {
     speakAbu(saludo.en);
   }
 
-  // Botón 🔊 (reescuchar) en cada burbuja — en las de Abu reproduce el
-  // audio REAL ya obtenido de Google Cloud (cacheado en domAbuAudioCache,
-  // ver speakAbu); en las tuyas usa la voz del navegador, ya que de tu
-  // voz solo se guarda el texto reconocido, no el audio.
+  // Botón 🔊 (reescuchar) en cada burbuja — las de Abu suenan con SU voz
+  // real (cacheada en vozCache, ver vozReal) y las tuyas con la voz 'a',
+  // también real: de tu voz solo se guarda el texto reconocido, así que
+  // lo que se oye es ese texto leído, no tu grabación.
   // "Ver traducción" queda oculta hasta tocarla.
   function domAddBubble(role, msg) {
     const box = document.getElementById('dom-abu-messages');
@@ -4216,7 +4332,9 @@ function openAbuChat() {
     if (!cont) return;
     const lista = (Array.isArray(tips) ? tips : []).map(t => String(t || '').trim()).filter(Boolean).slice(0, 3);
     cont.innerHTML = lista.map(r => `<button class="quick-reply shrink-0 text-[11px] font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-500" data-txt="${escapeHTML(r)}">🔊 ${escapeHTML(r)}</button>`).join('');
-    cont.querySelectorAll('.quick-reply').forEach(b => { b.onclick = () => speak(b.dataset.txt || ''); });
+    // Las 3 sugerencias son para ESCUCHAR: suenan con la voz real (voz
+    // 'a', distinta a la de Abu, porque son ejemplos de lo que dirías tú).
+    cont.querySelectorAll('.quick-reply').forEach(b => { b.onclick = () => vozReal(b.dataset.txt || '', { voz: 'a' }); });
   }
   function domBindAbu() {
     // Delegación de clics dentro del chat: 🔊 reescuchar y "Ver traducción".
@@ -4229,7 +4347,7 @@ function openAbuChat() {
           // Burbuja de Abu → reproduce el audio real (cacheado o, si hace
           // falta, recién pedido a Google Cloud). Burbuja tuya → siempre
           // voz del navegador, de tu voz solo se guardó el texto.
-          if (say.dataset.abu) speakAbu(texto); else { stopSpeaking(); speak(texto); }
+          if (say.dataset.abu) speakAbu(texto); else vozReal(texto, { voz: 'a' });
           return;
         }
         const tr = e.target.closest('[data-toggle-tr]');

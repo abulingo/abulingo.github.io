@@ -409,6 +409,11 @@
   }, { passive: true });
 
   // Síntesis de voz en inglés (mismo criterio que abulingo.html: voz en-US si existe)
+  // VOZ_VELOCIDAD manda igual en la voz REAL de Google Cloud (se manda a
+  // la Edge Function) y en la del navegador, que es solo el respaldo.
+  // 0.85 ≈ 15 % más lento que el ritmo normal: es el que un principiante
+  // alcanza a seguir.
+  const VOZ_VELOCIDAD = 0.85;
   let ttsVoices = [];
   function loadVoices() { ttsVoices = window.speechSynthesis ? window.speechSynthesis.getVoices() : []; }
   if (window.speechSynthesis) { loadVoices(); window.speechSynthesis.onvoiceschanged = loadVoices; }
@@ -422,10 +427,30 @@
     const u = new SpeechSynthesisUtterance(text);
     const v = pickEnglishVoice();
     if (v) u.voice = v;
-    u.lang = 'en-US'; u.rate = 0.92;
+    u.lang = 'en-US'; u.rate = VOZ_VELOCIDAD;
     window.speechSynthesis.speak(u);
   }
-  function stopSpeaking() { if (window.speechSynthesis) window.speechSynthesis.cancel(); }
+  // Audio real (mp3 de Google Cloud) que esté sonando ahora mismo, para
+  // poder cortarlo: antes stopSpeaking() solo callaba la voz del
+  // navegador y el mp3 seguía sonando encima de la línea siguiente.
+  let pzAudioActual = null;
+  function pzDetenerAudio() {
+    if (pzAudioActual) { try { pzAudioActual.pause(); } catch {} pzAudioActual = null; }
+  }
+  function pzTocarUrl(url, onend) {
+    pzDetenerAudio();
+    const a = new Audio(url);
+    pzAudioActual = a;
+    const fin = () => { if (pzAudioActual === a) pzAudioActual = null; if (onend) onend(); };
+    a.onended = fin;
+    a.onerror = fin;
+    a.play().catch(fin);
+    return a;
+  }
+  function stopSpeaking() {
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
+    pzDetenerAudio();
+  }
 
   /* ============================================================
      3. FRASES: se cargan de la tabla "frases" (misma tabla que
@@ -1156,7 +1181,11 @@
 
   let pzCrearForm = { tema: '', nivel: null, mensajes: 8, a: 'Alex', b: 'Sam' };
   let pzCrearGenerando = false;
-  const pzAudioCache = new Map();    // texto en inglés -> audioContent (base64 mp3)
+  const pzAudioCache = new Map();    // "voz|texto" -> audioContent (base64 mp3)
+  // Etiqueta de voz por personaje: A y B suenan distinto (la Edge
+  // Function traduce estas etiquetas a voces Chirp 3: HD concretas).
+  const pzVozDe = (rol) => (String(rol || '').toUpperCase() === 'B' ? 'b' : 'a');
+  const pzClaveVoz = (voz, texto) => `${voz}|${texto}`;
 
   function pzConvCreadas() {
     if (!Array.isArray(flujo.convCreadas)) flujo.convCreadas = [];
@@ -1507,7 +1536,15 @@
       e.currentTarget.className = `shrink-0 text-[10px] font-black px-2 py-1.5 rounded-lg ${pzVivo.verTrad ? 'bg-[#FF7A00] text-white' : 'bg-slate-100 text-slate-500'}`;
       document.querySelectorAll('.vivo-trad').forEach(el => el.classList.toggle('hidden', !pzVivo.verTrad));
     };
-    pzVivoPaso();
+    // Antes de la primera línea se traen TODAS las voces de una sola
+    // vez: así la conversación fluye sin esperas entre turno y turno.
+    if (pzVivo.conv?.creada) {
+      const turno = document.getElementById('vivo-turno');
+      if (turno) turno.innerHTML = `<p class="text-xs font-bold text-slate-400"><i class="fas fa-circle-notch fa-spin mr-1"></i>Preparando las voces…</p>`;
+      pzPrecargarAudios(pzVivo.conv.mensajes).finally(() => { if (pzVivo) pzVivoPaso(); });
+    } else {
+      pzVivoPaso();
+    }
   }
 
   function cerrarVivo() {
@@ -1722,22 +1759,25 @@
      pzAudioCache por texto exacto, así reescuchar una línea no vuelve a
      gastar cupo de la función. */
   async function pzAudioAbu(texto, rol) {
-    if (!texto) return null;
-    if (pzAudioCache.has(texto)) return pzAudioCache.get(texto);
+    const t = String(texto || '').trim();
+    if (!t) return null;
+    const voz = pzVozDe(rol);
+    const clave = pzClaveVoz(voz, t);
+    if (pzAudioCache.has(clave)) return pzAudioCache.get(clave);
     const headers = await cabecerasIA();
     if (!headers) return null;
     try {
       const resp = await fetch(`${SUPABASE_URL}/functions/v1/generar-audio-abu`, {
         method: 'POST',
         headers,
-        // `voz` es opcional: si tu Edge Function la soporta, cada personaje
-        // suena distinto; si la ignora, el audio sale con la voz por defecto.
-        body: JSON.stringify({ texto, voz: rol === 'B' ? 'b' : 'a' })
+        // `voz` da a cada personaje su propio timbre y `velocidad` deja el
+        // audio más lento que el ritmo nativo, para principiantes.
+        body: JSON.stringify({ texto: t, voz, velocidad: VOZ_VELOCIDAD })
       });
       const payload = await resp.json().catch(() => null);
       if (payload?.codigo && pzManejarRechazoIA(payload)) return null;
       if (!resp.ok || !payload?.audioContent) return null;
-      pzAudioCache.set(texto, payload.audioContent);
+      pzAudioCache.set(clave, payload.audioContent);
       return payload.audioContent;
     } catch (err) {
       console.warn('[crear conversación] audio:', err?.message || err);
@@ -1745,20 +1785,94 @@
     }
   }
 
+  /* ---------- Precarga en LOTE ----------
+     Pide en UNA sola llamada (un solo crédito) el audio de todas las
+     líneas de una conversación creada, en vez de una llamada por línea.
+     Devuelve cuántas quedaron listas. */
+  async function pzPrecargarAudios(mensajes) {
+    const pendientes = (mensajes || [])
+      .map(m => ({ texto: String(m?.en || '').trim(), voz: pzVozDe(m?.rol), ref: m }))
+      .filter(l => l.texto && !l.ref.audio_url && !pzAudioCache.has(pzClaveVoz(l.voz, l.texto)))
+      .slice(0, 14);
+
+    // Lo que ya estaba en caché se aprovecha aunque no haya red.
+    (mensajes || []).forEach(m => {
+      const t = String(m?.en || '').trim();
+      const c = pzAudioCache.get(pzClaveVoz(pzVozDe(m?.rol), t));
+      if (c && !m.audio_url) m.audio_url = `data:audio/mp3;base64,${c}`;
+    });
+    if (!pendientes.length) return 0;
+
+    const headers = await cabecerasIA();
+    if (!headers) return 0;
+    try {
+      const resp = await fetch(`${SUPABASE_URL}/functions/v1/generar-audio-abu`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          lineas: pendientes.map(l => ({ texto: l.texto, voz: l.voz })),
+          velocidad: VOZ_VELOCIDAD
+        })
+      });
+      const payload = await resp.json().catch(() => null);
+      if (payload?.codigo && pzManejarRechazoIA(payload)) return 0;
+      if (!resp.ok || !Array.isArray(payload?.audios)) return 0;
+
+      // El servidor puede saltarse una línea que falle, así que se
+      // emparejan por TEXTO y no por posición.
+      const porTexto = new Map();
+      pendientes.forEach(l => {
+        if (!porTexto.has(l.texto)) porTexto.set(l.texto, []);
+        porTexto.get(l.texto).push(l);
+      });
+      let ok = 0;
+      payload.audios.forEach(a => {
+        const lista = porTexto.get(String(a?.texto || ''));
+        const l = lista && lista.shift();
+        if (!l || !a?.audioContent) return;
+        pzAudioCache.set(pzClaveVoz(l.voz, l.texto), a.audioContent);
+        l.ref.audio_url = `data:audio/mp3;base64,${a.audioContent}`;
+        ok++;
+      });
+      return ok;
+    } catch (err) {
+      console.warn('[crear conversación] precarga de audio:', err?.message || err);
+      return 0;
+    }
+  }
+
   // Reproduce una línea: primero el audio real; si no existe todavía y la
   // conversación es creada, se pide a la Edge Function; si nada funciona,
   // se usa la voz del navegador para no dejar la línea muda.
+  /* Última red: dice una línea con la voz REAL (mismo motor de Abu) y
+     solo si eso no se puede, con la del navegador. Se usa donde antes
+     se caía directo a speak(): líneas de conversaciones guardadas que no
+     tienen mp3 en Supabase y frases sueltas sin audio grabado.
+     (Las conversaciones guardadas SIGUEN usando primero su audio real de
+     Supabase; esto es únicamente para cuando no existe). */
+  async function pzDecir(texto, rol, btn) {
+    const t = String(texto || '').trim();
+    if (!t) return;
+    stopSpeaking();
+    const previo = btn ? btn.innerHTML : null;
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-circle-notch fa-spin text-[10px]"></i>'; }
+    const b64 = await pzAudioAbu(t, rol);
+    if (btn) { btn.disabled = false; btn.innerHTML = previo; }
+    if (b64) pzTocarUrl(`data:audio/mp3;base64,${b64}`);
+    else speak(t);
+  }
+
   async function pzReproducirLinea(conv, m, btn) {
     stopSpeaking();
-    if (m.audio_url) { new Audio(m.audio_url).play().catch(() => speak(m.en)); return; }
-    if (!conv?.creada) { speak(m.en); return; }
+    if (m.audio_url) { pzTocarUrl(m.audio_url); return; }
+    if (!conv?.creada) { pzDecir(m.en, m.rol, btn); return; }
     const previo = btn ? btn.innerHTML : null;
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-circle-notch fa-spin text-[10px]"></i>'; }
     const b64 = await pzAudioAbu(m.en, m.rol);
     if (btn) { btn.disabled = false; btn.innerHTML = previo; }
     if (b64) {
       m.audio_url = `data:audio/mp3;base64,${b64}`;
-      new Audio(m.audio_url).play().catch(() => speak(m.en));
+      pzTocarUrl(m.audio_url);
     } else speak(m.en);
   }
 
@@ -1770,12 +1884,9 @@
     const pendientes = conv.mensajes.filter(m => !m.audio_url);
     if (!pendientes.length) { showToast('🔊 Los audios ya están listos.'); return; }
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i>'; }
-    let ok = 0;
-    for (const m of conv.mensajes) {
-      if (m.audio_url) continue;
-      const b64 = await pzAudioAbu(m.en, m.rol);
-      if (b64) { m.audio_url = `data:audio/mp3;base64,${b64}`; ok++; }
-    }
+    // Una sola llamada para toda la conversación (antes era una por
+    // línea: 8 líneas = 8 llamadas y 8 créditos gastados).
+    const ok = await pzPrecargarAudios(conv.mensajes);
     if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-volume-high"></i>'; }
     showToast(ok ? `🔊 ${ok} audio${ok === 1 ? '' : 's'} listo${ok === 1 ? '' : 's'}.` : '⚠️ No pude generar los audios ahora.');
   }
@@ -2286,7 +2397,7 @@
 
     document.getElementById('pz-cerrar').onclick = cerrarPractica;
     document.getElementById('pz-escuchar').onclick = async () => {
-      if (target.audioUrl) { new Audio(target.audioUrl).play().catch(() => speak(target.text)); return; }
+      if (target.audioUrl) { pzTocarUrl(target.audioUrl); return; }
       // Línea de una conversación creada con IA: se pide su audio real.
       if (target.conversacion?.creada) {
         const b = document.getElementById('pz-escuchar');
@@ -2302,7 +2413,7 @@
           return;
         }
       }
-      speak(target.text);
+      pzDecir(target.text, target.rol);
     };
     document.getElementById('pz-mic').onclick = () => { pzRecording ? pzDetenerGrabacion() : pzIniciarGrabacion(); };
   }
