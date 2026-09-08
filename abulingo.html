@@ -1146,7 +1146,7 @@ function openAbuChat() {
   async function compartirRachaArchivo(dias) {
     if (!rachaArchivo) return;
     const texto = dias > 0
-      ? `Llevo ${dias} día${dias === 1 ? '' : 's'} seguidos aprendiendo inglés con Abulingo 🔥`
+      ? `Llevo ${dias} día${dias === 1 ? '' : 's'} seguidos aprendiendo inglés con Abulingo: https://abulingo.github.io 🔥`
       : 'Hoy empiezo mi racha de inglés con Abulingo 🔥';
     try {
       if (navigator.canShare && navigator.canShare({ files: [rachaArchivo] })) {
