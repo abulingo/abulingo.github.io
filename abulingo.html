@@ -1146,7 +1146,7 @@ function openAbuChat() {
   async function compartirRachaArchivo(dias) {
     if (!rachaArchivo) return;
     const texto = dias > 0
-      ? `Llevo ${dias} día${dias === 1 ? '' : 's'} seguidos aprendiendo inglés con Abulingo: https://abulingo.github.io 🔥`
+      ? `Llevo ${dias} día${dias === 1 ? '' : 's'} seguidos aprendiendo inglés con Abulingo 🔥`
       : 'Hoy empiezo mi racha de inglés con Abulingo 🔥';
     try {
       if (navigator.canShare && navigator.canShare({ files: [rachaArchivo] })) {
@@ -2871,7 +2871,13 @@ function openAbuChat() {
        permitirTexto, vozOtro, vozTuya, barraGlobal, onFin, onSalir
      }
   ------------------------------------------------------------ */
-  const GC_MENSAJES   = 10;      // largo fijo de TODAS las conversaciones
+  // El diálogo A/B son 10 mensajes (empieza A, cierra B). Las charlas con
+  // Abu son 11 porque Abu ABRE y CIERRA: con 10 alternos empezando por Abu
+  // el último mensaje sería tuyo, y pedirle al modelo "10 mensajes que
+  // empiecen y terminen por Abu" es imposible — esa contradicción era una
+  // de las cosas que descuadraban el guion.
+  const GC_MENSAJES     = 10;    // diálogo con las palabras del grupo
+  const GC_MENSAJES_ABU = 11;    // conversaciones con Abu (6 de Abu + 5 tuyas)
   const GC_TIMEOUT_MS = 45000;
   let gc = null;                 // sesión activa del motor
 
@@ -3319,19 +3325,23 @@ function openAbuChat() {
       tu:  { en: 'Thank you, Abu. See you tomorrow.',           es: 'Gracias, Abu. Hasta mañana.' } }
   ];
 
-  /* Arma una conversación de respaldo de GC_MENSAJES mensajes con el
+  /* Arma una conversación de respaldo de GC_MENSAJES_ABU mensajes con el
      formato que espera el motor. `frases` (opcional) son las frases que
      el estudiante acaba de estudiar: si existen, esas son tus líneas. */
   function guionRespaldo(frases) {
     const mensajes = [];
     const pares = [...GUION_BASICO];
     const propias = (frases || []).filter(f => f && f.en);
-    for (let i = 0; i < GC_MENSAJES / 2; i++) {
+    const turnos = Math.floor(GC_MENSAJES_ABU / 2);      // 5 turnos tuyos
+    for (let i = 0; i < turnos; i++) {
       const par = pares[i % pares.length];
       const mia = propias[i] || par.tu;
       mensajes.push({ rol: 'otro', en: par.abu.en, es: par.abu.es, nombre: 'Abu', voz: 'abu' });
       mensajes.push({ rol: 'tu',   en: mia.en,     es: mia.es || '',                 voz: 'a' });
     }
+    // Abu cierra, igual que en el guion que escribe la IA.
+    const cierre = pares[pares.length - 1];
+    mensajes.push({ rol: 'otro', en: cierre.abu.en, es: cierre.abu.es, nombre: 'Abu', voz: 'abu' });
     return mensajes;
   }
 
@@ -3375,9 +3385,26 @@ function openAbuChat() {
   // Convierte los mensajes que devuelve la IA (rol "abu"/"tu") a lo que
   // consume el motor de conversación guiada.
   function mensajesDeAbu(lista) {
-    return (lista || []).map(m => (m.rol === 'tu')
-      ? { rol: 'tu',   en: m.en, es: m.es, voz: 'a' }
-      : { rol: 'otro', en: m.en, es: m.es, nombre: 'Abu', voz: 'abu' });
+    const mensajes = (lista || [])
+      .filter(m => m && String(m.en || '').trim())
+      .map(m => (m.rol === 'tu')
+        ? { rol: 'tu',   en: m.en, es: m.es, voz: 'a' }
+        : { rol: 'otro', en: m.en, es: m.es, nombre: 'Abu', voz: 'abu' });
+
+    // Segunda red, por si una respuesta vieja o rara llega mal armada: la
+    // charla SIEMPRE tiene que abrir Abu y alternar. Si llegan dos del
+    // mismo lado seguidos se unen, nunca se le cambia el dueño a una
+    // línea (eso es justo lo que producía diálogos sin sentido).
+    while (mensajes.length && mensajes[0].rol === 'tu') mensajes.shift();
+    const limpio = [];
+    mensajes.forEach(m => {
+      const ultimo = limpio[limpio.length - 1];
+      if (ultimo && ultimo.rol === m.rol) {
+        ultimo.en = `${ultimo.en} ${m.en}`.trim();
+        ultimo.es = [ultimo.es, m.es].filter(Boolean).join(' ').trim();
+      } else limpio.push({ ...m });
+    });
+    return limpio;
   }
 
   async function startChatPractice(nivel, group, cuenta) {
@@ -3394,7 +3421,7 @@ function openAbuChat() {
     const data = palabras.length ? await pedirGuion('generar-charla-palabras', {
       words: palabras.slice(0, 8),
       nivel: nivelActual(nivel),
-      mensajes: GC_MENSAJES,
+      mensajes: GC_MENSAJES_ABU,
       evitar: abuEvitarLista()
     }) : null;
 
@@ -3474,7 +3501,7 @@ function openAbuChat() {
   const DOM_PTS_CONVERSAR  = 20;
   const DOM_PTS_ABU        = 20;
   const DOM_PTS_SUBSECCION = 15;        // bono al completar toda la subsección
-  const DOM_CHAT_GOAL      = GC_MENSAJES; // largo de "Conversa con Abu" (guion completo)
+  const DOM_CHAT_GOAL      = GC_MENSAJES_ABU; // largo de "Conversa con Abu" (guion completo)
 
   let dominarCache = {};   // { [nivel]: { frases, practica_frases, practica_escucha, practica_videos, practica_textos, conversaciones, plan, cargado } }
 
@@ -4339,11 +4366,18 @@ function openAbuChat() {
     (item.ronda || []).forEach(r => {
       if (r.fila?.frase) frases.push({ en: String(r.fila.frase).trim(), es: String(r.fila.traduccion || '').trim() });
     });
+    // Del texto de lectura se toman POCAS y CORTAS: son narrativas ("Carlos
+    // has a presentation now") y, si llenan la lista, la IA arma la charla
+    // con material que nadie diría en una conversación.
     if (item.lee?.texto) {
-      item.lee.texto.split(/(?<=[.!?])\s+/).forEach(t => { if (t.trim()) frases.push({ en: t.trim(), es: '' }); });
+      item.lee.texto.split(/(?<=[.!?])\s+/)
+        .map(t => t.trim())
+        .filter(t => t.length > 2 && t.length <= 120)
+        .slice(0, 3)
+        .forEach(t => frases.push({ en: t, es: '' }));
     }
     const vistas = new Set();
-    return frases.filter(f => f.en && !vistas.has(f.en) && vistas.add(f.en)).slice(0, 10);
+    return frases.filter(f => f.en && !vistas.has(f.en) && vistas.add(f.en)).slice(0, 8);
   }
 
   function domIntroConversaAbu(nivel, n, item) {
@@ -4372,7 +4406,7 @@ function openAbuChat() {
     const data = domChatFrases.length ? await pedirGuion('generar-charla-dominar', {
       frases: domChatFrases.map(f => f.en),
       nivel: nivelActual(nivel),
-      mensajes: GC_MENSAJES,
+      mensajes: GC_MENSAJES_ABU,
       evitar: abuEvitarLista()
     }) : null;
 

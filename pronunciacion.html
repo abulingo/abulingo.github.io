@@ -2654,7 +2654,10 @@
       if (prac) {
         const m = pzLibre.mensajes[Number(prac.dataset.librePracticar)];
         if (!m) return;
-        pzVolverA = pintarLibreChat;
+        // Sin pzVolverA: esa ruta es para las conversaciones que YA viven
+        // dentro de un modal. Aquí el chat está en la página, así que al
+        // cerrar la práctica basta con cerrar su modal — con pzVolverA el
+        // modal se quedaba abierto encima del chat.
         abrirPractica({ text: m.en, es: m.es, nivel: pzLibre.nivel, audioUrl: m.audio_url || null, rol: 'mujer' });
         return;
       }
@@ -2672,7 +2675,12 @@
     });
     document.getElementById('libre-play-todo').onclick = pzLibreEscucharTodo;
     document.getElementById('libre-cerrar').onclick = pzLibreTerminar;
-    document.getElementById('libre-despedir').onclick = () => pzLibreTurnoIA({ cerrar: true });
+    document.getElementById('libre-despedir').onclick = () => {
+      if (pzLibrePensando) return;
+      pzLibre.mensajes.push({ rol: 'tu', en: 'I have to go now. Thank you, Emma!', fix: '' });
+      pintarLibreChat();
+      pzLibreTurnoIA({ cerrar: true });
+    };
 
     const msg = document.getElementById('libre-msg');
     document.getElementById('libre-mic').onclick = (e) => pzLibreMic(e.currentTarget, msg);
