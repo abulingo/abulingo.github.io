@@ -409,6 +409,11 @@
   }, { passive: true });
 
   // Síntesis de voz en inglés (mismo criterio que abulingo.html: voz en-US si existe)
+  // VOZ_VELOCIDAD manda igual en la voz REAL de Google Cloud (se manda a
+  // la Edge Function) y en la del navegador, que es solo el respaldo.
+  // 0.85 ≈ 15 % más lento que el ritmo normal: es el que un principiante
+  // alcanza a seguir.
+  const VOZ_VELOCIDAD = 0.85;
   let ttsVoices = [];
   function loadVoices() { ttsVoices = window.speechSynthesis ? window.speechSynthesis.getVoices() : []; }
   if (window.speechSynthesis) { loadVoices(); window.speechSynthesis.onvoiceschanged = loadVoices; }
@@ -422,10 +427,30 @@
     const u = new SpeechSynthesisUtterance(text);
     const v = pickEnglishVoice();
     if (v) u.voice = v;
-    u.lang = 'en-US'; u.rate = 0.92;
+    u.lang = 'en-US'; u.rate = VOZ_VELOCIDAD;
     window.speechSynthesis.speak(u);
   }
-  function stopSpeaking() { if (window.speechSynthesis) window.speechSynthesis.cancel(); }
+  // Audio real (mp3 de Google Cloud) que esté sonando ahora mismo, para
+  // poder cortarlo: antes stopSpeaking() solo callaba la voz del
+  // navegador y el mp3 seguía sonando encima de la línea siguiente.
+  let pzAudioActual = null;
+  function pzDetenerAudio() {
+    if (pzAudioActual) { try { pzAudioActual.pause(); } catch {} pzAudioActual = null; }
+  }
+  function pzTocarUrl(url, onend) {
+    pzDetenerAudio();
+    const a = new Audio(url);
+    pzAudioActual = a;
+    const fin = () => { if (pzAudioActual === a) pzAudioActual = null; if (onend) onend(); };
+    a.onended = fin;
+    a.onerror = fin;
+    a.play().catch(fin);
+    return a;
+  }
+  function stopSpeaking() {
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
+    pzDetenerAudio();
+  }
 
   /* ============================================================
      3. FRASES: se cargan de la tabla "frases" (misma tabla que
@@ -860,7 +885,7 @@
     { id: 'texto', icon: 'fa-file-lines', label: 'Mi texto' },
     { id: 'conversar', icon: 'fa-comments', label: 'Conversar' },
     { id: 'crear', icon: 'fa-wand-magic-sparkles', label: 'Crear conversación' },
-    { id: 'progreso', icon: 'fa-chart-simple', label: 'Progreso' }
+    { id: 'libre', icon: 'fa-comment-dots', label: 'Conversar libre' }
   ];
   let modoActual = 'buscar';
 
@@ -879,7 +904,7 @@
     else if (modoActual === 'frases') renderFrases();
     else if (modoActual === 'conversar') renderConversar();
     else if (modoActual === 'crear') renderCrear();
-    else if (modoActual === 'progreso') renderProgreso();
+    else if (modoActual === 'libre') renderLibre();
     else renderTexto();
   }
 
@@ -1057,17 +1082,12 @@
      conversaciones, gramática y subsecciones de "Dominar", con porcentajes)
      está en el menú de perfil → "Progreso nivel", que ahora funciona igual
      en las tres páginas (ver abu-menu.js). */
-  function renderProgreso() {
-    document.getElementById('mode-panel').innerHTML = `
-      <div class="card-3d p-4 sm:p-5">
-        <div id="pz-progreso-niveles"></div>
-        <button id="pz-ver-progreso-total" class="btn-juice bg-slate-800 text-white font-bold py-2.5 rounded-xl w-full mt-2">
-          <i class="fas fa-chart-line mr-2"></i>Ver mi progreso completo
-        </button>
-      </div>`;
-    document.getElementById('pz-ver-progreso-total').onclick = () => window.AbuMenu?.progresoNivel();
-    cargarYPintarProgreso();
-  }
+  /* El panel "Progreso" se retiró de las pestañas (su lugar lo ocupa
+     "Conversación libre"). El resumen por nivel se sigue calculando
+     porque otras partes lo llaman al dominar una frase o al calificar
+     una conversación; si su contenedor no está en pantalla, la función
+     de abajo simplemente no pinta nada. El progreso completo sigue
+     disponible en el menú de perfil (AbuMenu.progresoNivel). */
 
   /* ---------- Resumen "Frases dominadas" y "Conversaciones dominadas" por
      nivel (A1 · A2 · B1 · B2) ----------
@@ -1156,7 +1176,18 @@
 
   let pzCrearForm = { tema: '', nivel: null, mensajes: 8, a: 'Alex', b: 'Sam' };
   let pzCrearGenerando = false;
-  const pzAudioCache = new Map();    // texto en inglés -> audioContent (base64 mp3)
+  const pzAudioCache = new Map();    // "voz|texto" -> audioContent (base64 mp3)
+  // Etiqueta de voz por personaje: A y B suenan distinto (la Edge
+  // Function traduce estas etiquetas a voces Chirp 3: HD concretas).
+  // "A"/"B" son los personajes de una conversación creada; cualquier otra
+  // etiqueta ("mujer", "abu"...) se pasa tal cual a la Edge Function.
+  const pzVozDe = (rol) => {
+    const r = String(rol || '').trim();
+    if (/^b$/i.test(r)) return 'b';
+    if (/^a$/i.test(r)) return 'a';
+    return r.toLowerCase() || 'a';
+  };
+  const pzClaveVoz = (voz, texto) => `${voz}|${texto}`;
 
   function pzConvCreadas() {
     if (!Array.isArray(flujo.convCreadas)) flujo.convCreadas = [];
@@ -1507,7 +1538,15 @@
       e.currentTarget.className = `shrink-0 text-[10px] font-black px-2 py-1.5 rounded-lg ${pzVivo.verTrad ? 'bg-[#FF7A00] text-white' : 'bg-slate-100 text-slate-500'}`;
       document.querySelectorAll('.vivo-trad').forEach(el => el.classList.toggle('hidden', !pzVivo.verTrad));
     };
-    pzVivoPaso();
+    // Antes de la primera línea se traen TODAS las voces de una sola
+    // vez: así la conversación fluye sin esperas entre turno y turno.
+    if (pzVivo.conv?.creada) {
+      const turno = document.getElementById('vivo-turno');
+      if (turno) turno.innerHTML = `<p class="text-xs font-bold text-slate-400"><i class="fas fa-circle-notch fa-spin mr-1"></i>Preparando las voces…</p>`;
+      pzPrecargarAudios(pzVivo.conv.mensajes).finally(() => { if (pzVivo) pzVivoPaso(); });
+    } else {
+      pzVivoPaso();
+    }
   }
 
   function cerrarVivo() {
@@ -1722,22 +1761,25 @@
      pzAudioCache por texto exacto, así reescuchar una línea no vuelve a
      gastar cupo de la función. */
   async function pzAudioAbu(texto, rol) {
-    if (!texto) return null;
-    if (pzAudioCache.has(texto)) return pzAudioCache.get(texto);
+    const t = String(texto || '').trim();
+    if (!t) return null;
+    const voz = pzVozDe(rol);
+    const clave = pzClaveVoz(voz, t);
+    if (pzAudioCache.has(clave)) return pzAudioCache.get(clave);
     const headers = await cabecerasIA();
     if (!headers) return null;
     try {
       const resp = await fetch(`${SUPABASE_URL}/functions/v1/generar-audio-abu`, {
         method: 'POST',
         headers,
-        // `voz` es opcional: si tu Edge Function la soporta, cada personaje
-        // suena distinto; si la ignora, el audio sale con la voz por defecto.
-        body: JSON.stringify({ texto, voz: rol === 'B' ? 'b' : 'a' })
+        // `voz` da a cada personaje su propio timbre y `velocidad` deja el
+        // audio más lento que el ritmo nativo, para principiantes.
+        body: JSON.stringify({ texto: t, voz, velocidad: VOZ_VELOCIDAD })
       });
       const payload = await resp.json().catch(() => null);
       if (payload?.codigo && pzManejarRechazoIA(payload)) return null;
       if (!resp.ok || !payload?.audioContent) return null;
-      pzAudioCache.set(texto, payload.audioContent);
+      pzAudioCache.set(clave, payload.audioContent);
       return payload.audioContent;
     } catch (err) {
       console.warn('[crear conversación] audio:', err?.message || err);
@@ -1745,20 +1787,94 @@
     }
   }
 
+  /* ---------- Precarga en LOTE ----------
+     Pide en UNA sola llamada (un solo crédito) el audio de todas las
+     líneas de una conversación creada, en vez de una llamada por línea.
+     Devuelve cuántas quedaron listas. */
+  async function pzPrecargarAudios(mensajes) {
+    const pendientes = (mensajes || [])
+      .map(m => ({ texto: String(m?.en || '').trim(), voz: pzVozDe(m?.rol), ref: m }))
+      .filter(l => l.texto && !l.ref.audio_url && !pzAudioCache.has(pzClaveVoz(l.voz, l.texto)))
+      .slice(0, 14);
+
+    // Lo que ya estaba en caché se aprovecha aunque no haya red.
+    (mensajes || []).forEach(m => {
+      const t = String(m?.en || '').trim();
+      const c = pzAudioCache.get(pzClaveVoz(pzVozDe(m?.rol), t));
+      if (c && !m.audio_url) m.audio_url = `data:audio/mp3;base64,${c}`;
+    });
+    if (!pendientes.length) return 0;
+
+    const headers = await cabecerasIA();
+    if (!headers) return 0;
+    try {
+      const resp = await fetch(`${SUPABASE_URL}/functions/v1/generar-audio-abu`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          lineas: pendientes.map(l => ({ texto: l.texto, voz: l.voz })),
+          velocidad: VOZ_VELOCIDAD
+        })
+      });
+      const payload = await resp.json().catch(() => null);
+      if (payload?.codigo && pzManejarRechazoIA(payload)) return 0;
+      if (!resp.ok || !Array.isArray(payload?.audios)) return 0;
+
+      // El servidor puede saltarse una línea que falle, así que se
+      // emparejan por TEXTO y no por posición.
+      const porTexto = new Map();
+      pendientes.forEach(l => {
+        if (!porTexto.has(l.texto)) porTexto.set(l.texto, []);
+        porTexto.get(l.texto).push(l);
+      });
+      let ok = 0;
+      payload.audios.forEach(a => {
+        const lista = porTexto.get(String(a?.texto || ''));
+        const l = lista && lista.shift();
+        if (!l || !a?.audioContent) return;
+        pzAudioCache.set(pzClaveVoz(l.voz, l.texto), a.audioContent);
+        l.ref.audio_url = `data:audio/mp3;base64,${a.audioContent}`;
+        ok++;
+      });
+      return ok;
+    } catch (err) {
+      console.warn('[crear conversación] precarga de audio:', err?.message || err);
+      return 0;
+    }
+  }
+
   // Reproduce una línea: primero el audio real; si no existe todavía y la
   // conversación es creada, se pide a la Edge Function; si nada funciona,
   // se usa la voz del navegador para no dejar la línea muda.
+  /* Última red: dice una línea con la voz REAL (mismo motor de Abu) y
+     solo si eso no se puede, con la del navegador. Se usa donde antes
+     se caía directo a speak(): líneas de conversaciones guardadas que no
+     tienen mp3 en Supabase y frases sueltas sin audio grabado.
+     (Las conversaciones guardadas SIGUEN usando primero su audio real de
+     Supabase; esto es únicamente para cuando no existe). */
+  async function pzDecir(texto, rol, btn) {
+    const t = String(texto || '').trim();
+    if (!t) return;
+    stopSpeaking();
+    const previo = btn ? btn.innerHTML : null;
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-circle-notch fa-spin text-[10px]"></i>'; }
+    const b64 = await pzAudioAbu(t, rol);
+    if (btn) { btn.disabled = false; btn.innerHTML = previo; }
+    if (b64) pzTocarUrl(`data:audio/mp3;base64,${b64}`);
+    else speak(t);
+  }
+
   async function pzReproducirLinea(conv, m, btn) {
     stopSpeaking();
-    if (m.audio_url) { new Audio(m.audio_url).play().catch(() => speak(m.en)); return; }
-    if (!conv?.creada) { speak(m.en); return; }
+    if (m.audio_url) { pzTocarUrl(m.audio_url); return; }
+    if (!conv?.creada) { pzDecir(m.en, m.rol, btn); return; }
     const previo = btn ? btn.innerHTML : null;
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-circle-notch fa-spin text-[10px]"></i>'; }
     const b64 = await pzAudioAbu(m.en, m.rol);
     if (btn) { btn.disabled = false; btn.innerHTML = previo; }
     if (b64) {
       m.audio_url = `data:audio/mp3;base64,${b64}`;
-      new Audio(m.audio_url).play().catch(() => speak(m.en));
+      pzTocarUrl(m.audio_url);
     } else speak(m.en);
   }
 
@@ -1770,12 +1886,9 @@
     const pendientes = conv.mensajes.filter(m => !m.audio_url);
     if (!pendientes.length) { showToast('🔊 Los audios ya están listos.'); return; }
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i>'; }
-    let ok = 0;
-    for (const m of conv.mensajes) {
-      if (m.audio_url) continue;
-      const b64 = await pzAudioAbu(m.en, m.rol);
-      if (b64) { m.audio_url = `data:audio/mp3;base64,${b64}`; ok++; }
-    }
+    // Una sola llamada para toda la conversación (antes era una por
+    // línea: 8 líneas = 8 llamadas y 8 créditos gastados).
+    const ok = await pzPrecargarAudios(conv.mensajes);
     if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-volume-high"></i>'; }
     showToast(ok ? `🔊 ${ok} audio${ok === 1 ? '' : 's'} listo${ok === 1 ? '' : 's'}.` : '⚠️ No pude generar los audios ahora.');
   }
@@ -2233,6 +2346,411 @@
   }
 
   /* ============================================================
+     Modo 6: CONVERSACIÓN LIBRE CON EMMA
+     ------------------------------------------------------------
+     La diferencia con "Crear conversación": allá la IA escribe un
+     GUION cerrado y tú repites las líneas. Aquí NO hay guion — hablas
+     de lo que quieras y Emma te contesta de verdad, turno a turno,
+     como una charla real. Es la práctica más parecida a hablar con
+     una persona.
+
+     · Texto: Edge Function "conversacion-libre" (una llamada por
+       turno; es lo que hace falta para que sea libre de verdad).
+     · Voz: "generar-audio-abu" con la etiqueta "mujer" (voz femenina
+       Chirp 3: HD) y la misma velocidad lenta del resto de la app.
+     · Nivel: el que tenga el usuario en ese momento en su perfil
+       (userProfile.nivel). Emma no habla por encima de ese nivel.
+     · Cada mensaje de Emma trae "Ver traducción", 🔊 para escucharlo
+       y 🎤 para practicar ESA frase en el modal de pronunciación (con
+       su corrección con IA, igual que en el resto de la página).
+     · Cada mensaje tuyo recibe una corrección corta en español si
+       hiciste algo raro, y hay 3 sugerencias por si no sabes qué
+       responder.
+     · La charla se guarda en el perfil (flujo.convLibres) y se puede
+       retomar después: se conservan las últimas LIBRE_MAX_GUARDADAS.
+  ============================================================ */
+  const LIBRE_MAX_GUARDADAS = 10;
+  const LIBRE_MAX_MENSAJES  = 60;   // tope por charla, para no inflar el perfil
+  const LIBRE_TEMAS = [
+    'Mi trabajo y mi día a día', 'Viajes que quiero hacer', 'Comida y restaurantes',
+    'Música y películas', 'Deporte y ejercicio', 'Mi familia y mis amigos',
+    'Tecnología y celulares', 'Planes para el fin de semana', 'Estudiar inglés',
+    'Una entrevista de trabajo', 'Comprar en una tienda', 'El clima y las estaciones'
+  ];
+
+  let pzLibre = null;            // charla abierta: { id, tema, nivel, mensajes:[], ... }
+  let pzLibrePensando = false;
+  let pzLibreForm = { tema: '' };
+
+  function pzConvLibres() {
+    if (!Array.isArray(flujo.convLibres)) flujo.convLibres = [];
+    return flujo.convLibres;
+  }
+
+  /* ---------- Pantalla del modo ---------- */
+  function renderLibre() {
+    if (pzLibre) return pintarLibreChat();
+
+    const nivel = userProfile?.nivel || 'A1';
+    const guardadas = pzConvLibres();
+
+    document.getElementById('mode-panel').innerHTML = `
+      <div class="card-3d p-4 sm:p-5">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="bg-pink-100 text-pink-600 px-2.5 py-1 rounded-full text-[11px] font-bold uppercase">💬 Conversación libre</span>
+          <span class="text-[10px] font-black text-slate-400">Nivel ${escapeHTML(nivel)}</span>
+        </div>
+        <p class="text-sm text-slate-500 mb-3">Habla con <b>Emma</b> de lo que quieras, en inglés. Ella responde de verdad: no hay guion. Puedes hablar 🎙️ o escribir.</p>
+
+        <p class="text-xs font-black uppercase tracking-wide text-slate-400 mb-2">¿De qué quieres hablar?</p>
+        <textarea id="libre-tema" rows="2" maxlength="200"
+          placeholder="Ejemplo: quiero hablar de mi nuevo trabajo; o de la comida de mi país."
+          class="w-full p-3 rounded-xl border-2 border-slate-200 focus:border-[#FF7A00] outline-none text-sm">${escapeHTML(pzLibreForm.tema)}</textarea>
+
+        <div class="no-bar flex gap-1.5 overflow-x-auto whitespace-nowrap py-2 mb-1">
+          ${LIBRE_TEMAS.map(t => `<button class="libre-tema-chip shrink-0 text-[11px] font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-500 hover:bg-orange-50 hover:text-[#FF7A00]" data-tema="${escapeHTML(t)}">${escapeHTML(t)}</button>`).join('')}
+        </div>
+
+        <button id="libre-empezar" class="btn-juice bg-gradient-to-br from-[#FF7A00] to-orange-600 text-white font-bold py-3 rounded-xl w-full mt-1">
+          <i class="fas fa-comments mr-2"></i>Empezar a conversar
+        </button>
+        <p class="text-[11px] text-slate-400 text-center mt-2">Si dejas el tema vacío, Emma empieza con algo del día a día.</p>
+      </div>
+
+      ${guardadas.length ? `
+      <div class="card-3d p-4 sm:p-5 mt-4">
+        <p class="text-xs font-black uppercase tracking-wide text-slate-400 mb-2">Tus conversaciones libres</p>
+        <div class="space-y-2">
+          ${guardadas.map(c => `
+            <div class="flex items-center gap-2 bg-slate-50 border border-slate-100 rounded-xl p-2.5">
+              <button class="libre-abrir flex-1 min-w-0 text-left" data-id="${escapeHTML(c.id)}">
+                <p class="font-heading font-black text-slate-700 text-sm truncate">${escapeHTML(c.titulo || c.tema || 'Conversación libre')}</p>
+                <p class="text-[11px] text-slate-400">${(c.mensajes || []).length} mensajes · Nivel ${escapeHTML(c.nivel || 'A1')}</p>
+              </button>
+              <button class="libre-borrar shrink-0 w-8 h-8 rounded-full bg-white border border-slate-200 text-slate-300 hover:text-red-500" data-id="${escapeHTML(c.id)}" title="Borrar"><i class="fas fa-trash text-xs"></i></button>
+            </div>`).join('')}
+        </div>
+      </div>` : ''}`;
+
+    const tema = document.getElementById('libre-tema');
+    tema.addEventListener('input', () => { pzLibreForm.tema = tema.value; });
+    document.querySelectorAll('.libre-tema-chip').forEach(b => {
+      b.onclick = () => { tema.value = b.dataset.tema; pzLibreForm.tema = b.dataset.tema; tema.focus(); };
+    });
+    document.getElementById('libre-empezar').onclick = () => pzLibreEmpezar(tema.value.trim());
+    document.querySelectorAll('.libre-abrir').forEach(b => {
+      b.onclick = () => {
+        const c = pzConvLibres().find(x => x.id === b.dataset.id);
+        if (!c) return;
+        pzLibre = { ...c, mensajes: (c.mensajes || []).map(m => ({ ...m })) };
+        pintarLibreChat();
+      };
+    });
+    document.querySelectorAll('.libre-borrar').forEach(b => {
+      b.onclick = async () => {
+        flujo.convLibres = pzConvLibres().filter(x => x.id !== b.dataset.id);
+        await updateUserFlow();
+        renderLibre();
+      };
+    });
+  }
+
+  /* ---------- Arranque de una charla nueva ---------- */
+  async function pzLibreEmpezar(tema) {
+    const nivel = userProfile?.nivel || 'A1';
+    pzLibre = {
+      id: 'L' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      tema: tema || '',
+      titulo: (tema || 'Conversación libre').slice(0, 60),
+      nivel,
+      mensajes: [],
+      creadaEn: new Date().toISOString()
+    };
+    pintarLibreChat();
+    await pzLibreTurnoIA();          // Emma rompe el hielo
+  }
+
+  /* ---------- Llamada a la Edge Function ---------- */
+  async function pzLibreTurnoIA(opciones = {}) {
+    if (!pzLibre || pzLibrePensando) return;
+    pzLibrePensando = true;
+    pzLibrePintarEstado(true);
+
+    const historial = pzLibre.mensajes.slice(-10).map(m => ({
+      role: m.rol === 'tu' ? 'user' : 'assistant',
+      content: m.en
+    }));
+
+    const r = await pzFetchIA('conversacion-libre', {
+      tema: pzLibre.tema,
+      nivel: pzLibre.nivel,
+      messages: historial,
+      turno: pzLibre.mensajes.filter(m => m.rol === 'tu').length,
+      cerrar: !!opciones.cerrar
+    });
+
+    pzLibrePensando = false;
+    const reply = r?.payload?.reply;
+    if (!reply?.en) {
+      pzLibrePintarEstado(false, r?.rechazado ? '' : '⚠️ Emma no pudo responder. Intenta otra vez.');
+      return;
+    }
+
+    // La corrección viene junto con la respuesta: se pega al ÚLTIMO
+    // mensaje tuyo, que es al que corresponde.
+    if (reply.fix) {
+      for (let i = pzLibre.mensajes.length - 1; i >= 0; i--) {
+        if (pzLibre.mensajes[i].rol === 'tu') { pzLibre.mensajes[i].fix = reply.fix; break; }
+      }
+    }
+    pzLibre.mensajes.push({ rol: 'ia', en: reply.en, es: reply.es || '' });
+    pzLibre.sugerencias = Array.isArray(reply.sugerencias) ? reply.sugerencias.slice(0, 3) : [];
+    if (!pzLibre.tituloIA && reply.titulo) { pzLibre.tituloIA = reply.titulo; pzLibre.titulo = reply.titulo; }
+    if (pzLibre.mensajes.length > LIBRE_MAX_MENSAJES) pzLibre.mensajes = pzLibre.mensajes.slice(-LIBRE_MAX_MENSAJES);
+
+    pintarLibreChat();
+    pzLibreDecir(pzLibre.mensajes.length - 1);
+    pzLibreGuardar();
+    if (opciones.cerrar) setTimeout(pzLibreTerminar, 1200);
+  }
+
+  async function pzLibreEnviar(texto) {
+    const t = String(texto || '').trim();
+    if (!t || !pzLibre || pzLibrePensando) return;
+    pzLibre.mensajes.push({ rol: 'tu', en: t, fix: '' });
+    pintarLibreChat();
+    await pzLibreTurnoIA();
+  }
+
+  /* ---------- Voz de Emma ---------- */
+  // "mujer" es una etiqueta de voz de la Edge Function generar-audio-abu:
+  // una voz femenina Chirp 3: HD, distinta a las de los personajes A/B.
+  async function pzLibreDecir(indice, btn) {
+    const m = pzLibre?.mensajes?.[indice];
+    if (!m || m.rol !== 'ia') return;
+    stopSpeaking();
+    if (m.audio_url) { pzTocarUrl(m.audio_url); return; }
+    const previo = btn ? btn.innerHTML : null;
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-circle-notch fa-spin text-[10px]"></i>'; }
+    const b64 = await pzAudioAbu(m.en, 'mujer');
+    if (btn) { btn.disabled = false; btn.innerHTML = previo; }
+    if (b64) { m.audio_url = `data:audio/mp3;base64,${b64}`; pzTocarUrl(m.audio_url); }
+    else speak(m.en);
+  }
+
+  async function pzLibreEscucharTodo() {
+    if (!pzLibre) return;
+    for (let i = 0; i < pzLibre.mensajes.length; i++) {
+      const m = pzLibre.mensajes[i];
+      if (m.rol !== 'ia') continue;
+      if (!pzLibre) return;
+      await new Promise(async (resolve) => {
+        if (!m.audio_url) {
+          const b64 = await pzAudioAbu(m.en, 'mujer');
+          if (b64) m.audio_url = `data:audio/mp3;base64,${b64}`;
+        }
+        if (m.audio_url) {
+          const a = pzTocarUrl(m.audio_url, resolve);
+          if (!a) resolve();
+        } else { speak(m.en); setTimeout(resolve, Math.max(1500, m.en.length * 60)); }
+      });
+      await new Promise(r => setTimeout(r, 250));
+    }
+  }
+
+  /* ---------- Guardado en el perfil ---------- */
+  function pzLibreGuardar() {
+    if (!pzLibre) return;
+    const lista = pzConvLibres();
+    const copia = {
+      id: pzLibre.id, titulo: pzLibre.titulo, tema: pzLibre.tema, nivel: pzLibre.nivel,
+      creadaEn: pzLibre.creadaEn, actualizada: new Date().toISOString(),
+      // Solo texto: el audio se vuelve a pedir cuando haga falta.
+      mensajes: pzLibre.mensajes.map(m => ({ rol: m.rol, en: m.en, es: m.es || '', fix: m.fix || '' }))
+    };
+    const i = lista.findIndex(c => c.id === pzLibre.id);
+    if (i >= 0) lista[i] = copia; else lista.unshift(copia);
+    if (lista.length > LIBRE_MAX_GUARDADAS) lista.splice(LIBRE_MAX_GUARDADAS);
+    updateUserFlow();   // en segundo plano
+  }
+
+  function pzLibreTerminar() {
+    pzLibreGuardar();
+    stopSpeaking();
+    pzLibre = null;
+    pzLibrePensando = false;
+    renderLibre();
+  }
+
+  /* ---------- Pintado del chat ---------- */
+  function pzLibreBurbujaHTML(m, i) {
+    const idTr = `libre-tr-${i}`;
+    if (m.rol === 'tu') {
+      return `
+        <div class="flex justify-end items-end gap-1.5">
+          <div class="bg-[#FF7A00] text-white rounded-2xl rounded-br-sm px-3.5 py-2 max-w-[80%] font-medium">
+            ${escapeHTML(m.en)}
+            ${m.fix ? `<div class="mt-1.5 text-[11px] font-bold text-amber-50 bg-black/20 rounded-lg px-2 py-1 leading-snug">✏️ ${escapeHTML(m.fix)}</div>` : ''}
+          </div>
+        </div>`;
+    }
+    return `
+      <div class="flex justify-start items-end gap-1.5">
+        <div class="bg-white border border-slate-200 text-slate-800 rounded-2xl rounded-bl-sm px-3.5 py-2 max-w-[78%] shadow-sm">
+          <div class="text-[10px] font-black text-pink-500 uppercase mb-0.5">Emma</div>
+          <div class="font-medium leading-snug">${escapeHTML(m.en)}</div>
+          ${m.es ? `<button data-toggle-tr="${idTr}" class="text-[10px] font-bold text-slate-400 underline mt-1">Ver traducción</button>
+          <div id="${idTr}" class="hidden text-xs text-slate-400 mt-0.5 leading-snug">${escapeHTML(m.es)}</div>` : ''}
+        </div>
+        <div class="flex flex-col gap-1 shrink-0">
+          <button data-libre-say="${i}" title="Escuchar" class="w-8 h-8 rounded-full bg-white border border-slate-200 text-slate-400 hover:text-[#FF7A00] hover:border-[#FF7A00] active:scale-90 transition flex items-center justify-center"><i class="fas fa-volume-up text-[11px]"></i></button>
+          <button data-libre-practicar="${i}" title="Practicar esta frase" class="w-8 h-8 rounded-full bg-white border border-slate-200 text-slate-400 hover:text-[#FF7A00] hover:border-[#FF7A00] active:scale-90 transition flex items-center justify-center"><i class="fas fa-microphone text-[11px]"></i></button>
+        </div>
+      </div>`;
+  }
+
+  function pintarLibreChat() {
+    if (!pzLibre) return;
+    const viejo = document.getElementById('libre-mensajes');
+    const alFinal = !viejo || (viejo.scrollHeight - viejo.scrollTop - viejo.clientHeight) < 80;
+    const scrollPrevio = viejo ? viejo.scrollTop : 0;
+
+    document.getElementById('mode-panel').innerHTML = `
+      <div class="card-3d p-3 sm:p-4">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="bg-pink-100 text-pink-600 px-2.5 py-1 rounded-full text-[11px] font-bold uppercase shrink-0">💬 Libre</span>
+          <div class="flex-1 min-w-0">
+            <p class="font-heading font-black text-slate-800 text-sm truncate">${escapeHTML(pzLibre.titulo || 'Conversación libre')}</p>
+            <p class="text-[10px] text-slate-400">Con Emma · Nivel ${escapeHTML(pzLibre.nivel)}</p>
+          </div>
+          <button id="libre-play-todo" title="Escuchar toda la conversación" class="shrink-0 w-8 h-8 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center"><i class="fas fa-play text-[11px]"></i></button>
+          <button id="libre-cerrar" title="Terminar" class="shrink-0 w-8 h-8 rounded-full bg-slate-100 text-slate-400 hover:bg-slate-200 flex items-center justify-center"><i class="fas fa-times"></i></button>
+        </div>
+
+        <div id="libre-mensajes" class="chat-scroll h-[44vh] min-h-[220px] overflow-y-auto p-2 space-y-2 mb-2 bg-slate-50 rounded-xl border border-slate-100">
+          ${pzLibre.mensajes.map((m, i) => pzLibreBurbujaHTML(m, i)).join('')}
+          <div id="libre-pensando" class="hidden flex justify-start"><div class="bg-white border border-slate-200 text-slate-400 rounded-2xl rounded-bl-sm px-3.5 py-2 text-sm"><i class="fas fa-circle-notch fa-spin mr-1"></i> Emma está escribiendo...</div></div>
+        </div>
+
+        <div id="libre-sugerencias" class="no-bar flex gap-1.5 overflow-x-auto whitespace-nowrap mb-2 min-h-[26px]">
+          ${(pzLibre.sugerencias || []).map(t => `<button class="libre-sug shrink-0 text-[11px] font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-500 hover:bg-orange-50 hover:text-[#FF7A00]" data-txt="${escapeHTML(t)}">${escapeHTML(t)}</button>`).join('')}
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button id="libre-mic" class="mic-btn shrink-0" style="width:52px;height:52px;font-size:1.2rem"><i class="fas fa-microphone"></i></button>
+          <input id="libre-input" type="text" placeholder="Escribe en inglés..." autocomplete="off" autocapitalize="sentences" spellcheck="false" enterkeyhint="send"
+            class="flex-1 min-w-0 bg-white border-2 border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-[#FF7A00] text-slate-700 font-medium">
+          <button id="libre-enviar" class="btn-juice bg-[#FF7A00] text-white font-bold px-3.5 py-2.5 rounded-xl shrink-0"><i class="fas fa-paper-plane"></i></button>
+        </div>
+        <p id="libre-msg" class="text-xs font-bold text-slate-400 min-h-[1.3em] text-center mt-1.5">Habla 🎙️ o escribe tu respuesta en inglés</p>
+        <button id="libre-despedir" class="w-full text-[11px] font-bold text-slate-300 hover:text-slate-500 mt-1">Despedirme y terminar</button>
+      </div>`;
+
+    const box = document.getElementById('libre-mensajes');
+    box.addEventListener('click', (e) => {
+      const say = e.target.closest('[data-libre-say]');
+      if (say) { pzLibreDecir(Number(say.dataset.libreSay), say); return; }
+      const prac = e.target.closest('[data-libre-practicar]');
+      if (prac) {
+        const m = pzLibre.mensajes[Number(prac.dataset.librePracticar)];
+        if (!m) return;
+        pzVolverA = pintarLibreChat;
+        abrirPractica({ text: m.en, es: m.es, nivel: pzLibre.nivel, audioUrl: m.audio_url || null, rol: 'mujer' });
+        return;
+      }
+      const tr = e.target.closest('[data-toggle-tr]');
+      if (tr) { const el = document.getElementById(tr.dataset.toggleTr); if (el) el.classList.toggle('hidden'); }
+    });
+    box.scrollTop = alFinal ? box.scrollHeight : scrollPrevio;
+
+    const input = document.getElementById('libre-input');
+    const enviar = () => { const t = input.value.trim(); if (!t) return; input.value = ''; pzLibreEnviar(t); };
+    document.getElementById('libre-enviar').onclick = enviar;
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') enviar(); });
+    document.querySelectorAll('.libre-sug').forEach(b => {
+      b.onclick = () => { input.value = b.dataset.txt || ''; input.focus(); };
+    });
+    document.getElementById('libre-play-todo').onclick = pzLibreEscucharTodo;
+    document.getElementById('libre-cerrar').onclick = pzLibreTerminar;
+    document.getElementById('libre-despedir').onclick = () => pzLibreTurnoIA({ cerrar: true });
+
+    const msg = document.getElementById('libre-msg');
+    document.getElementById('libre-mic').onclick = (e) => pzLibreMic(e.currentTarget, msg);
+    if (pzLibrePensando) pzLibrePintarEstado(true);
+  }
+
+  function pzLibrePintarEstado(pensando, error) {
+    const burbuja = document.getElementById('libre-pensando');
+    if (burbuja) {
+      burbuja.classList.toggle('hidden', !pensando);
+      if (pensando) { const box = document.getElementById('libre-mensajes'); if (box) box.scrollTop = box.scrollHeight; }
+    }
+    const msg = document.getElementById('libre-msg');
+    if (msg && error) msg.textContent = error;
+    const enviar = document.getElementById('libre-enviar');
+    if (enviar) enviar.disabled = !!pensando;
+  }
+
+  /* ---------- Micrófono de la conversación libre ----------
+     Mismo patrón que el del modo "en vivo" (pzVivoGrabar), pero suelto:
+     aquí no hay una línea modelo con la que comparar, así que lo dicho
+     se manda tal cual como tu mensaje. En celular Chrome ignora
+     "continuous" y corta solo, por eso se reanuda y se acumula lo dicho
+     entre cortes. */
+  let pzLibreRec = null;
+  function pzLibreMic(btn, msg) {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { msg.textContent = 'Tu navegador no reconoce voz — escribe tu respuesta 😉'; return; }
+    if (pzLibreRec) { try { pzLibreRec.detenerYa(); } catch {} return; }
+    if (pzLibrePensando) return;
+
+    stopSpeaking();
+    let previo = '', sesion = '';
+    const textoTotal = () => limpiarRepeticionesVoz((previo + ' ' + sesion).trim());
+    let detenido = false, temporizador = null;
+    const t0 = Date.now();
+
+    const rec = new SR();
+    pzLibreRec = rec;
+    rec.lang = 'en-US';
+    rec.interimResults = true;
+    rec.maxAlternatives = 1;
+    rec.continuous = !pzVivoEsMovil;
+
+    btn.classList.add('recording');
+    msg.textContent = 'Escuchando... habla y se enviará solo 🎙️';
+
+    const limpiar = () => { if (temporizador) { clearTimeout(temporizador); temporizador = null; } };
+    const reprogramar = () => {
+      limpiar();
+      if (!sesion.trim()) return;
+      temporizador = setTimeout(() => { detenido = true; try { rec.stop(); } catch {} }, PZ_VIVO_SILENCIO_MS);
+    };
+
+    rec.onresult = (e) => {
+      let texto = '';
+      for (let i = 0; i < e.results.length; i++) texto += e.results[i][0].transcript + ' ';
+      sesion = texto.trim();
+      msg.textContent = sesion || 'Escuchando...';
+      reprogramar();
+    };
+    rec.onerror = () => { /* onend se encarga */ };
+    rec.onend = () => {
+      if (sesion) { previo = (previo + ' ' + sesion).trim(); sesion = ''; }
+      if (!detenido && Date.now() - t0 < 120000) { try { rec.start(); return; } catch {} }
+      limpiar();
+      pzLibreRec = null;
+      btn.classList.remove('recording');
+      const dicho = textoTotal();
+      if (!dicho) { msg.textContent = 'No te escuché, inténtalo otra vez 🎙️'; return; }
+      msg.textContent = 'Habla 🎙️ o escribe tu respuesta en inglés';
+      pzLibreEnviar(dicho);
+    };
+    rec.detenerYa = () => { detenido = true; limpiar(); try { rec.stop(); } catch {} };
+    try { rec.start(); } catch (err) { pzLibreRec = null; btn.classList.remove('recording'); console.warn('[libre] micrófono:', err); }
+  }
+
+  /* ============================================================
      6. ENTORNO DE PRÁCTICA (modal): escuchar modelo, grabarse y
         corregir con IA
   ============================================================ */
@@ -2286,7 +2804,7 @@
 
     document.getElementById('pz-cerrar').onclick = cerrarPractica;
     document.getElementById('pz-escuchar').onclick = async () => {
-      if (target.audioUrl) { new Audio(target.audioUrl).play().catch(() => speak(target.text)); return; }
+      if (target.audioUrl) { pzTocarUrl(target.audioUrl); return; }
       // Línea de una conversación creada con IA: se pide su audio real.
       if (target.conversacion?.creada) {
         const b = document.getElementById('pz-escuchar');
@@ -2302,7 +2820,7 @@
           return;
         }
       }
-      speak(target.text);
+      pzDecir(target.text, target.rol);
     };
     document.getElementById('pz-mic').onclick = () => { pzRecording ? pzDetenerGrabacion() : pzIniciarGrabacion(); };
   }

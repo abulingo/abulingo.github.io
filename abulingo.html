@@ -125,7 +125,7 @@
     }
     .word-chip.used::after { content: " ✓"; font-weight: 900; }
     @keyframes bubbleIn { from { opacity: 0; transform: translateY(8px) scale(.97); } to { opacity: 1; transform: none; } }
-    #ai-messages > div { animation: bubbleIn .22s ease-out both; }
+    #gc-messages > div, #dom-conv-messages > div { animation: bubbleIn .22s ease-out both; }
 
     /* ============================================================
        DOMINAR — estilos portados/adaptados de practica.html
@@ -885,6 +885,7 @@ function openAbuChat() {
 
   // Abu siempre habla con SU voz; el resto de los chats pasan la suya.
   function speakAbu(text, onend) { return vozReal(text, { voz: VOZ_ABU, onend }); }
+  window.speakAbu = speakAbu;   // queda expuesto por si algún módulo viejo lo llama
 
   function triggerConfetti() {
     if (window.confetti) confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 }, colors: ['#FF7A00', '#3b82f6', '#fbbf24'] });
@@ -938,6 +939,258 @@ function openAbuChat() {
     actions.forEach((a, i) => {
       const btn = modalRoot.querySelector(`.modal-action[data-idx="${i}"]`);
       if (btn) btn.onclick = () => { if (a.onClick) a.onClick(); };
+    });
+  }
+
+  /* ============================================================
+     COMPARTIR LA RACHA — imagen generada en el propio navegador
+     ------------------------------------------------------------
+     No hace falta servidor ni librería: se dibuja en un <canvas>
+     (1080x1350, la proporción que usan las redes) y se entrega como
+     PNG. Lleva el ícono de la app (icono.png), el logotipo
+     "Abulingo.", la llama con los días de racha, el récord y el nivel.
+
+     Por qué primero se muestra una vista previa y el botón de
+     compartir viene DESPUÉS: navigator.share() solo funciona dentro
+     del gesto del usuario, y generar la imagen es asíncrono (cargar
+     el ícono + toBlob). Si se compartiera en el mismo toque que la
+     genera, Safari en iPhone lo bloquea por "gesto vencido". Así el
+     toque que comparte encuentra el archivo ya listo.
+  ============================================================ */
+  const RACHA_W = 1080, RACHA_H = 1350;
+  let rachaArchivo = null;      // File del PNG ya generado
+  let rachaURL = null;          // object URL de la vista previa
+
+  function cargarImagenSegura(src) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => resolve(null);   // si falta el archivo, se dibuja un sustituto
+      img.src = src;
+    });
+  }
+
+  function rectRedondo(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  // Llama dibujada a mano en vez del emoji 🔥: en canvas los emojis
+  // dependen de la fuente del sistema y en varios Android salen como
+  // un cuadrito vacío.
+  function dibujarLlama(ctx, cx, cy, h) {
+    const dibujo = (alto, relleno) => {
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - alto * 0.55);
+      ctx.bezierCurveTo(cx + alto * 0.30, cy - alto * 0.28, cx + alto * 0.42, cy + alto * 0.05, cx + alto * 0.30, cy + alto * 0.26);
+      ctx.bezierCurveTo(cx + alto * 0.20, cy + alto * 0.45, cx - alto * 0.20, cy + alto * 0.45, cx - alto * 0.30, cy + alto * 0.26);
+      ctx.bezierCurveTo(cx - alto * 0.42, cy + alto * 0.05, cx - alto * 0.24, cy - alto * 0.16, cx - alto * 0.10, cy - alto * 0.30);
+      ctx.bezierCurveTo(cx - alto * 0.06, cy - alto * 0.16, cx - alto * 0.02, cy - alto * 0.30, cx, cy - alto * 0.55);
+      ctx.closePath();
+      ctx.fillStyle = relleno;
+      ctx.fill();
+    };
+    const fuera = ctx.createLinearGradient(cx, cy - h * 0.55, cx, cy + h * 0.45);
+    fuera.addColorStop(0, '#FFB347');
+    fuera.addColorStop(0.5, '#FF7A00');
+    fuera.addColorStop(1, '#E2452B');
+    dibujo(h, fuera);
+    ctx.save();
+    ctx.translate(0, h * 0.14);
+    dibujo(h * 0.52, '#FFD166');
+    ctx.restore();
+  }
+
+  async function dibujarTarjetaRacha() {
+    const dias   = flujo?.racha?.days || 0;
+    const mejor  = Math.max(flujo?.racha?.best || 0, dias);
+    const nivel  = flujo?.currentNivel || 'A1';
+    const nombre = primerNombre(userProfile?.full_name, '');
+
+    const canvas = document.createElement('canvas');
+    canvas.width = RACHA_W; canvas.height = RACHA_H;
+    const ctx = canvas.getContext('2d');
+    const cx = RACHA_W / 2;
+
+    // Las tipografías de la página tardan en cargar; sin esto el canvas
+    // dibuja con la fuente de reserva.
+    try { await document.fonts.ready; } catch { /* navegador sin la API */ }
+
+    // Fondo
+    const fondo = ctx.createLinearGradient(0, 0, 0, RACHA_H);
+    fondo.addColorStop(0, '#0D47A1');
+    fondo.addColorStop(1, '#05224E');
+    ctx.fillStyle = fondo;
+    ctx.fillRect(0, 0, RACHA_W, RACHA_H);
+
+    // Resplandor naranja detrás de la llama
+    const glow = ctx.createRadialGradient(cx, 470, 40, cx, 470, 430);
+    glow.addColorStop(0, 'rgba(255,122,0,0.45)');
+    glow.addColorStop(1, 'rgba(255,122,0,0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 100, RACHA_W, 800);
+
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+
+    // ---- Cabecera: ícono + logotipo ----
+    const icono = await cargarImagenSegura('icono.png');
+    ctx.font = '700 66px Nunito, Poppins, system-ui, sans-serif';
+    const anchoTexto = ctx.measureText('Abulingo.').width;
+    const total = 130 + 26 + anchoTexto;
+    const x0 = (RACHA_W - total) / 2;
+    const icoCx = x0 + 65, icoCy = 160;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(icoCx, icoCy, 65, 0, Math.PI * 2);
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fill();
+    if (icono) {
+      ctx.clip();
+      // Recorte tipo "cover": si icono.png no es cuadrado, se recorta en
+      // vez de deformarse.
+      const lado = Math.min(icono.width, icono.height) || 1;
+      const sx = (icono.width - lado) / 2, sy = (icono.height - lado) / 2;
+      ctx.drawImage(icono, sx, sy, lado, lado, icoCx - 65, icoCy - 65, 130, 130);
+    } else {
+      // Sustituto si icono.png no está: la inicial sobre el círculo.
+      ctx.fillStyle = '#0D47A1';
+      ctx.font = '800 72px Nunito, system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('A', icoCx, icoCy + 26);
+    }
+    ctx.restore();
+
+    ctx.textAlign = 'left';
+    ctx.font = '700 66px Nunito, Poppins, system-ui, sans-serif';
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillText('Abulingo', x0 + 156, icoCy + 22);
+    ctx.fillStyle = '#FF7A00';
+    ctx.fillText('.', x0 + 156 + ctx.measureText('Abulingo').width, icoCy + 22);
+
+    // ---- Llama con el número dentro ----
+    dibujarLlama(ctx, cx, 430, 320);
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#FFFFFF';
+    ctx.shadowColor = 'rgba(0,0,0,0.35)';
+    ctx.shadowBlur = 24;
+    ctx.font = `800 ${dias > 99 ? 220 : 280}px Nunito, Poppins, system-ui, sans-serif`;
+    ctx.fillText(String(dias), cx, 800);
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = '#FFD166';
+    ctx.font = '800 58px Nunito, Poppins, system-ui, sans-serif';
+    ctx.fillText(dias === 1 ? 'DÍA DE RACHA' : 'DÍAS DE RACHA', cx, 878);
+
+    // ---- Frase ----
+    ctx.fillStyle = 'rgba(255,255,255,0.92)';
+    ctx.font = '700 44px Nunito, Poppins, system-ui, sans-serif';
+    const frase = dias > 0
+      ? (nombre ? `${nombre} lleva ${dias} día${dias === 1 ? '' : 's'} seguidos` : `¡${dias} día${dias === 1 ? '' : 's'} seguidos aprendiendo!`)
+      : 'Hoy empieza mi racha';
+    ctx.fillText(frase, cx, 958);
+    if (dias > 0 && nombre) {
+      ctx.font = '600 40px Nunito, Poppins, system-ui, sans-serif';
+      ctx.fillStyle = 'rgba(255,255,255,0.70)';
+      ctx.fillText('aprendiendo inglés sin parar', cx, 1010);
+    }
+
+    // ---- Pastillas: récord y nivel ----
+    const pastillas = [`Récord: ${mejor} día${mejor === 1 ? '' : 's'}`, `Nivel ${nivel}`];
+    ctx.font = '700 38px Nunito, Poppins, system-ui, sans-serif';
+    const anchos = pastillas.map(t => ctx.measureText(t).width + 70);
+    const anchoFila = anchos.reduce((a, b) => a + b, 0) + 24;
+    let px = (RACHA_W - anchoFila) / 2;
+    pastillas.forEach((t, i) => {
+      rectRedondo(ctx, px, 1078, anchos[i], 84, 42);
+      ctx.fillStyle = 'rgba(255,255,255,0.12)';
+      ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = 'rgba(255,255,255,0.28)';
+      ctx.stroke();
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillText(t, px + anchos[i] / 2, 1132);
+      px += anchos[i] + 24;
+    });
+
+    // ---- Pie ----
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    ctx.font = '600 36px Nunito, Poppins, system-ui, sans-serif';
+    ctx.fillText('Aprende inglés conmigo', cx, 1230);
+    ctx.fillStyle = '#FF7A00';
+    ctx.font = '800 42px Nunito, Poppins, system-ui, sans-serif';
+    ctx.fillText('abulingo.github.io', cx, 1288);
+
+    const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
+    return { blob, dias };
+  }
+
+  function descargarRacha() {
+    if (!rachaURL || !rachaArchivo) return;
+    const a = document.createElement('a');
+    a.href = rachaURL;
+    a.download = rachaArchivo.name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    showToast('📥 Imagen descargada. ¡Compártela donde quieras!', 3000);
+  }
+
+  async function compartirRachaArchivo(dias) {
+    if (!rachaArchivo) return;
+    const texto = dias > 0
+      ? `Llevo ${dias} día${dias === 1 ? '' : 's'} seguidos aprendiendo inglés con Abulingo 🔥`
+      : 'Hoy empiezo mi racha de inglés con Abulingo 🔥';
+    try {
+      if (navigator.canShare && navigator.canShare({ files: [rachaArchivo] })) {
+        await navigator.share({ files: [rachaArchivo], title: 'Mi racha en Abulingo', text: texto });
+        return;
+      }
+    } catch (err) {
+      // "AbortError" = el usuario cerró la hoja de compartir: no es un fallo.
+      if (err?.name === 'AbortError') return;
+      console.warn('[racha] compartir:', err?.message || err);
+    }
+    descargarRacha();   // navegador sin compartir archivos (escritorio, Firefox…)
+  }
+
+  async function abrirCompartirRacha() {
+    showModal({
+      icon: '🔥', title: 'Preparando tu imagen…',
+      body: '<div class="w-10 h-10 border-4 border-[#FF7A00] border-t-transparent rounded-full animate-spin mx-auto my-4"></div>',
+      dismissable: true, actions: []
+    });
+
+    let datos = null;
+    try { datos = await dibujarTarjetaRacha(); } catch (err) { console.warn('[racha] imagen:', err); }
+    if (!datos?.blob) {
+      return showModal({
+        icon: '😕', title: 'No se pudo crear la imagen',
+        body: 'Vuelve a intentarlo en un momento.',
+        actions: [{ label: 'Cerrar', onClick: closeModal }]
+      });
+    }
+
+    if (rachaURL) URL.revokeObjectURL(rachaURL);
+    rachaArchivo = new File([datos.blob], `racha-abulingo-${datos.dias}-dias.png`, { type: 'image/png' });
+    rachaURL = URL.createObjectURL(datos.blob);
+
+    const puedeCompartir = !!(navigator.canShare && navigator.canShare({ files: [rachaArchivo] }));
+    showModal({
+      icon: '', title: 'Tu racha, lista para presumir',
+      body: `<img src="${rachaURL}" alt="Mi racha en Abulingo" class="w-full rounded-2xl shadow-lg">`,
+      actions: [
+        ...(puedeCompartir ? [{ label: 'Compartir 🔥', onClick: () => compartirRachaArchivo(datos.dias) }] : []),
+        { label: 'Descargar imagen', style: puedeCompartir ? 'bg-slate-100 text-slate-600' : 'bg-[#FF7A00] text-white', onClick: descargarRacha },
+        { label: 'Cerrar', style: 'bg-white border-2 border-slate-200 text-slate-500', onClick: closeModal }
+      ]
     });
   }
 
@@ -2590,52 +2843,329 @@ function openAbuChat() {
      manual) o escribiendo — a diferencia de "Conversa con Abu", que
      es solo por voz.
   ============================================================ */
-  let domDialogoActual = null; // { data, nivel, group, personaje }
+  /* ------------------------------------------------------------
+     MOTOR DE CONVERSACIÓN GUIADA  (gc*)
+     ------------------------------------------------------------
+     Las TRES conversaciones de la app —el diálogo con las palabras del
+     grupo, "Conversa con Abu" del vocabulario y "Conversa con Abu" de
+     Dominar— funcionan ahora igual que "Ahora, a conversar": la IA
+     escribe el GUION COMPLETO de una sola vez y tú lo practicas línea
+     por línea.
 
-  async function generarDialogoGrupo(nivel, grupo, words) {
+     POR QUÉ SE CAMBIÓ EL CHAT LIBRE POR UN GUION:
+       · Repetición. Improvisando turno a turno, con solo 8 mensajes de
+         historial, el modelo volvía siempre a las mismas preguntas de
+         relleno ("Tell me about your best friend", "What music do you
+         listen to?") y saltaba de tema sin hilo.
+       · No sabías qué decir. Las tres sugerencias sueltas no formaban
+         una conversación; ahora cada turno tuyo ES una frase concreta.
+       · Costo. Antes se gastaba una llamada de IA POR MENSAJE; ahora es
+         una por conversación completa.
+
+     Cada burbuja tuya muestra arriba la frase que debías decir, abajo
+     lo que se te entendió ("Dijiste"), el botón "Ver traducción" y la
+     corrección cuando no coincide.
+
+     cfg = {
+       etiqueta, chipClase, mensajes:[{rol:'tu'|'otro', en, es, nombre?, voz?}],
+       permitirTexto, vozOtro, vozTuya, barraGlobal, onFin, onSalir
+     }
+  ------------------------------------------------------------ */
+  const GC_MENSAJES   = 10;      // largo fijo de TODAS las conversaciones
+  const GC_TIMEOUT_MS = 45000;
+  let gc = null;                 // sesión activa del motor
+
+  // Red de seguridad: la Edge Function ya los quita, pero si algo se cuela
+  // no puede llegar a la pantalla — estas líneas se leen en voz alta y el
+  // estudiante las tiene que repetir; un emoji no se pronuncia.
+  const sinEmojis = (t) => String(t || '')
+    .replace(/[\u{1F000}-\u{1FAFF}\u{2190}-\u{2BFF}\u{2600}-\u{27BF}\u{FE00}-\u{FE0F}\u{200D}]/gu, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+
+  // El nivel que manda es el del botón "Nivel" de la barra superior
+  // (flujo.currentNivel es justo lo que ese botón cambia).
+  function nivelActual(preferido) {
+    const etiqueta = (document.getElementById('nivel-label')?.textContent || '').trim();
+    const candidatos = [flujo?.currentNivel, etiqueta, preferido, 'A1'];
+    return candidatos.find(n => typeof NIVELES_FIJOS !== 'undefined' ? NIVELES_FIJOS.includes(n) : !!n) || 'A1';
+  }
+
+  /* Pide el guion completo a una Edge Function (una llamada por
+     conversación). Devuelve el payload o null si no se pudo. */
+  async function pedirGuion(funcion, cuerpo) {
+    if (!puedeIA()) return null;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), GC_TIMEOUT_MS);
     try {
       const headers = await cabecerasIA();
       if (!headers) return null;
-      const resp = await fetch(`${SUPABASE_URL}/functions/v1/generar-dialogo`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ words, nivel, grupo, evitar: abuEvitarLista() })
+      const resp = await fetch(`${SUPABASE_URL}/functions/v1/${funcion}`, {
+        method: 'POST', headers, body: JSON.stringify(cuerpo), signal: controller.signal
       });
       const payload = await resp.json().catch(() => null);
-      if (!resp.ok) manejarRechazoIA(payload);
-      if (!resp.ok || !payload || !Array.isArray(payload.lines) || !payload.lines.length) return null;
-      if (payload.title) registrarAbuEvitar(payload.title);
+      if (payload?.codigo && manejarRechazoIA(payload)) return null;
+      if (!resp.ok || !Array.isArray(payload?.mensajes) || payload.mensajes.length < 4) {
+        console.warn(`[${funcion}]`, payload?.error || `HTTP ${resp.status}`);
+        return null;
+      }
       return payload;
-    } catch (err) { console.warn('[Diálogo grupo]', err?.message || err); return null; }
+    } catch (err) {
+      console.warn(`[${funcion}]`, err?.name === 'AbortError' ? 'tardó demasiado' : (err?.message || err));
+      return null;
+    } finally { clearTimeout(timer); }
   }
 
+  const gcVoz = (m) => m.voz || (m.rol === 'tu' ? (gc?.cfg?.vozTuya || 'b') : (gc?.cfg?.vozOtro || 'a'));
+
+  /* Compara lo que dijiste con la frase que tocaba y devuelve una
+     corrección corta EN ESPAÑOL (o '' si estuvo bien). Es local: no
+     gasta IA y aparece al instante. */
+  function gcRevisar(objetivo, dicho) {
+    const obj = norm(objetivo).split(' ').filter(Boolean);
+    const dic = new Set(norm(dicho).split(' ').filter(Boolean));
+    const gram = corregirLocal(dicho);
+    if (!obj.length) return gram;
+    const faltan = obj.filter(w => !dic.has(w));
+    if (!faltan.length) return gram;
+    if (faltan.length >= obj.length) return `No se entendió la frase. Se dice así: "${objetivo}"`;
+    const lista = faltan.slice(0, 4).map(w => `"${w}"`).join(', ');
+    return `Te faltó ${lista}. La frase completa es: "${objetivo}"${gram ? ' · ' + gram : ''}`;
+  }
+
+  function gcProgreso() {
+    if (!gc) return;
+    const pct = Math.round((gc.idx / gc.mensajes.length) * 100);
+    const bar = document.getElementById('gc-bar'); if (bar) bar.style.width = pct + '%';
+    const cnt = document.getElementById('gc-count'); if (cnt) cnt.textContent = gc.idx;
+    if (gc.cfg.barraGlobal !== false) updateProgressBar(pct);
+  }
+
+  function gcIniciar(cfg) {
+    stopSpeaking();
+    const mensajes = (cfg.mensajes || [])
+      .map(m => ({ ...m, en: sinEmojis(m.en), es: sinEmojis(m.es || '') }))
+      .filter(m => m.en);
+    gc = { cfg, mensajes, idx: 0, aciertos: 0, tuyos: mensajes.filter(m => m.rol === 'tu').length };
+
+    appContainer.innerHTML = `
+      <div class="card-3d p-3 sm:p-4 animate-pop mt-1">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="${cfg.chipClase || 'bg-purple-100 text-purple-600'} px-2.5 py-1 rounded-full text-[11px] font-bold uppercase shrink-0">${escapeHTML(cfg.etiqueta || 'Conversación')}</span>
+          <div class="flex-1 progress-track" style="margin-top:0"><div id="gc-bar" class="progress-fill" style="width:0%"></div></div>
+          <span class="text-[11px] font-black text-slate-400 shrink-0"><span id="gc-count">0</span>/${mensajes.length}</span>
+          ${cfg.onSalir ? `<button id="gc-exit" title="Salir" class="shrink-0 w-6 h-6 rounded-full text-slate-300 hover:text-slate-500 hover:bg-slate-100 transition text-sm">&times;</button>` : ''}
+        </div>
+        <div id="gc-messages" class="chat-scroll h-[42vh] min-h-[200px] overflow-y-auto p-2 space-y-2 mb-2 bg-slate-50 rounded-xl border border-slate-100"></div>
+        <div id="gc-turno" class="flex flex-col items-center gap-1.5"></div>
+      </div>`;
+
+    document.getElementById('gc-messages').addEventListener('click', gcClick);
+    const exit = document.getElementById('gc-exit');
+    if (exit) exit.onclick = () => { const salir = gc?.cfg?.onSalir; gc = null; stopSpeaking(); if (salir) salir(); };
+
+    gcPrepararVoces().then(() => gcPaso());
+  }
+
+  function gcClick(e) {
+    const say = e.target.closest('[data-say]');
+    if (say) { vozReal(decodeURIComponent(say.dataset.say || ''), { voz: say.dataset.voz || 'a' }); return; }
+    const tr = e.target.closest('[data-toggle-tr]');
+    if (tr) { const el = document.getElementById(tr.dataset.toggleTr); if (el) el.classList.toggle('hidden'); }
+  }
+
+  // Todas las voces del guion en UNA sola llamada, antes de empezar.
+  async function gcPrepararVoces() {
+    if (!gc || !puedeIA()) return;
+    const turno = document.getElementById('gc-turno');
+    if (turno) turno.innerHTML = `<p class="text-xs font-bold text-slate-400"><i class="fas fa-circle-notch fa-spin mr-1"></i>Preparando las voces…</p>`;
+    await precargarVoces(gc.mensajes.map(m => ({ texto: m.en, voz: gcVoz(m) })));
+  }
+
+  function gcBurbujaOtro(m) {
+    const box = document.getElementById('gc-messages'); if (!box) return;
+    const idTr = 'gc-tr-' + Math.random().toString(36).slice(2, 9);
+    const div = document.createElement('div');
+    div.className = 'flex justify-start items-end gap-1.5';
+    div.innerHTML = `<div class="bg-white border border-slate-200 text-slate-800 rounded-2xl rounded-bl-sm px-3.5 py-2 max-w-[75%] shadow-sm">
+        ${m.nombre ? `<div class="text-[10px] font-black text-purple-500 uppercase mb-0.5">${escapeHTML(m.nombre)}</div>` : ''}
+        <div class="font-medium leading-snug">${escapeHTML(m.en)}</div>
+        ${m.es ? `<button data-toggle-tr="${idTr}" class="text-[10px] font-bold text-slate-400 underline mt-1">Ver traducción</button>
+        <div id="${idTr}" class="hidden text-xs text-slate-400 mt-0.5 leading-snug">${escapeHTML(m.es)}</div>` : ''}
+      </div>
+      <button data-say="${encodeURIComponent(m.en)}" data-voz="${gcVoz(m)}" title="Escuchar" class="shrink-0 w-8 h-8 rounded-full bg-white border border-slate-200 text-slate-400 hover:text-[#FF7A00] hover:border-[#FF7A00] active:scale-90 transition flex items-center justify-center"><i class="fas fa-volume-up text-[11px]"></i></button>`;
+    box.appendChild(div); box.scrollTop = box.scrollHeight;
+  }
+
+  // Arriba la frase que TOCABA decir, abajo lo que se te entendió, el
+  // botón de traducción y —si hizo falta— la corrección.
+  function gcBurbujaTuya(m, dicho, fix) {
+    const box = document.getElementById('gc-messages'); if (!box) return;
+    const idTr = 'gc-tr-' + Math.random().toString(36).slice(2, 9);
+    const div = document.createElement('div');
+    div.className = 'flex justify-end items-end gap-1.5';
+    div.innerHTML = `<button data-say="${encodeURIComponent(m.en)}" data-voz="${gcVoz(m)}" title="Escuchar" class="shrink-0 w-8 h-8 rounded-full bg-white border border-slate-200 text-slate-400 hover:text-[#FF7A00] hover:border-[#FF7A00] active:scale-90 transition flex items-center justify-center"><i class="fas fa-volume-up text-[11px]"></i></button>
+      <div class="bg-[#FF7A00] text-white rounded-2xl rounded-br-sm px-3.5 py-2 max-w-[75%] font-medium">
+        <div class="text-[13px] font-bold leading-snug">${escapeHTML(m.en)}</div>
+        <div class="text-[10px] font-black text-orange-100 uppercase mt-1.5 pt-1.5 border-t border-white/25 mb-0.5">Dijiste</div>
+        ${escapeHTML(dicho || '—')}
+        ${m.es ? `<button data-toggle-tr="${idTr}" class="block text-[10px] font-bold text-orange-100 underline mt-1">Ver traducción</button>
+        <div id="${idTr}" class="hidden text-xs text-orange-100 mt-0.5 leading-snug">${escapeHTML(m.es)}</div>` : ''}
+        ${fix ? `<div class="mt-1.5 text-[11px] font-bold text-amber-50 bg-black/20 rounded-lg px-2 py-1 leading-snug">✏️ ${escapeHTML(fix)}</div>` : ''}
+      </div>`;
+    box.appendChild(div); box.scrollTop = box.scrollHeight;
+  }
+
+  function gcPaso() {
+    if (!gc) return;
+    gcProgreso();
+    if (gc.idx >= gc.mensajes.length) return gcFin();
+    const m = gc.mensajes[gc.idx];
+    const turno = document.getElementById('gc-turno');
+    if (!turno) return;
+
+    /* ---- Línea del otro: se escucha y avanza sola al terminar el audio ---- */
+    if (m.rol !== 'tu') {
+      turno.innerHTML = `<div class="text-center text-slate-300"><i class="fas fa-volume-up fa-lg"></i></div>`;
+      gcBurbujaOtro(m);
+      let hecho = false;
+      const avanzar = () => {
+        if (hecho || !gc) return;
+        hecho = true; gc.idx++;
+        setTimeout(() => gcPaso(), 450);
+      };
+      const respaldo = setTimeout(avanzar, Math.max(3000, m.en.length * 95));
+      vozReal(m.en, { voz: gcVoz(m), onend: () => { clearTimeout(respaldo); avanzar(); } });
+      return;
+    }
+
+    /* ---- Tu turno: sabes exactamente qué decir ---- */
+    const idTr = 'gc-obj-' + Math.random().toString(36).slice(2, 9);
+    turno.innerHTML = `
+      <p class="text-[11px] font-black text-[#FF7A00] uppercase text-center px-2">Te toca decir</p>
+      <p class="text-center text-sm font-bold text-slate-700 px-2">“${escapeHTML(m.en)}”</p>
+      ${m.es ? `<button data-toggle-tr="${idTr}" class="text-[10px] font-bold text-slate-400 underline">Ver traducción</button>
+      <p id="${idTr}" class="hidden text-center text-[11px] text-slate-400 px-2">${escapeHTML(m.es)}</p>` : ''}
+      <button id="gc-oir" class="text-[11px] font-black text-slate-400 hover:text-[#FF7A00]"><i class="fas fa-volume-up mr-1"></i>Escuchar el modelo</button>
+      <div class="flex items-center gap-2 w-full">
+        <button id="gc-mic" class="mic-btn shrink-0" style="width:52px;height:52px;font-size:1.2rem"><i class="fas fa-microphone"></i></button>
+        ${gc.cfg.permitirTexto ? `<input id="gc-input" type="text" placeholder="…o escribe aquí" autocomplete="off" autocapitalize="sentences" spellcheck="false" enterkeyhint="send" class="flex-1 min-w-0 bg-white border-2 border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-[#FF7A00] text-slate-700 font-medium">
+        <button id="gc-enviar" class="btn-juice bg-[#FF7A00] text-white font-bold px-3.5 py-2.5 rounded-xl shrink-0"><i class="fas fa-paper-plane"></i></button>` : ''}
+      </div>
+      <p id="gc-msg" class="text-xs font-bold text-slate-400 min-h-[1.2em] text-center px-4">${gc.cfg.permitirTexto ? 'Habla 🎙️ o escribe tu línea' : 'Toca el micrófono y dilo en voz alta'}</p>
+      <button id="gc-saltar" class="text-[11px] font-bold text-slate-300 hover:text-slate-500">Saltar esta línea</button>`;
+
+    turno.querySelector('[data-toggle-tr]')?.addEventListener('click', (e) => {
+      const el = document.getElementById(e.currentTarget.dataset.toggleTr);
+      if (el) el.classList.toggle('hidden');
+    });
+    document.getElementById('gc-oir').onclick = () => vozReal(m.en, { voz: gcVoz(m) });
+    document.getElementById('gc-saltar').onclick = () => { if (!gc) return; gc.idx++; gcPaso(); };
+
+    const msg = document.getElementById('gc-msg');
+    if (gc.cfg.permitirTexto) {
+      const input = document.getElementById('gc-input');
+      const enviar = () => {
+        const texto = (input.value || '').trim();
+        if (!texto) return;
+        input.value = '';
+        gcResponder(texto);
+      };
+      document.getElementById('gc-enviar').onclick = enviar;
+      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') enviar(); });
+    }
+
+    bindMicManual(document.getElementById('gc-mic'), msg, {
+      onFinal: (texto) => {
+        if (texto) gcResponder(texto);
+        else msg.textContent = gc?.cfg?.permitirTexto ? 'No escuché nada — habla de nuevo o escribe 🎙️' : 'No escuché nada, intenta otra vez 🎙️';
+      },
+      onError: (err) => {
+        msg.textContent = err === 'no-soportado'
+          ? (gc?.cfg?.permitirTexto ? 'Tu navegador no reconoce voz — escribe tu respuesta 😉' : 'Tu navegador no reconoce voz. Usa "Saltar esta línea".')
+          : 'No te escuché, intenta de nuevo';
+      },
+      textoEscuchando: 'Escuchando… habla y se enviará solo (o toca para terminar antes)'
+    });
+  }
+
+  function gcResponder(dicho) {
+    if (!gc) return;
+    const m = gc.mensajes[gc.idx];
+    const bien = coincideVoz(dicho, m.en);
+    if (bien) gc.aciertos++;
+    playSound(bien ? 'correct' : 'wrong');
+    gcBurbujaTuya(m, dicho, bien ? '' : gcRevisar(m.en, dicho));
+
+    // Se retira el micrófono mientras suena el modelo: si se dejaba
+    // puesto, se podía mandar dos veces la misma línea y el guion se
+    // adelantaba solo.
+    const turno = document.getElementById('gc-turno');
+    if (turno) turno.innerHTML = `<p class="text-xs font-bold text-center px-4 ${bien ? 'text-green-600' : 'text-slate-400'}">${bien ? '✅ ¡Bien dicho!' : 'Escucha cómo se dice…'}</p>`;
+
+    if (bien) { addPoints(3); touchStreak(); }
+    gc.idx++;
+    // Se oye el modelo correcto y recién ahí sigue la conversación.
+    setTimeout(() => {
+      if (!gc) return;
+      vozReal(m.en, { voz: gcVoz(m), onend: () => setTimeout(() => gcPaso(), 400) });
+    }, 600);
+  }
+
+  function gcFin() {
+    const cfg = gc?.cfg;
+    const resumen = { aciertos: gc?.aciertos || 0, tuyos: gc?.tuyos || 0, mensajes: gc?.mensajes.length || 0 };
+    gc = null;
+    stopSpeaking();
+    if (cfg?.onFin) cfg.onFin(resumen);
+  }
+
+  /* ============================================================
+     12.5. DIÁLOGO GENERADO CON LAS PALABRAS DEL GRUPO
+     ------------------------------------------------------------
+     Al terminar la práctica de un grupo se pide a la Edge Function
+     "generar-dialogo-grupo" un guion de GC_MENSAJES (10) mensajes
+     FIJOS que use al menos el 60 % de las palabras recién estudiadas
+     (el servidor lo verifica y reintenta si no llega). El usuario
+     elige "Persona A" o "Persona B" y lo practica hablando o
+     escribiendo, con el motor de conversación guiada de arriba.
+  ============================================================ */
+  let domDialogoActual = null; // { data, nivel, group, personaje }
+
   async function introDialogoGrupo(nivel, group, words) {
-    // Este paso usa la función Edge "generar-dialogo" (IA): en Gratis/Plus
-    // se salta sin trabar el flujo, igual que cuando la IA falla o tarda.
-    if (!puedeIA()) {
+    // En Gratis/Plus no hay funciones Edge de IA: se salta el paso sin
+    // trabar el flujo, igual que cuando la IA falla o tarda.
+    const marcarHecho = async () => {
       const g = flujo.niveles[nivel]?.grupos?.[group];
       if (g) { if (!g.dialogo) g.dialogo = {}; g.dialogo.done = true; await updateUserFlow(); }
-      return runFlow();
-    }
+    };
+    if (!puedeIA()) { await marcarHecho(); return runFlow(); }
+
     updateProgressBar(65);
     appContainer.innerHTML = `<div class="text-center animate-pulse mt-10"><i class="fas fa-circle-notch fa-spin text-4xl text-[#FF7A00]"></i><p class="text-slate-400 font-bold mt-3">Generando un diálogo con tus palabras...</p></div>`;
-    const palabras = (words || []).map(w => w.ingles).filter(Boolean).slice(0, 8);
-    const data = await generarDialogoGrupo(nivel, group, palabras);
-    if (!data) {
-      // No bloquea el flujo si la IA falla o tarda demasiado.
-      const g = flujo.niveles[nivel]?.grupos?.[group];
-      if (g) { if (!g.dialogo) g.dialogo = {}; g.dialogo.done = true; await updateUserFlow(); }
-      return runFlow();
-    }
+
+    const palabras = (words || []).map(w => w.ingles).filter(Boolean).slice(0, 10);
+    const data = await pedirGuion('generar-dialogo-grupo', {
+      words: palabras,
+      nivel: nivelActual(nivel),
+      grupo: group,
+      mensajes: GC_MENSAJES,
+      evitar: abuEvitarLista()
+    });
+    if (!data) { await marcarHecho(); return runFlow(); }
+    registrarAbuEvitar(data.titulo || data.mensajes[0]?.en);
+
     domDialogoActual = { data, nivel, group, personaje: null };
-    const speakers = [...new Set(data.lines.map(l => l.speaker))];
+    const personajes = [...new Set(data.mensajes.map(m => m.rol))];
+    const faltaron = Array.isArray(data.palabrasFaltantes) ? data.palabrasFaltantes.length : 0;
     appContainer.innerHTML = `
       <div class="card-3d p-5 animate-pop mt-1 text-center">
         <span class="bg-teal-100 text-teal-600 px-3 py-1 rounded-full text-xs font-bold uppercase mb-3 inline-block">🎭 Diálogo con tus palabras</span>
-        <h3 class="font-heading font-bold text-slate-800 text-lg mb-3">${escapeHTML(data.title || '')}</h3>
+        <h3 class="font-heading font-bold text-slate-800 text-lg mb-1">${escapeHTML(data.titulo || '')}</h3>
+        <p class="text-[11px] font-bold text-slate-400 mb-3">${data.mensajes.length} mensajes · usa ${(data.palabrasUsadas || []).length} de tus ${palabras.length} palabras${faltaron ? '' : ''}</p>
         <p class="text-[11px] font-bold text-slate-400 mb-2">Elige tu personaje:</p>
         <div id="dg-personajes" class="grid grid-cols-2 gap-2 mb-2">
-          ${speakers.map(s => `<button class="personaje-btn" data-per="${escapeHTML(s)}"><div class="text-2xl mb-1">🧑</div><div class="font-bold text-sm">Persona ${escapeHTML(s)}</div></button>`).join('')}
+          ${personajes.map(r => `<button class="personaje-btn" data-per="${escapeHTML(r)}"><div class="text-2xl mb-1">🧑</div><div class="font-bold text-sm">Persona ${escapeHTML(r)}</div></button>`).join('')}
         </div>
         <p class="text-[11px] text-slate-400 mt-2">Puedes responder hablando 🎙️ o escribiendo ⌨️.</p>
       </div>`;
@@ -2647,168 +3177,57 @@ function openAbuChat() {
   function dgIniciar(personaje) {
     const info = domDialogoActual; if (!info) return;
     info.personaje = personaje;
-    const total = info.data.lines.length;
-    appContainer.innerHTML = `
-      <div class="card-3d p-3 sm:p-4 animate-pop mt-1">
-        <div class="flex items-center gap-2 mb-2">
-          <span class="bg-teal-100 text-teal-600 px-2.5 py-1 rounded-full text-[11px] font-bold uppercase shrink-0">🎭 Diálogo</span>
-          <div class="flex-1 progress-track" style="margin-top:0"><div id="dg-bar" class="progress-fill" style="width:0%"></div></div>
-          <span class="text-[11px] font-black text-slate-400 shrink-0"><span id="dg-count">0</span>/${total}</span>
-        </div>
-        <div id="dg-messages" class="chat-scroll h-[40vh] min-h-[190px] overflow-y-auto p-2 space-y-2 mb-2 bg-slate-50 rounded-xl border border-slate-100"></div>
-        <div id="dg-turno" class="flex flex-col items-center gap-1.5"></div>
-      </div>`;
-    dgBind();
-    // Se precargan TODAS las voces del diálogo antes de empezar: una sola
-    // llamada (un crédito) en vez de una por línea, y sin pausas raras
-    // entre burbuja y burbuja.
-    dgPrepararAudios().then(() => dgPaso(0));
-  }
-
-  async function dgPrepararAudios() {
-    const info = domDialogoActual;
-    if (!info || !puedeIA()) return;
-    const turno = document.getElementById('dg-turno');
-    if (turno) turno.innerHTML = `<p class="text-xs font-bold text-slate-400"><i class="fas fa-circle-notch fa-spin mr-1"></i>Preparando las voces…</p>`;
-    await precargarVoces(info.data.lines.map(l => ({ texto: l.en, voz: vozDePersonaje(l.speaker) })));
-  }
-
-  function dgBind() {
-    const box = document.getElementById('dg-messages');
-    if (!box) return;
-    box.addEventListener('click', (e) => {
-      const say = e.target.closest('[data-say]');
-      if (say) { vozReal(decodeURIComponent(say.dataset.say || ''), { voz: say.dataset.voz || 'a' }); return; }
-      const tr = e.target.closest('[data-toggle-tr]');
-      if (tr) { const el = document.getElementById(tr.dataset.toggleTr); if (el) el.classList.toggle('hidden'); }
+    // Cada personaje conserva SU voz aunque sea el tuyo: así el diálogo
+    // suena a dos personas distintas de principio a fin.
+    const mensajes = info.data.mensajes.map(m => ({
+      rol: m.rol === personaje ? 'tu' : 'otro',
+      en: m.en,
+      es: m.es,
+      nombre: m.rol === personaje ? null : `Persona ${m.rol}`,
+      voz: String(m.rol).toUpperCase() === 'B' ? 'b' : 'a'
+    }));
+    gcIniciar({
+      etiqueta: '🎭 Diálogo',
+      chipClase: 'bg-teal-100 text-teal-600',
+      mensajes,
+      permitirTexto: true,
+      onFin: dgFin
     });
   }
 
-  function dgBubble(role, en, es) {
-    const box = document.getElementById('dg-messages');
-    if (!box) return;
-    const idTr = 'dg-tr-' + Math.random().toString(36).slice(2, 9);
-    // data-voz: la burbuja recuerda con qué voz debe sonar (Persona A o
-    // Persona B), para que el 🔊 no las mezcle al reescuchar.
-    const vozLinea = vozDePersonaje(role === 'user' ? (domDialogoActual?.personaje || 'A') : role);
-    const btnSay = `<button data-say="${encodeURIComponent(en)}" data-voz="${vozLinea}" title="Escuchar" class="shrink-0 w-8 h-8 rounded-full bg-white border border-slate-200 text-slate-400 hover:text-[#FF7A00] hover:border-[#FF7A00] active:scale-90 transition flex items-center justify-center"><i class="fas fa-volume-up text-[11px]"></i></button>`;
-    const div = document.createElement('div');
-    if (role === 'user') {
-      div.className = 'flex justify-end items-end gap-1.5';
-      div.innerHTML = `${btnSay}<div class="bg-[#FF7A00] text-white rounded-2xl rounded-br-sm px-3.5 py-2 max-w-[75%] font-medium">
-        ${escapeHTML(en)}
-        ${es ? `<button data-toggle-tr="${idTr}" class="block text-[10px] font-bold text-orange-100 underline mt-1">Ver traducción</button>
-        <div id="${idTr}" class="hidden text-xs text-orange-100 mt-0.5 leading-snug">${escapeHTML(es)}</div>` : ''}
-      </div>`;
-    } else {
-      div.className = 'flex justify-start items-end gap-1.5';
-      div.innerHTML = `<div class="bg-white border border-slate-200 text-slate-800 rounded-2xl rounded-bl-sm px-3.5 py-2 max-w-[75%] shadow-sm">
-        <div class="text-[10px] font-black text-teal-500 uppercase mb-0.5">Persona ${escapeHTML(role)}</div>
-        <div class="font-medium leading-snug">${escapeHTML(en)}</div>
-        ${es ? `<button data-toggle-tr="${idTr}" class="text-[10px] font-bold text-slate-400 underline mt-1">Ver traducción</button>
-        <div id="${idTr}" class="hidden text-xs text-slate-400 mt-0.5 leading-snug">${escapeHTML(es)}</div>` : ''}
-      </div>${btnSay}`;
-    }
-    box.appendChild(div); box.scrollTop = box.scrollHeight;
-  }
-
-  function dgPaso(idx) {
-    stopSpeaking();
-    const info = domDialogoActual; if (!info) return;
-    const lineas = info.data.lines;
-    const bar = document.getElementById('dg-bar'); if (bar) bar.style.width = `${Math.round((idx / lineas.length) * 100)}%`;
-    const cnt = document.getElementById('dg-count'); if (cnt) cnt.textContent = idx;
-    if (idx >= lineas.length) return dgFin();
-    const linea = lineas[idx];
-    const esMio = linea.speaker === info.personaje;
-    const turno = document.getElementById('dg-turno');
-
-    if (!esMio) {
-      turno.innerHTML = `<div class="text-center text-slate-300"><i class="fas fa-volume-up fa-lg"></i></div>`;
-      dgBubble(linea.speaker, linea.en, linea.es);
-      // Se avanza cuando TERMINA el audio, no a los N milisegundos que
-      // salían de contar letras: con la voz real (más lenta) ese cálculo
-      // cortaba la línea a la mitad. El temporizador queda solo de red de
-      // seguridad por si el audio nunca llega a sonar.
-      let avanzado = false;
-      const avanzar = () => { if (avanzado) return; avanzado = true; setTimeout(() => dgPaso(idx + 1), 700); };
-      const respaldo = setTimeout(avanzar, Math.max(3000, linea.en.length * 95));
-      vozReal(linea.en, {
-        voz: vozDePersonaje(linea.speaker),
-        onend: () => { clearTimeout(respaldo); avanzar(); }
-      });
-      return;
-    }
-
-    turno.innerHTML = `
-      <p class="text-[11px] font-black text-[#FF7A00] uppercase text-center px-4">Te toca: "${escapeHTML(linea.en)}"</p>
-      <div class="flex items-center gap-2 w-full">
-        <button id="dg-mic" class="mic-btn shrink-0" style="width:52px;height:52px;font-size:1.2rem"><i class="fas fa-microphone"></i></button>
-        <input id="dg-input" type="text" placeholder="…o escribe aquí" autocomplete="off" class="flex-1 min-w-0 bg-white border-2 border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-[#FF7A00] text-slate-700 font-medium">
-        <button id="dg-enviar" class="btn-juice bg-[#FF7A00] text-white font-bold px-3.5 py-2.5 rounded-xl shrink-0"><i class="fas fa-paper-plane"></i></button>
-      </div>
-      <p id="dg-msg" class="text-xs font-bold text-slate-400 min-h-[1.2em] text-center px-4">Habla 🎙️ o escribe tu línea</p>`;
-
-    const input = document.getElementById('dg-input');
-    const msg = document.getElementById('dg-msg');
-    const enviarTexto = () => {
-      const texto = (input.value || '').trim();
-      if (!texto) return;
-      input.value = '';
-      dgResponder(idx, texto);
-    };
-    document.getElementById('dg-enviar').onclick = enviarTexto;
-    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') enviarTexto(); });
-
-    const micBtn = document.getElementById('dg-mic');
-    bindMicManual(micBtn, msg, {
-      onFinal: (texto) => { if (texto) dgResponder(idx, texto); else msg.textContent = 'No escuché nada — habla de nuevo o escribe 🎙️'; },
-      onError: (err) => { msg.textContent = err === 'no-soportado' ? 'Tu navegador no reconoce voz — escribe tu respuesta 😉' : 'No te escuché, intenta de nuevo'; },
-      textoEscuchando: 'Escuchando… habla y se enviará solo (o toca para terminar antes)'
-    });
-  }
-
-  function dgResponder(idx, texto) {
+  async function dgFin(resumen) {
     const info = domDialogoActual;
-    const linea = info.data.lines[idx];
-    playSound(coincideVoz(texto, linea.en) ? 'correct' : 'wrong');
-    dgBubble('user', texto, linea.es || null);
-    setTimeout(() => dgPaso(idx + 1), 900);
-  }
-
-  async function dgFin() {
-    const info = domDialogoActual;
-    const turno = document.getElementById('dg-turno');
     await addPoints(15);
     const g = flujo.niveles[info.nivel]?.grupos?.[info.group];
     if (g) { if (!g.dialogo) g.dialogo = {}; g.dialogo.done = true; await updateUserFlow(); }
     playSound('complete'); triggerConfetti();
-    if (turno) {
-      turno.innerHTML = `
-        <p class="text-center text-sm font-bold text-green-600 mb-2">🎉 ¡Diálogo terminado! <span class="text-yellow-600">+15 puntos</span></p>
-        <button id="dg-continuar" class="w-full btn-juice bg-[#FF7A00] text-white font-bold py-2.5 rounded-xl text-sm">Continuar 👉</button>`;
-      document.getElementById('dg-continuar').onclick = () => runFlow();
-    } else runFlow();
+    showModal({
+      icon: '🎭', title: '¡Diálogo terminado!',
+      body: `Dijiste bien <b class="text-green-600">${resumen.aciertos}</b> de <b>${resumen.tuyos}</b> líneas. <span class="text-yellow-600 font-bold">+15 puntos</span>`,
+      dismissable: false,
+      actions: [{ label: 'Continuar 👉', onClick: () => { closeModal(); runFlow(); } }]
+    });
   }
 
   /* ============================================================
-     13. HABLAR CON ABU — práctica de conversación (última misión)
+     13. CONVERSA CON ABU — práctica de conversación (última misión)
      ------------------------------------------------------------
-     Es una práctica más, como las tarjetas o los ejercicios: hay que
-     enviar CHAT_GOAL mensajes para completarla y cerrar el grupo.
-     Abu contesta corto, corrige al instante y usa las palabras que
-     acabas de estudiar. Nunca se presenta como una IA: es Abu.
-     Respuestas: Edge Function "generar-dialogo" (mode:"chat").
+     Es una práctica más, como las tarjetas o los ejercicios. Ya NO es
+     un chat libre: Abu trae una conversación completa escrita con las
+     palabras que acabas de estudiar (Edge Function
+     "generar-charla-palabras") y tú vas diciendo, turno a turno, la
+     frase que te toca. Nunca se presenta como una IA: es Abu.
+
+     Se quitaron a propósito, porque estorbaban más de lo que ayudaban:
+       · las tres sugerencias sueltas (ahora sabes la frase exacta);
+       · las fichas de palabras de abajo (las palabras ya vienen dentro
+         de las frases que dices, no hay que ir a buscarlas).
   ============================================================ */
   function chatPracticeIntro(nivel, group) {
-    // Sin modal previo: la charla arranca de una vez.
+    // Sin modal previo: la práctica arranca de una vez.
     startChatPractice(nivel, group, true);
   }
-  const CHAT_TIMEOUT_MS = 20000;   // con "thinking" desactivado la respuesta llega en 1-3 s
-  let aiChat = [];                 // historial [{role:'user'|'assistant', content}]
-  let chatWords = [];              // palabras objetivo de esta charla
-  let chatSession = null;          // { nivel, group, counts, count, goal, used:Set, streak }
-  let chatModoLocalAvisado = false; // para avisar una sola vez si falla la Edge Function
+  let chatInfo = null;             // { nivel, group, counts }
 
   // Últimas N palabras estudiadas (con registro SRS), ordenadas por fecha de estudio.
   async function getStudiedWords(max = 10) {
@@ -2835,16 +3254,9 @@ function openAbuChat() {
     return [...new Set(list.map(w => String(w).trim()).filter(Boolean))].slice(0, max);
   }
 
-  /*
-    Llamada a la Edge Function. Reintenta una vez y, si aun así falla,
-    devuelve null para que la charla continúe con una respuesta local
-    (nunca se corta la práctica con "no pude responder").
-  */
-  // Guarda las últimas líneas que Abu ya usó (en "Conversa con Abu", en
-  // Dominar y en el diálogo con palabras del grupo) para poder pedirle a
-  // la IA que no las repita la próxima vez. Vive en `flujo`, así que
-  // sobrevive entre sesiones y dispositivos — antes esto no se guardaba
-  // en ningún lado y la función Edge nunca recibía un "evitar" real.
+  /* Guarda las últimas líneas/títulos que Abu ya usó, para pedirle a la
+     IA que no los repita la próxima vez. Vive en `flujo`, así que
+     sobrevive entre sesiones y dispositivos. */
   function registrarAbuEvitar(texto) {
     if (!texto || !flujo) return;
     if (!Array.isArray(flujo.abuEvitar)) flujo.abuEvitar = [];
@@ -2858,55 +3270,15 @@ function openAbuChat() {
     return Array.isArray(flujo?.abuEvitar) ? flujo.abuEvitar.slice(-max) : [];
   }
 
-  async function callChatFunction(body, reintentos = 1) {
-    // Plan Gratis/Plus: sin acceso a funciones Edge de IA. Se devuelve null
-    // de una vez (sin llamar a la red) para que la charla siga con las
-    // respuestas locales que ya existen como respaldo — la misma ruta que
-    // se usa cuando la función Edge falla o tarda demasiado.
-    if (!puedeIA()) return null;
-    if (!body.evitar) body.evitar = abuEvitarLista();
-    for (let intento = 0; intento <= reintentos; intento++) {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), CHAT_TIMEOUT_MS);
-      try {
-        const headers = await cabecerasIA();
-        if (!headers) { clearTimeout(timer); return null; }
-        const resp = await fetch(`${SUPABASE_URL}/functions/v1/generar-dialogo`, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify(body),
-          signal: controller.signal
-        });
-        let payload = null;
-        try { payload = await resp.json(); } catch { /* respuesta no JSON */ }
-        // Plan, cupo o sesión: se avisa y NO se reintenta, no tiene caso.
-        if (payload?.codigo && manejarRechazoIA(payload)) { clearTimeout(timer); return null; }
-        if (!resp.ok || payload?.error) {
-          throw new Error(`${payload?.error || 'HTTP ' + resp.status}${payload?.motivo ? ' · ' + payload.motivo : ''}`);
-        }
-        const en = (payload?.reply?.en || '').trim();
-        if (!en) throw new Error('respuesta vacía');
-        registrarAbuEvitar(en);
-        return payload.reply;
-      } catch (err) {
-        console.warn(`[Abu] intento ${intento + 1}:`, err?.name === 'AbortError' ? 'tardó demasiado' : (err?.message || err));
-        if (intento < reintentos) await new Promise(r => setTimeout(r, 500));
-      } finally {
-        clearTimeout(timer);
-      }
-    }
-    return null;
-  }
-
   /*
     Diagnóstico rápido. Abre la consola del navegador (F12) y escribe:
         await pingAbu()
-    Te dice si la clave de DeepSeek existe, si responde y en cuántos ms.
+    Te dice si las funciones de conversación responden y en cuántos ms.
   */
-  window.pingAbu = async function () {
+  window.pingAbu = async function (funcion = 'generar-charla-palabras') {
     const headers = await cabecerasIA();
     if (!headers) { console.warn('❌ Sin sesión: inicia sesión antes de hacer ping.'); return null; }
-    const r = await fetch(`${SUPABASE_URL}/functions/v1/generar-dialogo`, {
+    const r = await fetch(`${SUPABASE_URL}/functions/v1/${funcion}`, {
       method: 'POST',
       headers,
       body: JSON.stringify({ mode: 'ping' })
@@ -2917,31 +3289,51 @@ function openAbuChat() {
   };
 
   /* ------------------------------------------------------------
-     GUION LOCAL DE ABU
-     Se usa cuando la Edge Function no contesta (sin conexión, API
-     caída o clave vencida). Antes soltaba frases sueltas y repetía
-     "¿te gusta 'we'?", que además no tiene sentido con pronombres.
-     Ahora es una conversación de verdad: reacciona a lo que escribió
-     el estudiante, nunca repite pregunta y cada 3 turnos le pide usar
-     una palabra del grupo en una frase.
+     GUION DE RESPALDO (sin IA)
+     Se usa SOLO si la Edge Function no contesta (sin conexión, API
+     caída, cupo agotado). Son parejas pregunta/respuesta completas y
+     con traducción, para que la práctica funcione igual: Abu pregunta
+     y tú tienes una frase concreta que decir.
+     SIN EMOJIS: estas líneas se leen en voz alta y se repiten.
   ------------------------------------------------------------ */
-  const ABU_GUION = [
-    { id: 'today',   en: "What did you do today?",             es: "¿Qué hiciste hoy?",                       tips: ['I worked.', 'I studied English.', 'Nothing special 😅'] },
-    { id: 'family',  en: "Who do you live with?",              es: "¿Con quién vives?",                       tips: ['With my family.', 'I live alone.', 'With my friends.'] },
-    { id: 'work',    en: "Do you work or study?",              es: "¿Trabajas o estudias?",                   tips: ['I work.', 'I study.', 'Both! 😅'] },
-    { id: 'food',    en: "What food do you like?",             es: "¿Qué comida te gusta?",                   tips: ['I like pizza.', 'Rice and chicken.', 'Everything! 😄'] },
-    { id: 'weekend', en: "What do you do on weekends?",        es: "¿Qué haces los fines de semana?",         tips: ['I rest at home.', 'I go out.', 'I see my family.'] },
-    { id: 'city',    en: "Where are you from?",                es: "¿De dónde eres?",                         tips: ["I'm from Colombia.", 'From Bogotá.', 'A small town.'] },
-    { id: 'why',     en: "Why do you learn English?",          es: "¿Por qué aprendes inglés?",               tips: ['For my job.', 'To travel ✈️', 'I like it.'] },
-    { id: 'music',   en: "What music do you listen to?",       es: "¿Qué música escuchas?",                   tips: ['I like rock.', 'Reggaeton 🔥', 'All kinds.'] },
-    { id: 'travel',  en: "Where do you want to travel?",       es: "¿A dónde quieres viajar?",                tips: ['To the USA.', 'To Europe.', 'Anywhere! 😄'] },
-    { id: 'morning', en: "What time do you wake up?",          es: "¿A qué hora te levantas?",                tips: ['At six.', 'Very early 😴', 'Late on Sundays.'] },
-    { id: 'pet',     en: "Do you have a pet?",                 es: "¿Tienes mascota?",                        tips: ['Yes, a dog 🐶', "No, I don't.", 'I want one!'] },
-    { id: 'movie',   en: "What was the last movie you saw?",   es: "¿Cuál fue la última película que viste?", tips: ['A comedy.', "I don't remember 😅", 'A horror movie.'] },
-    { id: 'friend',  en: "Tell me about your best friend.",    es: "Cuéntame de tu mejor amigo.",             tips: ['He is funny.', 'She is very kind.', 'We study together.'] },
-    { id: 'dream',   en: "What is your dream job?",            es: "¿Cuál es el trabajo de tus sueños?",      tips: ['A doctor.', "I don't know yet.", 'Something with computers.'] },
-    { id: 'plans',   en: "What are your plans for tomorrow?",  es: "¿Qué planes tienes para mañana?",         tips: ['I work.', 'I rest.', 'I study English.'] }
+  const GUION_BASICO = [
+    { abu: { en: "Hi! I'm Abu. How is your day going?",        es: '¡Hola! Soy Abu. ¿Cómo va tu día?' },
+      tu:  { en: 'My day is going well, thank you.',            es: 'Mi día va bien, gracias.' } },
+    { abu: { en: 'Nice. What did you do this morning?',         es: 'Qué bien. ¿Qué hiciste esta mañana?' },
+      tu:  { en: 'I had breakfast and then I worked.',          es: 'Desayuné y después trabajé.' } },
+    { abu: { en: 'Do you study English every day?',             es: '¿Estudias inglés todos los días?' },
+      tu:  { en: 'Yes, I study a little every day.',            es: 'Sí, estudio un poco todos los días.' } },
+    { abu: { en: 'What do you usually do after work?',          es: '¿Qué haces normalmente después del trabajo?' },
+      tu:  { en: 'I rest at home and listen to music.',         es: 'Descanso en casa y escucho música.' } },
+    { abu: { en: 'Do you cook at home or eat out?',             es: '¿Cocinas en casa o comes fuera?' },
+      tu:  { en: 'I cook at home almost every day.',            es: 'Cocino en casa casi todos los días.' } },
+    { abu: { en: 'Where do you want to travel next year?',      es: '¿A dónde quieres viajar el año que viene?' },
+      tu:  { en: 'I want to travel to another country.',        es: 'Quiero viajar a otro país.' } },
+    { abu: { en: 'How do you go to work in the morning?',       es: '¿Cómo vas al trabajo en la mañana?' },
+      tu:  { en: 'I go by bus, it takes twenty minutes.',       es: 'Voy en bus, tarda veinte minutos.' } },
+    { abu: { en: 'What is the weather like today?',             es: '¿Cómo está el clima hoy?' },
+      tu:  { en: 'It is cloudy and a little cold.',             es: 'Está nublado y hace un poco de frío.' } },
+    { abu: { en: 'Do you prefer mornings or evenings?',         es: '¿Prefieres las mañanas o las noches?' },
+      tu:  { en: 'I prefer mornings, I have more energy.',      es: 'Prefiero las mañanas, tengo más energía.' } },
+    { abu: { en: 'That was great practice. See you soon!',      es: 'Fue muy buena práctica. ¡Nos vemos pronto!' },
+      tu:  { en: 'Thank you, Abu. See you tomorrow.',           es: 'Gracias, Abu. Hasta mañana.' } }
   ];
+
+  /* Arma una conversación de respaldo de GC_MENSAJES mensajes con el
+     formato que espera el motor. `frases` (opcional) son las frases que
+     el estudiante acaba de estudiar: si existen, esas son tus líneas. */
+  function guionRespaldo(frases) {
+    const mensajes = [];
+    const pares = [...GUION_BASICO];
+    const propias = (frases || []).filter(f => f && f.en);
+    for (let i = 0; i < GC_MENSAJES / 2; i++) {
+      const par = pares[i % pares.length];
+      const mia = propias[i] || par.tu;
+      mensajes.push({ rol: 'otro', en: par.abu.en, es: par.abu.es, nombre: 'Abu', voz: 'abu' });
+      mensajes.push({ rol: 'tu',   en: mia.en,     es: mia.es || '',                 voz: 'a' });
+    }
+    return mensajes;
+  }
 
   const alAzar = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
@@ -2979,380 +3371,72 @@ function openAbuChat() {
     return errores.join(' ');
   }
 
-  // Reacción corta a lo último que escribió el estudiante (así se siente escuchado)
-  function reaccionAbu(texto, usadas) {
-    const t = (texto || '').toLowerCase().trim();
-    if (usadas && usadas.length) return { en: `Perfect use of "${usadas[0]}"! 🎯`, es: `¡Perfecto uso de "${usadas[0]}"! 🎯` };
-    if (/don'?t know|no s[eé]|idk|ni idea/.test(t))     return { en: 'No problem! 😄', es: '¡No pasa nada! 😄' };
-    if (/hard|difficult|dif[ií]cil/.test(t))            return { en: "I know, but you're doing great! 💪", es: '¡Lo sé, pero lo haces muy bien! 💪' };
-    if (/easy|f[aá]cil/.test(t))                        return { en: 'That’s the spirit! 🔥', es: '¡Ese es el ánimo! 🔥' };
-    if (/^(yes|yeah|yep|sure|of course)/.test(t))       return { en: 'Great! 😄', es: '¡Genial! 😄' };
-    if (/^(no|nope|not really|never)/.test(t))          return { en: 'Okay! 👌', es: '¡Está bien! 👌' };
-    if (t.split(/\s+/).length >= 6)                     return { en: 'Wow, great sentence! 🔥', es: '¡Wow, gran frase! 🔥' };
-    return alAzar([
-      { en: 'Nice!', es: '¡Bien!' }, { en: 'Cool!', es: '¡Genial!' },
-      { en: 'Love it!', es: '¡Me encanta!' }, { en: 'So good!', es: '¡Muy bien!' },
-      { en: 'Awesome!', es: '¡Excelente!' }
-    ]);
+  /* ---------- Pantalla de la práctica ---------- */
+  // Convierte los mensajes que devuelve la IA (rol "abu"/"tu") a lo que
+  // consume el motor de conversación guiada.
+  function mensajesDeAbu(lista) {
+    return (lista || []).map(m => (m.rol === 'tu')
+      ? { rol: 'tu',   en: m.en, es: m.es, voz: 'a' }
+      : { rol: 'otro', en: m.en, es: m.es, nombre: 'Abu', voz: 'abu' });
   }
 
-  function abuFallback(textoUsuario = '', usadas = []) {
-    const cs = chatSession;
-    if (cs && !cs.guionUsado) cs.guionUsado = new Set();
-    const hechas = cs?.guionUsado || new Set();
-    const turno = cs?.count || 0;
-    const r = reaccionAbu(textoUsuario, usadas);
-
-    // Último mensaje: despedida, sin preguntas
-    if (cs && turno >= cs.goal) {
-      return {
-        en: `${r.en} You did an amazing job today. See you soon! 👋`,
-        es: `${r.es} Hiciste un trabajo increíble hoy. ¡Nos vemos pronto! 👋`,
-        tips: ['Thank you! 😄', 'See you, Abu!', 'Bye bye 👋']
-      };
-    }
-
-    /*
-      Ya NO se le "ordena" al estudiante hacer una frase suelta
-      ("Try a sentence with X 👀"): eso rompía el hilo de la charla.
-      Ahora, cada 2 turnos, ABU MISMO usa una palabra pendiente dentro
-      de una frase natural y hace una pregunta relacionada, invitando
-      (no obligando) a responder con esa misma palabra. Las sugerencias
-      rápidas incluyen una respuesta lista que la usa, para que el flujo
-      de la conversación tenga sentido lógico.
-    */
-    if (cs && !cs.retadas) cs.retadas = new Set();
-    const retadas = cs?.retadas || new Set();
-    const sinUsar = chatWords.filter(w => !cs?.used.has(norm(w)));
-    const libre = sinUsar.find(w => !retadas.has(norm(w))) || sinUsar[0];
-    if (libre && turno > 0 && turno % 2 === 0) {
-      retadas.add(norm(libre));
-      const charla = alAzar([
-        { en: `You know, I think learning English is never "${libre}" — it always surprises me 😄. What about you: is English "${libre}" for you?`,
-          es: `¿Sabes? Creo que aprender inglés nunca es "${libre}", siempre me sorprende 😄. ¿Y tú? ¿El inglés es "${libre}" para ti?`,
-          tips: [`Yes, it's very "${libre}" for me.`, `No, it's not "${libre}" at all.`, `Sometimes it feels "${libre}" 😅`] },
-        { en: `Today my coffee was really "${libre}" ☕😄. Can you describe something in your day with the word "${libre}"?`,
-          es: `Hoy mi café estuvo muy "${libre}" ☕😄. ¿Puedes describir algo de tu día con la palabra "${libre}"?`,
-          tips: [`My morning was "${libre}".`, `My work is "${libre}" today.`, `Nothing "${libre}" today 😅`] },
-        { en: `I love the word "${libre}" — I use it a lot when I talk about my week. How was your week? You can use "${libre}" in your answer 😉`,
-          es: `Me encanta la palabra "${libre}", la uso mucho cuando hablo de mi semana. ¿Cómo estuvo tu semana? Puedes usar "${libre}" en tu respuesta 😉`,
-          tips: [`My week was "${libre}"!`, `It was good, and very "${libre}".`, `A "${libre}" week, honestly.`] }
-      ]);
-      return {
-        en: `${r.en} ${charla.en}`,
-        es: `${r.es} ${charla.es}`,
-        tips: charla.tips
-      };
-    }
-
-    // Siguiente pregunta del guion que todavía no se haya hecho.
-    // Una de las sugerencias siempre trae una palabra pendiente ya integrada.
-    const pendientes = ABU_GUION.filter(q => !hechas.has(q.id));
-    const sig = pendientes.length ? alAzar(pendientes) : ABU_GUION[turno % ABU_GUION.length];
-    hechas.add(sig.id);
-    const tips = [...sig.tips];
-    if (libre) tips[tips.length - 1] = `It was "${libre}", I think 😄`;
-    return { en: `${r.en} ${sig.en}`, es: `${r.es} ${sig.es}`, tips };
-  }
-
-  /*
-    Respuestas sugeridas. Lo ideal viene de Abu (campo "tips"), pero si no
-    llega se arman aquí leyendo qué tipo de pregunta hizo: así siempre hay
-    algo que responder aunque falle la red.
-  */
-  function sugerenciasLocales(textoAbu) {
-    const t = (textoAbu || '').toLowerCase();
-    const libre = chatWords.filter(w => !chatSession?.used.has(norm(w)))[0];
-    let base;
-    // Las preguntas con wh- mandan sobre las de sí/no: "Why do you...?" no se
-    // responde con "Yes, I do", aunque contenga "do you".
-    if (/how are you|how do you feel|how is it going/.test(t))  base = ["I'm good! 😄", "A little tired.", "Great, thanks!"];
-    else if (/\bwhy\b/.test(t))                            base = ['Because I like it.', "I don't know 😅", "It's fun!"];
-    else if (/\bwhere\b/.test(t))                          base = ['At home.', 'In my city.', 'At school.'];
-    else if (/\bwhen|what time\b/.test(t))                 base = ['Every day.', 'On weekends.', 'In the morning.'];
-    else if (/\bhow (many|much|often|long)\b/.test(t))     base = ['Two or three.', 'A lot!', 'Not much.'];
-    else if (/\bhow\b/.test(t))                            base = ['With my phone.', "It's easy!", "It's hard 😅"];
-    else if (/\bwho\b/.test(t))                            base = ['My family.', 'My best friend.', 'My teacher.'];
-    else if (/\bwhich\b/.test(t))                          base = ['The first one.', 'Both! 😄', "I'm not sure 🤔"];
-    else if (/\bwhat.*(like|favou?rite|prefer)\b/.test(t)) base = ['I like it a lot.', 'Not really.', 'My favourite! 🔥'];
-    else if (/\bwhat\b/.test(t))                           base = ['I like it.', "I'm not sure 🤔", 'Tell me more.'];
-    else if (/\b(do|did|does|are|is|was|can|have|had|would|will) you\b/.test(t)) base = ['Yes, I do! 😄', "No, I don't.", 'Sometimes.'];
-    else                                                    base = ['Yes! 😄', 'Really?', 'Tell me more.'];
-    // Una sugerencia siempre es una FRASE COMPLETA que usa una palabra
-    // pendiente del grupo, con sentido dentro de la conversación
-    // (antes era "What about X?", que no la usaba de verdad).
-    if (libre) {
-      const conPalabra = alAzar([
-        `For me, it's "${libre}".`,
-        `I think it was "${libre}".`,
-        `Honestly, quite "${libre}" 😄`
-      ]);
-      base = [...base.slice(0, 2), conPalabra];
-    }
-    return base;
-  }
-
-  function pintarSugerencias(tips) {
-    const cont = document.getElementById('chat-quick');
-    if (!cont) return;
-    const lista = (Array.isArray(tips) ? tips : [])
-      .map(t => String(t || '').trim()).filter(Boolean).slice(0, 3);
-    const finales = lista.length >= 2 ? lista : sugerenciasLocales(tips);
-    cont.innerHTML = finales.map(r =>
-      `<button class="quick-reply shrink-0 text-[11px] font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-500 hover:bg-orange-50 hover:text-[#FF7A00] transition" data-txt="${escapeHTML(r)}">${escapeHTML(r)}</button>`
-    ).join('');
-    const input = document.getElementById('ai-input');
-    cont.querySelectorAll('.quick-reply').forEach(b => {
-      b.onclick = () => { if (input) { input.value = b.dataset.txt || ''; input.focus(); } };
-    });
-  }
-
-  /* ---------- Pantalla de la charla ---------- */
   async function startChatPractice(nivel, group, cuenta) {
     closeModal();
     stopSpeaking();
-    domResetAudioCache(); // charla nueva → se descarta el audio real de la anterior
-    const g = (group && flujo.niveles[nivel]?.grupos?.[group]) || null;
-    chatWords = await getChatWords(nivel, group, 10);
-    aiChat = [];
-    chatSession = {
-      nivel, group, counts: !!cuenta, goal: CHAT_GOAL,
-      count: (cuenta && g?.chat?.count) ? g.chat.count : 0,
-      used: new Set(), streak: 0
-    };
+    domResetAudioCache();          // conversación nueva → audio de la anterior fuera
+    chatInfo = { nivel, group, counts: !!cuenta };
 
-    const chips = chatWords.map(w =>
-      `<span class="word-chip shrink-0 text-[11px] font-bold px-2 py-1 rounded-full bg-white border border-slate-200 text-slate-500" data-word="${escapeHTML(norm(w))}">${escapeHTML(w)}</span>`
-    ).join('');
+    const palabras = await getChatWords(nivel, group, 10);
+    appContainer.innerHTML = `<div class="text-center animate-pulse mt-10"><i class="fas fa-circle-notch fa-spin text-4xl text-[#FF7A00]"></i><p class="text-slate-400 font-bold mt-3">Abu está preparando una conversación con tus palabras...</p></div>`;
 
-    appContainer.innerHTML = `
-      <div class="card-3d p-3 sm:p-4 animate-pop mt-1">
+    // Máximo 8 palabras: la cobertura mínima (60 %) tiene que caber en
+    // tus 5 líneas del guion. Con 10 palabras salían frases forzadas.
+    const data = palabras.length ? await pedirGuion('generar-charla-palabras', {
+      words: palabras.slice(0, 8),
+      nivel: nivelActual(nivel),
+      mensajes: GC_MENSAJES,
+      evitar: abuEvitarLista()
+    }) : null;
 
-        <div class="flex items-center gap-2 mb-1.5">
-          <span class="bg-purple-100 text-purple-600 px-2.5 py-1 rounded-full text-[11px] font-bold uppercase shrink-0">💬 Abu</span>
-          <div class="flex-1 progress-track" style="margin-top:0"><div id="chat-bar" class="progress-fill" style="width:${(chatSession.count / CHAT_GOAL) * 100}%"></div></div>
-          <span class="text-[11px] font-black text-slate-400 shrink-0"><span id="chat-count" class="text-[#FF7A00]">${chatSession.count}</span>/${CHAT_GOAL}</span>
-          <button id="chat-exit" title="Salir" class="shrink-0 w-6 h-6 rounded-full text-slate-300 hover:text-slate-500 hover:bg-slate-100 transition text-sm">&times;</button>
-        </div>
-
-        <div id="ai-messages" class="chat-scroll h-[46vh] min-h-[220px] overflow-y-auto p-2 space-y-2 mb-2 bg-slate-50 rounded-xl border border-slate-100"></div>
-
-        <div id="chat-quick" class="no-bar flex gap-1.5 overflow-x-auto whitespace-nowrap mb-2 min-h-[26px]"></div>
-
-        <div class="flex gap-2">
-          <input id="ai-input" type="text" placeholder="Escribe en inglés..." autocomplete="off" autocapitalize="sentences" spellcheck="false" enterkeyhint="send"
-            class="flex-1 min-w-0 bg-white border-2 border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-[#FF7A00] text-slate-700 font-medium">
-          <button id="ai-send" class="btn-juice bg-[#FF7A00] text-white font-bold px-4 py-2 rounded-xl shrink-0"><i class="fas fa-paper-plane"></i></button>
-        </div>
-
-        ${chips ? `
-        <div class="flex items-center gap-2 mt-2">
-          <div id="chat-chips" class="no-bar flex-1 flex gap-1.5 overflow-x-auto whitespace-nowrap py-0.5">${chips}</div>
-          <span class="text-[10px] font-bold text-slate-400 shrink-0"><span id="chat-usadas">0</span>/${chatWords.length}</span>
-        </div>` : ''}
-      </div>`;
-
-    bindChatPractice();
-    pintarProgresoChat();
-
-    // Abu empieza DE UNA VEZ con una pregunta directa (sin discurso largo).
-    // La instrucción de usar las palabras va en un toast breve, no en el mensaje.
-    let saludo;
-    if (chatWords.length) {
-      const q = alAzar(ABU_GUION);
-      chatSession.guionUsado = new Set([q.id]);
-      saludo = { en: `Hi! I'm Abu 👋 ${q.en}`, es: `¡Hola! Soy Abu 👋 ${q.es}`, tips: q.tips };
-      setTimeout(() => showToast('💡 Usa las palabras de abajo en tus respuestas: dan puntos extra.'), 800);
+    let mensajes;
+    if (data) {
+      mensajes = mensajesDeAbu(data.mensajes);
+      registrarAbuEvitar(data.titulo || data.mensajes[0]?.en);
     } else {
-      saludo = { en: `Hi! I'm Abu 👋 How are you today?`, es: `¡Hola! Soy Abu 👋 ¿Cómo estás hoy?` };
+      mensajes = guionRespaldo();
+      showToast('📴 Abu no pudo escribir la conversación: usamos una básica.', 3000);
     }
-    addChatBubble('ai', saludo);
-    aiChat.push({ role: 'assistant', content: saludo.en });
-    pintarSugerencias(saludo.tips || saludo.en);   // sugerencias acordes al saludo
-    speakAbu(saludo.en);
-  }
 
-  function addChatBubble(role, msg) {
-    const box = document.getElementById('ai-messages');
-    if (!box) return null;
-    const div = document.createElement('div');
-    if (role === 'user') {
-      div.className = 'flex justify-end';
-      div.innerHTML = `<div class="bg-[#FF7A00] text-white rounded-2xl rounded-br-sm px-3.5 py-2 max-w-[85%] font-medium">${escapeHTML(msg.en)}</div>`;
-    } else {
-      div.className = 'flex justify-start items-end gap-1.5';
-      div.innerHTML = `
-        <div class="bg-white border border-slate-200 text-slate-800 rounded-2xl rounded-bl-sm px-3.5 py-2 max-w-[78%] shadow-sm">
-          <div class="font-medium leading-snug">${escapeHTML(msg.en)}</div>
-          ${msg.es ? `<div class="text-xs text-slate-400 mt-0.5 leading-snug">${escapeHTML(msg.es)}</div>` : ''}
-          ${msg.fix ? `<div class="mt-1.5 text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1 leading-snug">✏️ ${escapeHTML(msg.fix)}</div>` : ''}
-        </div>
-        <button data-say="${encodeURIComponent(msg.en || '')}" data-abu="1" title="Escuchar otra vez"
-          class="say-btn shrink-0 w-8 h-8 rounded-full bg-white border border-slate-200 text-slate-400 hover:text-[#FF7A00] hover:border-[#FF7A00] active:scale-90 transition flex items-center justify-center">
-          <i class="fas fa-volume-up text-[11px]"></i>
-        </button>`;
-    }
-    box.appendChild(div);
-    box.scrollTop = box.scrollHeight;
-    return div;
-  }
-
-  // Marca las palabras objetivo usadas por primera vez y las devuelve.
-  function marcarPalabrasUsadas(text) {
-    if (!chatSession) return [];
-    const t = ' ' + norm(text).replace(/\s+/g, ' ') + ' ';
-    const nuevas = [];
-    chatWords.forEach(w => {
-      const k = norm(w);
-      if (!k || chatSession.used.has(k)) return;
-      if (t.includes(' ' + k + ' ')) {
-        chatSession.used.add(k);
-        nuevas.push(w);
-        document.querySelectorAll('#chat-chips .word-chip').forEach(ch => {
-          if (ch.dataset.word === k) ch.classList.add('used');
-        });
-      }
+    gcIniciar({
+      etiqueta: '💬 Abu',
+      chipClase: 'bg-purple-100 text-purple-600',
+      mensajes,
+      permitirTexto: true,          // aquí puedes hablar o escribir
+      vozOtro: 'abu',
+      vozTuya: 'a',
+      onFin: finishChatPractice,
+      onSalir: () => { chatInfo = null; runFlow(); }
     });
-    const cont = document.getElementById('chat-usadas');
-    if (cont) cont.textContent = chatSession.used.size;
-    return nuevas;
   }
 
-  function pintarProgresoChat() {
-    const cs = chatSession;
-    if (!cs) return;
-    const pct = Math.min(100, (cs.count / cs.goal) * 100);
-    const bar = document.getElementById('chat-bar'); if (bar) bar.style.width = pct + '%';
-    const num = document.getElementById('chat-count'); if (num) num.textContent = cs.count;
-    updateProgressBar(pct);
-  }
-
-  function bindChatPractice() {
-    const box = document.getElementById('ai-messages');
-    const input = document.getElementById('ai-input');
-    const send = document.getElementById('ai-send');
-    if (!input || !send || !box) return;
-
-    // Volver a escuchar cualquier mensaje de Abu (usa el audio real
-    // cacheado/pedido a Google Cloud vía speakAbu; nunca la voz del
-    // navegador de una — solo Abu tiene botón 🔊 en este chat).
-    box.addEventListener('click', (e) => {
-      const b = e.target.closest('[data-say]');
-      if (!b) return;
-      speakAbu(decodeURIComponent(b.dataset.say || ''));
-    });
-
-    const exit = document.getElementById('chat-exit');
-    if (exit) exit.onclick = async () => {
-      const cs = chatSession;
-      stopSpeaking();
-      if (cs?.counts && cs.group && flujo.niveles[cs.nivel]?.grupos?.[cs.group]) {
-        flujo.niveles[cs.nivel].grupos[cs.group].chat.count = cs.count;   // se guarda el avance
-        await updateUserFlow();
-        showToast(`💬 Guardamos tu avance: ${cs.count}/${CHAT_GOAL} mensajes.`);
-      }
-      chatSession = null;
-      runFlow();
-    };
-
-    const enviar = async (textoDirecto) => {
-      const text = (textoDirecto ?? input.value ?? '').toString().trim();
-      if (!text || send.disabled || !chatSession) return;
-      input.value = '';
-      addChatBubble('user', { en: text });
-      aiChat.push({ role: 'user', content: text });
-
-      /* ---- Recompensa inmediata (así el chat engancha) ---- */
-      const cs = chatSession;
-      cs.count++;
-      cs.streak++;
-      let pts = 3;
-      const nuevas = marcarPalabrasUsadas(text);
-      const fixLocal = corregirLocal(text);   // red de seguridad de correcciones
-      if (nuevas.length) pts += 6 * nuevas.length;
-      if (text.split(/\s+/).length >= 6) pts += 2;      // premio a frases largas
-      pintarProgresoChat();
-
-      // El avance del chat se guarda EN CADA MENSAJE (antes solo al salir con la X:
-      // si recargabas a mitad de charla, el contador volvía a cero).
-      if (cs.counts && cs.group && flujo.niveles[cs.nivel]?.grupos?.[cs.group]) {
-        flujo.niveles[cs.nivel].grupos[cs.group].chat.count = cs.count;
-      }
-      await updateUserFlow();
-      await addPoints(pts);
-      touchStreak();
-      if (nuevas.length) showToast(`🎯 ¡Usaste "${nuevas[0]}"! +${6 * nuevas.length} puntos`);
-      else if (cs.count === Math.ceil(cs.goal / 2)) { triggerConfetti(); showToast('🔥 ¡Mitad del camino! Vas encendido.'); }
-      else if (cs.goal - cs.count === 3) showToast('💪 ¡Solo 3 mensajes más!');
-
-      const quick = document.getElementById('chat-quick');
-      if (quick) quick.innerHTML = '';
-
-      const typing = document.createElement('div');
-      typing.className = 'flex justify-start';
-      typing.innerHTML = `<div class="bg-white border border-slate-200 text-slate-400 rounded-2xl rounded-bl-sm px-3.5 py-2 text-sm"><i class="fas fa-circle-notch fa-spin mr-1"></i> Abu escribe...</div>`;
-      box.appendChild(typing);
-      box.scrollTop = box.scrollHeight;
-      send.disabled = true;
-
-      let reply = await callChatFunction({
-        mode: 'chat',
-        nivel: chatSession?.nivel || flujo.currentNivel,
-        messages: aiChat.slice(-8),           // contexto suficiente para que la charla tenga hilo
-        words: chatWords.slice(0, 8),
-        used: [...cs.used],                    // palabras ya usadas → la IA se enfoca en las pendientes
-        turn: cs.count,                        // Abu sabe si está empezando o cerrando
-        goal: cs.goal
-      });
-      typing.remove();
-      if (!reply) {
-        reply = abuFallback(text, nuevas);
-        // Aviso único: si sale, la Edge Function no está respondiendo.
-        if (!chatModoLocalAvisado) {
-          chatModoLocalAvisado = true;
-          console.warn('[Abu] sin respuesta de la Edge Function → guion local. Revisa los logs de generar-dialogo en Supabase.');
-          showToast('📴 Abu está respondiendo en modo básico.', 2600);
-        }
-      }
-
-      // Corrección garantizada: si la IA no marcó nada pero el corrector
-      // local detectó un error, se muestra igual la cajita ✏️.
-      if (!reply.fix && fixLocal) reply.fix = fixLocal;
-
-      addChatBubble('ai', { en: reply.en, es: reply.es || '', fix: reply.fix || '' });
-      aiChat.push({ role: 'assistant', content: reply.en });
-      pintarSugerencias(reply.tips && reply.tips.length ? reply.tips : reply.en);
-      speakAbu(reply.en);
-      send.disabled = false;
-      input.focus();
-
-      if (chatSession && chatSession.count >= chatSession.goal) setTimeout(finishChatPractice, 1100);
-    };
-
-    send.onclick = () => enviar();
-    input.addEventListener('keypress', (e) => { if (e.key === 'Enter') enviar(); else sfx('type'); });
-    setTimeout(() => input.focus(), 120);
-  }
-
-  async function finishChatPractice() {
-    const cs = chatSession;
-    if (!cs) return;
-    chatSession = null;
+  async function finishChatPractice(resumen) {
+    const info = chatInfo;
+    chatInfo = null;
     stopSpeaking();
     await addPoints(25);
 
-    const g = (cs.group && flujo.niveles[cs.nivel]?.grupos?.[cs.group]) || null;
-    if (cs.counts && g) {
-      g.chat = { done: true, count: cs.count };
+    const g = (info?.group && flujo.niveles[info.nivel]?.grupos?.[info.group]) || null;
+    if (info?.counts && g) {
+      g.chat = { done: true, count: CHAT_GOAL };
       g.completed = true;
       flujo.stats.sessionsCompleted = (flujo.stats.sessionsCompleted || 0) + 1;
       await updateUserFlow();
-      return groupCompleteScreen(cs.nivel, cs.group, g);
+      return groupCompleteScreen(info.nivel, info.group, g);
     }
     playSound('complete'); triggerConfetti();
     showModal({
       icon: '💬', title: '¡Conversación completada!',
-      body: `Enviaste <b>${cs.count} mensajes</b> y usaste <b class="text-green-600">${cs.used.size}</b> de tus palabras. <br><span class="text-yellow-600 font-bold">+25 puntos</span>`,
+      body: `Dijiste bien <b class="text-green-600">${resumen.aciertos}</b> de <b>${resumen.tuyos}</b> frases. <br><span class="text-yellow-600 font-bold">+25 puntos</span>`,
       dismissable: false,
       actions: [{ label: 'Continuar', onClick: () => { closeModal(); runFlow(); } }]
     });
@@ -3390,7 +3474,7 @@ function openAbuChat() {
   const DOM_PTS_CONVERSAR  = 20;
   const DOM_PTS_ABU        = 20;
   const DOM_PTS_SUBSECCION = 15;        // bono al completar toda la subsección
-  const DOM_CHAT_GOAL      = 10;        // turnos de voz por "Conversa con Abu"
+  const DOM_CHAT_GOAL      = GC_MENSAJES; // largo de "Conversa con Abu" (guion completo)
 
   let dominarCache = {};   // { [nivel]: { frases, practica_frases, practica_escucha, practica_videos, practica_textos, conversaciones, plan, cargado } }
 
@@ -4242,20 +4326,24 @@ function openAbuChat() {
      3 sugerencias son para ESCUCHAR (no para copiar y pegar).
   ------------------------------------------------------------ */
   let domChatSession = null;
-  let domAiChat = [];
-  let domChatFrases = [];
+  let domChatFrases = [];        // [{en, es}] de la subsección actual
 
   // Junta las frases que YA estudió en esta subsección (no palabras sueltas):
   // las de la ronda 🧩/👂 y las oraciones del texto de 📖 Lee y completa.
   // Esto es lo que se manda a la función de IA para que Abu arme una
   // conversación real con lo que el usuario acaba de practicar.
+  // Devuelve {en, es}: la traducción hace falta para el botón "Ver
+  // traducción" del guion de respaldo cuando la IA no responde.
   function frasesEstudiadasDeSubseccion(item) {
     const frases = [];
-    (item.ronda || []).forEach(r => { if (r.fila.frase) frases.push(r.fila.frase.trim()); });
+    (item.ronda || []).forEach(r => {
+      if (r.fila?.frase) frases.push({ en: String(r.fila.frase).trim(), es: String(r.fila.traduccion || '').trim() });
+    });
     if (item.lee?.texto) {
-      item.lee.texto.split(/(?<=[.!?])\s+/).forEach(s => { if (s.trim()) frases.push(s.trim()); });
+      item.lee.texto.split(/(?<=[.!?])\s+/).forEach(t => { if (t.trim()) frases.push({ en: t.trim(), es: '' }); });
     }
-    return [...new Set(frases)].slice(0, 10);
+    const vistas = new Set();
+    return frases.filter(f => f.en && !vistas.has(f.en) && vistas.add(f.en)).slice(0, 10);
   }
 
   function domIntroConversaAbu(nivel, n, item) {
@@ -4269,138 +4357,48 @@ function openAbuChat() {
     document.getElementById('dom-abu-empezar').onclick = () => domIniciarAbu(nivel, n, item);
   }
 
-  // 👉 Para cambiar cuántos turnos dura "Conversa con Abu", edita
-  // DOM_CHAT_GOAL más arriba (sección 14, junto a los demás DOM_PTS_*).
-  function domIniciarAbu(nivel, n, item) {
+  /* Conversación completa escrita por la Edge Function
+     "generar-charla-dominar" a partir de las frases que acabas de
+     estudiar en la subsección. Antes era un chat libre que improvisaba
+     turno a turno y terminaba repitiendo siempre las mismas preguntas;
+     ahora el guion se escribe entero de una vez, con un solo tema y un
+     hilo lógico. Aquí solo se responde por voz. */
+  async function domIniciarAbu(nivel, n, item) {
     domChatFrases = frasesEstudiadasDeSubseccion(item);
-    domAiChat = [];
-    domChatSession = { nivel, n, count: 0, goal: DOM_CHAT_GOAL };
-    domResetAudioCache(); // charla nueva → se descarta el audio real de la anterior
-    appContainer.innerHTML = `
-      <div class="card-3d p-3 sm:p-4 animate-pop mt-1">
-        <div class="flex items-center gap-2 mb-2">
-          <span class="bg-purple-100 text-purple-600 px-2.5 py-1 rounded-full text-[11px] font-bold uppercase shrink-0">🦉 Abu</span>
-          <div class="flex-1 progress-track" style="margin-top:0"><div id="dom-abu-bar" class="progress-fill" style="width:0%"></div></div>
-          <span class="text-[11px] font-black text-slate-400 shrink-0"><span id="dom-abu-count">0</span>/${DOM_CHAT_GOAL}</span>
-        </div>
-        <div id="dom-abu-messages" class="chat-scroll h-[40vh] min-h-[190px] overflow-y-auto p-2 space-y-2 mb-2 bg-slate-50 rounded-xl border border-slate-100"></div>
-        <div id="dom-abu-quick" class="no-bar flex gap-1.5 overflow-x-auto whitespace-nowrap mb-3 min-h-[26px]"></div>
-        <div class="flex flex-col items-center gap-1.5">
-          <button id="dom-abu-mic" class="mic-btn"><i class="fas fa-microphone"></i></button>
-          <p id="dom-abu-mic-msg" class="text-xs font-bold text-slate-400 min-h-[1.2em]">Toca el micrófono para responder</p>
-        </div>
-      </div>`;
-    domBindAbu();
-    const q = alAzar(ABU_GUION);
-    const saludo = { en: `Hi! I'm Abu 👋 ${q.en}`, es: `¡Hola! Soy Abu 👋 ${q.es}`, tips: q.tips };
-    domAddBubble('ai', saludo);
-    domAiChat.push({ role: 'assistant', content: saludo.en });
-    domPintarSugerencias(saludo.tips);
-    speakAbu(saludo.en);
-  }
+    domChatSession = { nivel, n };
+    domResetAudioCache();          // conversación nueva → audio anterior fuera
+    appContainer.innerHTML = `<div class="text-center animate-pulse mt-10"><i class="fas fa-circle-notch fa-spin text-4xl text-[#FF7A00]"></i><p class="text-slate-400 font-bold mt-3">Abu está preparando la conversación...</p></div>`;
 
-  // Botón 🔊 (reescuchar) en cada burbuja — las de Abu suenan con SU voz
-  // real (cacheada en vozCache, ver vozReal) y las tuyas con la voz 'a',
-  // también real: de tu voz solo se guarda el texto reconocido, así que
-  // lo que se oye es ese texto leído, no tu grabación.
-  // "Ver traducción" queda oculta hasta tocarla.
-  function domAddBubble(role, msg) {
-    const box = document.getElementById('dom-abu-messages');
-    if (!box) return;
-    const idTr = 'dom-tr-' + Math.random().toString(36).slice(2, 9);
-    const btnSay = (texto, esAbu) => `<button data-say="${encodeURIComponent(texto)}" ${esAbu ? 'data-abu="1"' : ''} title="Escuchar" class="shrink-0 w-8 h-8 rounded-full bg-white border border-slate-200 text-slate-400 hover:text-[#FF7A00] hover:border-[#FF7A00] active:scale-90 transition flex items-center justify-center"><i class="fas fa-volume-up text-[11px]"></i></button>`;
-    const div = document.createElement('div');
-    if (role === 'user') {
-      div.className = 'flex justify-end items-end gap-1.5';
-      div.innerHTML = `${btnSay(msg.en, false)}<div class="bg-[#FF7A00] text-white rounded-2xl rounded-br-sm px-3.5 py-2 max-w-[78%] font-medium">
-        ${escapeHTML(msg.en)}
-        ${msg.fix ? `<div class="mt-1.5 text-[11px] font-bold text-amber-50 bg-black/15 rounded-lg px-2 py-1 leading-snug">✏️ ${escapeHTML(msg.fix)}</div>` : ''}
-      </div>`;
+    const data = domChatFrases.length ? await pedirGuion('generar-charla-dominar', {
+      frases: domChatFrases.map(f => f.en),
+      nivel: nivelActual(nivel),
+      mensajes: GC_MENSAJES,
+      evitar: abuEvitarLista()
+    }) : null;
+
+    let mensajes;
+    if (data) {
+      mensajes = mensajesDeAbu(data.mensajes);
+      registrarAbuEvitar(data.titulo || data.mensajes[0]?.en);
     } else {
-      div.className = 'flex justify-start items-end gap-1.5';
-      div.innerHTML = `<div class="bg-white border border-slate-200 text-slate-800 rounded-2xl rounded-bl-sm px-3.5 py-2 max-w-[78%] shadow-sm">
-        <div class="font-medium leading-snug">${escapeHTML(msg.en)}</div>
-        ${msg.es ? `<button data-toggle-tr="${idTr}" class="text-[10px] font-bold text-slate-400 underline mt-1">Ver traducción</button>
-        <div id="${idTr}" class="hidden text-xs text-slate-400 mt-0.5 leading-snug">${escapeHTML(msg.es)}</div>` : ''}
-        ${msg.fix ? `<div class="mt-1.5 text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1 leading-snug">✏️ ${escapeHTML(msg.fix)}</div>` : ''}
-      </div>${btnSay(msg.en, true)}`;
+      // Respaldo: tus líneas son las frases que acabas de estudiar.
+      mensajes = guionRespaldo(domChatFrases);
+      showToast('📴 Abu no pudo escribir la conversación: usamos una básica.', 3000);
     }
-    box.appendChild(div); box.scrollTop = box.scrollHeight;
-  }
-  function domPintarSugerencias(tips) {
-    const cont = document.getElementById('dom-abu-quick');
-    if (!cont) return;
-    const lista = (Array.isArray(tips) ? tips : []).map(t => String(t || '').trim()).filter(Boolean).slice(0, 3);
-    cont.innerHTML = lista.map(r => `<button class="quick-reply shrink-0 text-[11px] font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-500" data-txt="${escapeHTML(r)}">🔊 ${escapeHTML(r)}</button>`).join('');
-    // Las 3 sugerencias son para ESCUCHAR: suenan con la voz real (voz
-    // 'a', distinta a la de Abu, porque son ejemplos de lo que dirías tú).
-    cont.querySelectorAll('.quick-reply').forEach(b => { b.onclick = () => vozReal(b.dataset.txt || '', { voz: 'a' }); });
-  }
-  function domBindAbu() {
-    // Delegación de clics dentro del chat: 🔊 reescuchar y "Ver traducción".
-    const box = document.getElementById('dom-abu-messages');
-    if (box) {
-      box.addEventListener('click', (e) => {
-        const say = e.target.closest('[data-say]');
-        if (say) {
-          const texto = decodeURIComponent(say.dataset.say || '');
-          // Burbuja de Abu → reproduce el audio real (cacheado o, si hace
-          // falta, recién pedido a Google Cloud). Burbuja tuya → siempre
-          // voz del navegador, de tu voz solo se guardó el texto.
-          if (say.dataset.abu) speakAbu(texto); else vozReal(texto, { voz: 'a' });
-          return;
-        }
-        const tr = e.target.closest('[data-toggle-tr]');
-        if (tr) { const el = document.getElementById(tr.dataset.toggleTr); if (el) el.classList.toggle('hidden'); }
-      });
-    }
-    const mic = document.getElementById('dom-abu-mic');
-    const msg = document.getElementById('dom-abu-mic-msg');
-    if (!mic) return;
-    bindMicManual(mic, msg, {
-      onFinal: (texto) => {
-        msg.textContent = 'Toca el micrófono para responder';
-        if (texto) domEnviarAbu(texto); else msg.textContent = 'No escuché nada, intenta de nuevo 🎙️';
-      },
-      onError: (err) => {
-        msg.textContent = err === 'no-soportado' ? 'Tu navegador no reconoce voz 😕' : 'No te escuché, intenta de nuevo';
-      },
-      textoEscuchando: 'Escuchando… habla y se enviará solo (o toca para terminar antes)'
+
+    gcIniciar({
+      etiqueta: '🦉 Abu',
+      chipClase: 'bg-purple-100 text-purple-600',
+      mensajes,
+      permitirTexto: false,        // aquí solo se responde hablando
+      vozOtro: 'abu',
+      vozTuya: 'a',
+      barraGlobal: false,          // la barra de Dominar la maneja pasoDominar
+      onFin: domFinAbu
     });
   }
-  async function domEnviarAbu(text) {
-    text = (text || '').trim();
-    if (!text || !domChatSession) return;
-    const cs = domChatSession;
-    cs.count++;
-    const esUltimo = cs.count >= cs.goal;
-    const fixLocal = corregirLocal(text);
-    domAddBubble('user', { en: text, fix: esUltimo ? fixLocal : '' });
-    domAiChat.push({ role: 'user', content: text });
-    const bar = document.getElementById('dom-abu-bar'); if (bar) bar.style.width = `${Math.min(100, (cs.count / cs.goal) * 100)}%`;
-    const cnt = document.getElementById('dom-abu-count'); if (cnt) cnt.textContent = cs.count;
-    await addPoints(6);
-    touchStreak();
 
-    // El ÚLTIMO mensaje de la charla debe ser el tuyo: al llegar a la meta
-    // no se le pide una respuesta más a Abu, se cierra aquí mismo.
-    if (esUltimo) { setTimeout(domFinAbu, 900); return; }
-
-    const typing = document.createElement('div');
-    typing.className = 'flex justify-start';
-    typing.innerHTML = `<div class="bg-white border border-slate-200 text-slate-400 rounded-2xl rounded-bl-sm px-3.5 py-2 text-sm"><i class="fas fa-circle-notch fa-spin mr-1"></i> Abu escribe...</div>`;
-    document.getElementById('dom-abu-messages')?.appendChild(typing);
-
-    let reply = await callChatFunction({ mode: 'dominar_chat', nivel: cs.nivel, messages: domAiChat.slice(-8), frases: domChatFrases.slice(0, 10), turn: cs.count, goal: cs.goal });
-    typing.remove();
-    if (!reply) reply = abuFallback(text, []);
-    if (!reply.fix && fixLocal) reply.fix = fixLocal;
-    domAddBubble('ai', { en: reply.en, es: reply.es || '', fix: reply.fix || '' });
-    domAiChat.push({ role: 'assistant', content: reply.en });
-    domPintarSugerencias(reply.tips);
-    speakAbu(reply.en);
-  }
-  async function domFinAbu() {
+  async function domFinAbu(resumen) {
     const cs = domChatSession; if (!cs) return;
     domChatSession = null;
     await addPoints(DOM_PTS_ABU);
@@ -4410,7 +4408,7 @@ function openAbuChat() {
     playSound('complete'); triggerConfetti();
     showModal({
       icon: '🦉', title: '¡Charla completada!',
-      body: `Hablaste con Abu <b>${cs.count}</b> veces. <span class="text-yellow-600 font-bold">+${DOM_PTS_ABU} puntos</span>`,
+      body: `Dijiste bien <b class="text-green-600">${resumen?.aciertos ?? 0}</b> de <b>${resumen?.tuyos ?? 0}</b> frases. <span class="text-yellow-600 font-bold">+${DOM_PTS_ABU} puntos</span>`,
       dismissable: false,
       actions: [{ label: 'Continuar 👉', onClick: () => { closeModal(); pasoDominar(cs.nivel); } }]
     });
@@ -6330,7 +6328,12 @@ function openAbuChat() {
     showModal({
       icon: '🔥', title: dias > 0 ? `¡Llevas ${dias} día${dias === 1 ? '' : 's'} de racha!` : 'Empieza tu racha hoy',
       body: dias > 0 ? animos[Math.floor(Math.random() * animos.length)] : 'Estudia hoy para encender tu racha diaria. 🔥',
-      actions: [{ label: '¡Seguir así! 💪', onClick: closeModal }]
+      actions: [
+        // La imagen se arma en el navegador con el ícono de la app y la
+        // llama con tus días (ver abrirCompartirRacha más arriba).
+        { label: '<i class="fas fa-share-nodes mr-2"></i>Compartir racha', onClick: abrirCompartirRacha },
+        { label: '¡Seguir así! 💪', style: 'bg-white border-2 border-slate-200 text-slate-500', onClick: closeModal }
+      ]
     });
   };
 
