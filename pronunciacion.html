@@ -1580,6 +1580,7 @@
         ${dicho ? `<p class="text-[11px] text-slate-500 mt-1.5 pt-1.5 border-t border-orange-200"><span class="font-black uppercase text-[9px] text-slate-400">Dijiste</span><br>${escapeHTML(dicho)}</p>` : ''}
         <div class="flex items-center gap-2 mt-1.5">
           <button class="vivo-repetir w-7 h-7 rounded-full bg-white border border-slate-200 text-slate-500 flex items-center justify-center" title="Escuchar"><i class="fas fa-volume-up text-[10px]"></i></button>
+          ${mia ? pzMiniEstrellas(puntaje) : ''}
         </div>
       </div>`;
     div.querySelector('.vivo-repetir').onclick = (e) => pzReproducirLinea(pzVivo.conv, m, e.currentTarget);

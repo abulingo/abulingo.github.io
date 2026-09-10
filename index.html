@@ -202,11 +202,20 @@
     (function () {
         'use strict';
         var CLAVE = 'abu_consentimiento'; // 'aceptado' | 'rechazado'
+        // Respaldo en memoria: en modo privado (o con el almacenamiento
+        // bloqueado) localStorage no guarda nada, y sin esto el "Aceptar"
+        // se perdería al instante y nadie podría crear su cuenta.
+        var eleccionEnMemoria = null;
 
         function guardar(valor) {
-            try { localStorage.setItem(CLAVE, valor); } catch (e) { /* modo privado: no se puede recordar la elección */ }
+            eleccionEnMemoria = valor;
+            try { localStorage.setItem(CLAVE, valor); } catch (e) { /* modo privado: solo queda en memoria */ }
+            // Aviso para el resto de la página (lo escucha el formulario de
+            // registro, que muestra u oculta su recordatorio de cookies).
+            try { document.dispatchEvent(new CustomEvent('abu:consentimiento', { detail: valor })); } catch (e) {}
         }
         function leer() {
+            if (eleccionEnMemoria) return eleccionEnMemoria;
             try { return localStorage.getItem(CLAVE); } catch (e) { return null; }
         }
 
@@ -259,7 +268,13 @@
 
         // API pública: la usa el enlace "Preferencias de cookies" del footer
         // para poder cambiar de opinión más tarde.
-        window.AbuCookies = { mostrarBanner: mostrarBanner, estado: leer };
+        window.AbuCookies = {
+            mostrarBanner: mostrarBanner,
+            estado: leer,
+            // La usa el formulario de registro: sin cookies aceptadas no se
+            // puede crear la cuenta.
+            aceptado: function () { return leer() === 'aceptado'; }
+        };
     })();
     </script>
 
@@ -871,9 +886,13 @@
                     <input type="password" id="signup-pin" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" minlength="4" autocomplete="new-password" placeholder="••••" class="w-full input-field pin-field" required>
                     <p class="text-xs text-slate-400 mt-1">Usarás este PIN de 4 dígitos para entrar. Sencillo de recordar.</p>
                 </div>
+                <div id="signup-cookies-aviso" class="hidden rounded-lg bg-amber-50 border border-amber-200 p-3 text-xs text-amber-800 leading-snug">
+                    🍪 Para crear tu cuenta primero tienes que <b>aceptar el uso de cookies</b>.
+                    <button type="button" id="signup-abrir-cookies" class="underline font-bold hover:text-amber-900">Ver el aviso de cookies</button>
+                </div>
                 <label class="flex items-start gap-2 text-xs text-slate-500 leading-snug">
-                    <input type="checkbox" id="signup-consiente-contacto" class="mt-0.5 w-4 h-4 shrink-0 accent-[#FF7A00]">
-                    <span>Acepto que Abulingo me contacte por correo o WhatsApp (por ejemplo, para avisos sobre mi cuenta o novedades del curso) y que me agreguen a un grupo de WhatsApp de estudiantes, donde mi número y nombre serán visibles para los demás miembros. Es opcional — puedo crear mi cuenta sin marcar esto. Ver <button type="button" id="signup-ver-privacidad" class="underline hover:text-[#0D47A1]">política de privacidad</button>.</span>
+                    <input type="checkbox" id="signup-consiente-contacto" class="mt-0.5 w-4 h-4 shrink-0 accent-[#FF7A00]" required>
+                    <span>Acepto que Abulingo me contacte por correo o WhatsApp (por ejemplo, para avisos sobre mi cuenta o novedades del curso) y que me agreguen a un grupo de WhatsApp de estudiantes, donde mi número y nombre serán visibles para los demás miembros. <b class="text-slate-600">Es obligatorio para crear la cuenta.</b> Ver <button type="button" id="signup-ver-privacidad" class="underline hover:text-[#0D47A1]">política de privacidad</button>.</span>
                 </label>
                 <button type="submit" id="signup-submit-btn" class="w-full btn-primary font-bold py-3 rounded-lg !mt-6">Crear Cuenta</button>
             </form>
@@ -966,7 +985,25 @@
         const openModal = (modal) => modal.classList.remove('hidden');
         const closeModal = (modal) => modal.classList.add('hidden');
         document.querySelectorAll('.auth-btn-login').forEach(btn => btn.addEventListener('click', () => openModal(loginModal)));
-        document.querySelectorAll('.auth-btn-signup').forEach(btn => btn.addEventListener('click', () => openModal(signupModal)));
+        // Sin cookies aceptadas no se puede crear cuenta: el aviso se
+        // muestra dentro del propio formulario y se refresca cada vez que
+        // se abre (por si la persona acaba de aceptar en el banner).
+        const cookiesAceptadas = () => {
+            try { return !!(window.AbuCookies && window.AbuCookies.aceptado && window.AbuCookies.aceptado()); }
+            catch (e) { return false; }
+        };
+        const refrescarAvisoCookies = () => {
+            const aviso = document.getElementById('signup-cookies-aviso');
+            if (aviso) aviso.classList.toggle('hidden', cookiesAceptadas());
+        };
+        const abrirRegistro = () => { refrescarAvisoCookies(); openModal(signupModal); };
+        document.querySelectorAll('.auth-btn-signup').forEach(btn => btn.addEventListener('click', abrirRegistro));
+        document.getElementById('signup-abrir-cookies')?.addEventListener('click', () => {
+            if (window.AbuCookies) window.AbuCookies.mostrarBanner();
+        });
+        // Si acepta las cookies con el formulario ya abierto, el aviso
+        // desaparece solo, sin tener que cerrar y volver a abrir.
+        document.addEventListener('abu:consentimiento', refrescarAvisoCookies);
 
         // Enlaces legales del footer (política de privacidad / términos).
         const privacyModal = document.getElementById('privacy-modal');
@@ -1065,6 +1102,24 @@
                     msgEl.className = 'text-sm mt-4 text-center text-feedback-error';
                 };
                 const yaRegistrado = () => showError('Este correo ya está registrado. Inicia sesión con tu PIN.');
+
+                // REQUISITO 1: cookies aceptadas. Sin esto no se crea la cuenta;
+                // se vuelve a mostrar el banner para poder aceptarlas ahí mismo.
+                if (!cookiesAceptadas()) {
+                    refrescarAvisoCookies();
+                    showError('🍪 Para crear tu cuenta primero tienes que aceptar el uso de cookies.');
+                    if (window.AbuCookies) window.AbuCookies.mostrarBanner();
+                    return;
+                }
+
+                // REQUISITO 2: consentimiento de contacto. El checkbox ya es
+                // "required", pero se comprueba igual por si el navegador no
+                // valida (o alguien lo salta desde la consola).
+                if (!consienteContacto) {
+                    showError('Para crear tu cuenta tienes que aceptar que Abulingo te contacte y te agregue al grupo de WhatsApp.');
+                    document.getElementById('signup-consiente-contacto').focus();
+                    return;
+                }
 
                 if (!isValidPin(pin)) {
                     showError('El PIN debe tener exactamente 4 dígitos numéricos.');
@@ -1251,6 +1306,13 @@
 
             // INICIAR SESIÓN CON GOOGLE
             document.getElementById('google-login-btn').addEventListener('click', async () => {
+                // La primera vez que alguien entra con Google se le crea la
+                // cuenta, así que aquí rige el mismo requisito de cookies.
+                if (!cookiesAceptadas()) {
+                    document.getElementById('login-error').textContent = '🍪 Primero tienes que aceptar el uso de cookies.';
+                    if (window.AbuCookies) window.AbuCookies.mostrarBanner();
+                    return;
+                }
                 const { error } = await supabase.auth.signInWithOAuth({
                     provider: 'google',
                     options: {
@@ -1318,7 +1380,7 @@
                     topLogout.addEventListener('click', () => supabase.auth.signOut());
                 }
                 mobileMenu.querySelectorAll('.auth-btn-login').forEach(btn => btn.addEventListener('click', () => { openModal(loginModal); mobileMenu.classList.add('hidden'); }));
-                mobileMenu.querySelectorAll('.auth-btn-signup').forEach(btn => btn.addEventListener('click', () => { openModal(signupModal); mobileMenu.classList.add('hidden'); }));
+                mobileMenu.querySelectorAll('.auth-btn-signup').forEach(btn => btn.addEventListener('click', () => { abrirRegistro(); mobileMenu.classList.add('hidden'); }));
                 mobileMenu.querySelectorAll('a').forEach(a => a.addEventListener('click', () => mobileMenu.classList.add('hidden')));
             };
 

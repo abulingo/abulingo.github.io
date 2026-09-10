@@ -127,6 +127,25 @@
     @keyframes bubbleIn { from { opacity: 0; transform: translateY(8px) scale(.97); } to { opacity: 1; transform: none; } }
     #gc-messages > div, #dom-conv-messages > div { animation: bubbleIn .22s ease-out both; }
 
+    /* Cajita "en vivo": mientras hablas, lo que el micrófono va
+       entendiendo se escribe aquí palabra por palabra, para que se vea
+       que sí te está escuchando y no haya que adivinar. */
+    .voz-vivo {
+      width: 100%; text-align: center; border-radius: 14px; padding: 8px 12px;
+      background: #fff; border: 2px dashed rgba(255,122,0,.45);
+      font-weight: 600; color: #334155; line-height: 1.35; font-size: .875rem;
+      min-height: 2.6em; display: flex; align-items: center; justify-content: center;
+      gap: 2px; flex-wrap: wrap; animation: tipIn .2s ease-out both;
+      max-height: 7.5em; overflow-y: auto;
+    }
+    .voz-vivo.grabando { border-color: #dc2626; background: #fff7f7; }
+    .voz-vivo .voz-vivo-espera { color: #cbd5e1; font-style: italic; }
+    .voz-vivo .voz-vivo-cursor {
+      display: inline-block; width: 2px; height: 1em; background: #FF7A00;
+      vertical-align: -.15em; animation: vozCursor 1s steps(1) infinite;
+    }
+    @keyframes vozCursor { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
+
     /* ============================================================
        DOMINAR — estilos portados/adaptados de practica.html
     ============================================================ */
@@ -1214,19 +1233,19 @@ function openAbuChat() {
     { icon: '🧰', title: 'Más herramientas para ti',
       body: `Además de las palabras y la práctica, Abulingo tiene más funciones para cuando las necesites:<br><br>📘 <b>Gramática</b>, 🎙️ <b>Pronunciación</b>, 💬 <b>Club</b> de conversación, 🌐 <b>Traductor</b> y 🗂️ <b>Mazo</b> de repaso, entre otras.<br><br>Las encuentras en la <b>barra de herramientas</b>, arriba. ¡Explóralas cuando quieras! 🔍` },
     { icon: '✨', title: 'Paso 1 · Repaso',
-      body: `Verás <b>tarjetas</b> con cada palabra: su imagen, pronunciación 🔊 y significado.<br><br>Toca <b class="text-green-600">Fácil</b> si ya la conoces o <b class="text-red-500">Difícil</b> si te cuesta. Las difíciles se repetirán <b>más veces</b> hasta que las domines. 🧠` },
+      body: `Verás <b>tarjetas</b> con imagen, sonido 🔊 y significado.<br><br>Marca <b class="text-green-600">Fácil</b> o <b class="text-red-500">Difícil</b>: las difíciles vuelven más veces. 🧠` },
     { icon: '👁️👂', title: 'Paso 2 · Práctica',
-      body: `Después vienen dos ejercicios <b>en orden aleatorio</b>:<br><br>👁️ <b>Identifica la imagen</b>: elige la palabra correcta (¡y escucha su pronunciación!).<br>👂 <b>Escucha y escribe</b>: escribe lo que oyes.<br><br>Si fallas, la palabra volverá más seguido para reforzarla. 💪` },
+      body: `Luego llegan dos ejercicios:<br><br>👁️ <b>Identifica la imagen</b><br>👂 <b>Escucha y escribe</b><br><br>Si fallas, esa palabra vuelve más seguido. 💪` },
     { icon: '💬', title: 'Paso 3 · Habla con Abu',
-      body: `Al final de cada grupo chateas con <b>Abu</b> 🦉.<br><br>Tus palabras nuevas aparecen <b>debajo de la caja de mensajes</b>: úsalas en tus respuestas y gana puntos extra. Abu también las usará y te corregirá con cariño. ✏️` },
+      body: `Al final de cada grupo conversas con <b>Abu</b> 🦉.<br><br>Puedes <b>hablar</b> 🎙️ o <b>escribir</b> ⌨️, y Abu te corrige. ✏️` },
     { icon: '🧠', title: 'Tu memoria a largo plazo',
-      body: `Cuando toque repasar, verás <b>"¡Toca repasar!"</b>: son palabras que tu memoria está a punto de olvidar.<br><br>Domínalas completando bien los tres tipos de práctica y se <b>graduarán</b> 🎓.<br><br>🔥 Mantén tu <b>racha diaria</b> y cumple la <b>meta de puntos</b> para ganar 💎 lingots.` },
-    { icon: '🔁', title: 'Los repasos te siguen a todos lados',
-      body: `Aunque cambies de nivel (por ejemplo de <b>A1</b> a <b>A2</b>), las palabras que aún <b>no dominas</b> siguen apareciendo en <b>"¡Toca repasar!"</b>.<br><br>Verás una etiqueta naranja 🔁 con el nivel de donde viene la palabra. <b>No necesitas volver a cambiar el nivel</b> para repasarlas. 👌` },
+      body: `En <b>“¡Toca repasar!”</b> salen las palabras que estás por olvidar. Domínalas y se <b>gradúan</b> 🎓.<br><br>🔥 Cuida tu <b>racha diaria</b> y gana 💎 lingots.` },
+    { icon: '🔁', title: 'Los repasos te siguen',
+      body: `Aunque cambies de nivel, lo que aún no dominas sigue apareciendo en <b>“¡Toca repasar!”</b> con una etiqueta 🔁.<br><br>No tienes que volver a cambiar el nivel. 👌` },
     { icon: '🎓', title: 'Tu certificado',
-      body: `Cuando tengas <b>todas las palabras de un nivel como dominadas</b> 🏅, recibes tu <b>certificado de Abulingo</b> de ese nivel.<br><br>Mira cuánto te falta en <b>Certificados</b> (toca tu foto de perfil 👤) y, al llegar al 100%, pídelo desde ahí mismo. 📜` },
+      body: `Cuando domines todas las palabras de un nivel 🏅 recibes tu <b>certificado</b>.<br><br>Míralo en <b>Certificados</b>, tocando tu foto de perfil 👤. 📜` },
     { icon: '🎯', title: '¡Todo listo!',
-      body: `Recuerda: constancia > cantidad. Con <b>sesiones cortas al día</b> tu inglés despega.<br><br>¿Empezamos con tus primeras palabras? 😄` }
+      body: `Constancia > cantidad: con <b>sesiones cortas al día</b> tu inglés despega.<br><br>¿Empezamos? 😄` }
   ];
 
   function mostrarTutorial(alTerminar) {
@@ -1237,7 +1256,7 @@ function openAbuChat() {
       closeModal();
       if (alTerminar) alTerminar();
     };
-    const SEGUNDOS_POR_TARJETA = 10; // tiempo mínimo de lectura antes de poder avanzar
+    const SEGUNDOS_POR_TARJETA = 3; // tiempo mínimo de lectura antes de poder avanzar
     let tutorialTimer = null;
     const paso = (i) => {
       clearInterval(tutorialTimer);
@@ -2752,10 +2771,20 @@ function openAbuChat() {
     userProfile.lingots = lingots;
     const dl = document.getElementById('user-lingots'); if (dl) dl.textContent = lingots;
     dbClient.from('profiles').update({ lingots }).eq('id', currentUser.id).then(() => {});
+    const resumen = `Terminaste <b>${group}</b> del nivel <b>${nivel}</b>.<br><span class="text-green-600 font-bold">${g.correct} aciertos</span> · <span class="text-slate-400">${g.wrong} fallos</span> · <span class="text-yellow-600 font-bold">🎁 +1 💎 Lingot</span>`;
+    // Aquí se llega justo al terminar la charla con Abu, así que el cierre
+    // se queda DEBAJO del chat (se puede seguir repasando lo dicho). Solo
+    // se cae al modal si esa pantalla ya no está.
+    const ok = gcPieFinal({
+      titulo: '🏆 ¡Grupo completado!',
+      resumen,
+      acciones: [{ label: 'Siguiente 👉', onClick: () => advanceGroup(nivel, group) }]
+    });
+    if (ok) return;
     showModal({
       icon: '🏆',
       title: '¡Grupo completado!',
-      body: `Terminaste <b>${group}</b> del nivel <b>${nivel}</b>.<br><span class="text-green-600 font-bold">${g.correct} aciertos</span> · <span class="text-slate-400">${g.wrong} fallos</span><br><span class="text-yellow-600 font-bold text-lg">🎁 +1 💎 Lingot</span>`,
+      body: resumen,
       dismissable: false,
       actions: [{ label: 'Siguiente 👉', onClick: () => { closeModal(); advanceGroup(nivel, group); } }]
     });
@@ -3058,7 +3087,8 @@ function openAbuChat() {
         ${gc.cfg.permitirTexto ? `<input id="gc-input" type="text" placeholder="…o escribe aquí" autocomplete="off" autocapitalize="sentences" spellcheck="false" enterkeyhint="send" class="flex-1 min-w-0 bg-white border-2 border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-[#FF7A00] text-slate-700 font-medium">
         <button id="gc-enviar" class="btn-juice bg-[#FF7A00] text-white font-bold px-3.5 py-2.5 rounded-xl shrink-0"><i class="fas fa-paper-plane"></i></button>` : ''}
       </div>
-      <p id="gc-msg" class="text-xs font-bold text-slate-400 min-h-[1.2em] text-center px-4">${gc.cfg.permitirTexto ? 'Habla 🎙️ o escribe tu línea' : 'Toca el micrófono y dilo en voz alta'}</p>
+      <div id="gc-vivo" class="voz-vivo hidden"></div>
+      <p id="gc-msg" class="text-xs font-bold text-slate-400 min-h-[1.2em] text-center px-4">${gc.cfg.permitirTexto ? 'Toca el micrófono 🎙️ y habla, o escribe tu línea ⌨️' : 'Toca el micrófono y habla: se enviará solo al terminar'}</p>
       <button id="gc-saltar" class="text-[11px] font-bold text-slate-300 hover:text-slate-500">Saltar esta línea</button>`;
 
     turno.querySelector('[data-toggle-tr]')?.addEventListener('click', (e) => {
@@ -3082,6 +3112,7 @@ function openAbuChat() {
     }
 
     bindMicManual(document.getElementById('gc-mic'), msg, {
+      vivo: 'gc-vivo',
       onFinal: (texto) => {
         if (texto) gcResponder(texto);
         else msg.textContent = gc?.cfg?.permitirTexto ? 'No escuché nada — habla de nuevo o escribe 🎙️' : 'No escuché nada, intenta otra vez 🎙️';
@@ -3124,6 +3155,29 @@ function openAbuChat() {
     gc = null;
     stopSpeaking();
     if (cfg?.onFin) cfg.onFin(resumen);
+  }
+
+  /* Cierre de una conversación SIN modal: el resumen y los botones se
+     quedan DEBAJO del chat, en el mismo sitio donde estaba el
+     micrófono. Así la conversación sigue a la vista y se puede repasar
+     lo dicho (y volver a escuchar cada línea) antes de continuar.
+     Devuelve false si la pantalla del chat ya no existe, para que quien
+     llama pueda seguir por su cuenta. */
+  function gcPieFinal({ titulo, resumen, acciones }) {
+    const turno = document.getElementById('gc-turno');
+    if (!turno) return false;
+    turno.innerHTML = `
+      <p class="text-center text-sm font-bold text-green-600 mb-1">${titulo}</p>
+      <div class="w-full text-center text-[13px] text-slate-500 font-medium bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 mb-2 leading-snug">${resumen}</div>
+      <div class="flex gap-2 w-full">
+        ${(acciones || []).map((a, i) => `<button data-pie="${i}" class="flex-1 btn-juice ${a.style || 'bg-[#FF7A00] text-white'} font-bold py-2.5 rounded-xl text-sm">${a.label}</button>`).join('')}
+      </div>`;
+    (acciones || []).forEach((a, i) => {
+      const b = turno.querySelector(`[data-pie="${i}"]`);
+      if (b) b.onclick = () => { stopSpeaking(); a.onClick && a.onClick(); };
+    });
+    turno.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    return true;
   }
 
   /* ============================================================
@@ -3207,12 +3261,14 @@ function openAbuChat() {
     const g = flujo.niveles[info.nivel]?.grupos?.[info.group];
     if (g) { if (!g.dialogo) g.dialogo = {}; g.dialogo.done = true; await updateUserFlow(); }
     playSound('complete'); triggerConfetti();
-    showModal({
-      icon: '🎭', title: '¡Diálogo terminado!',
-      body: `Dijiste bien <b class="text-green-600">${resumen.aciertos}</b> de <b>${resumen.tuyos}</b> líneas. <span class="text-yellow-600 font-bold">+15 puntos</span>`,
-      dismissable: false,
-      actions: [{ label: 'Continuar 👉', onClick: () => { closeModal(); runFlow(); } }]
+    // Sin modal: el resumen y el botón se quedan bajo el chat para poder
+    // revisar con calma lo que se dijo en cada línea.
+    const ok = gcPieFinal({
+      titulo: '🎭🎉 ¡Diálogo terminado!',
+      resumen: `Dijiste bien <b class="text-green-600">${resumen.aciertos}</b> de <b>${resumen.tuyos}</b> líneas. <span class="text-yellow-600 font-bold">+15 puntos</span>`,
+      acciones: [{ label: 'Continuar 👉', onClick: () => runFlow() }]
     });
+    if (!ok) runFlow();
   }
 
   /* ============================================================
@@ -3461,12 +3517,12 @@ function openAbuChat() {
       return groupCompleteScreen(info.nivel, info.group, g);
     }
     playSound('complete'); triggerConfetti();
-    showModal({
-      icon: '💬', title: '¡Conversación completada!',
-      body: `Dijiste bien <b class="text-green-600">${resumen.aciertos}</b> de <b>${resumen.tuyos}</b> frases. <br><span class="text-yellow-600 font-bold">+25 puntos</span>`,
-      dismissable: false,
-      actions: [{ label: 'Continuar', onClick: () => { closeModal(); runFlow(); } }]
+    const ok = gcPieFinal({
+      titulo: '🎉 ¡Conversación completada!',
+      resumen: `Dijiste bien <b class="text-green-600">${resumen.aciertos}</b> de <b>${resumen.tuyos}</b> frases. <span class="text-yellow-600 font-bold">+25 puntos</span>`,
+      acciones: [{ label: 'Continuar 👉', onClick: () => runFlow() }]
     });
+    if (!ok) runFlow();
   }
 
 
@@ -4009,8 +4065,8 @@ function openAbuChat() {
   // Ese riesgo lo evita el temporizador de abajo: solo cuenta silencio
   // DESPUÉS de que ya se dijo algo, y con un margen generoso — así no se
   // corta a media frase, pero tampoco hace falta tocar dos veces.)
-  const SILENCIO_AUTO_DETENER_MS = 2200;
-  function iniciarGrabacionVoz({ onFinal, onError, lang }) {
+  const SILENCIO_AUTO_DETENER_MS = 2800;
+  function iniciarGrabacionVoz({ onFinal, onError, onParcial, lang }) {
     // Mata cualquier grabación anterior que haya quedado viva.
     if (recActivoGlobal) { try { recActivoGlobal.abort(); } catch {} recActivoGlobal = null; }
 
@@ -4050,6 +4106,9 @@ function openAbuChat() {
       let texto = '';
       for (let i = 0; i < e.results.length; i++) texto += e.results[i][0].transcript + ' ';
       sesion = texto.trim();
+      // Se va pintando en pantalla lo que llevas dicho, aunque todavía no
+      // sea definitivo: así se ve que el micrófono te está siguiendo.
+      if (onParcial) { try { onParcial(textoTotal()); } catch {} }
       reprogramarAutoDetener();
     };
 
@@ -4104,11 +4163,25 @@ function openAbuChat() {
   }
   // Prende/apaga la UI del botón de micrófono con este patrón manual: un
   // solo listener que alterna entre "grabar" y "detener y enviar".
-  function bindMicManual(btn, msg, { onFinal, onError, lang = 'en-US', textoEscuchando = 'Escuchando… habla y se enviará solo (o toca para terminar antes)' }) {
+  function bindMicManual(btn, msg, { onFinal, onError, onParcial, vivo, lang = 'en-US', textoEscuchando = 'Escuchando… habla tranquilo: se envía solo cuando termines (o toca para cortar antes)' }) {
     if (!btn) return;
     let grabacion = null;
     let watchdog = null;
     const decir = (t) => { if (msg) msg.textContent = t; };
+    // `vivo` es la cajita donde se escribe EN TIEMPO REAL lo que se oye
+    // (puede ser el elemento o el id del elemento).
+    const cajaVivo = () => (typeof vivo === 'string' ? document.getElementById(vivo) : (vivo || null));
+    const pintarVivo = (texto, grabando) => {
+      const el = cajaVivo(); if (!el) return;
+      if (!grabando && !texto) { el.classList.add('hidden'); el.innerHTML = ''; return; }
+      el.classList.remove('hidden');
+      el.classList.add('voz-vivo');
+      el.classList.toggle('grabando', !!grabando);
+      el.innerHTML = texto
+        ? `<span>${escapeHTML(texto)}</span>${grabando ? '<span class="voz-vivo-cursor"></span>' : ''}`
+        : `<span class="voz-vivo-espera">Te escucho… empieza a hablar 🎙️</span>`;
+      el.scrollTop = el.scrollHeight;
+    };
     const avisarError = (err) => {
       onError && onError(err);
       // Mensajes claros para los dos casos que el usuario SÍ puede resolver.
@@ -4132,6 +4205,7 @@ function openAbuChat() {
           if (grabacion !== g) return; // ya se resolvió por las buenas
           grabacion = null;
           resetBtn();
+          pintarVivo('', false);
           try { g.abort(); } catch {}
           avisarError('atascado');
         }, WATCHDOG_MS);
@@ -4141,10 +4215,11 @@ function openAbuChat() {
       }
       grabacion = iniciarGrabacionVoz({
         lang,
-        onFinal: (texto) => { limpiarWatchdog(); grabacion = null; resetBtn(); onFinal && onFinal(texto); },
-        onError: (err) => { limpiarWatchdog(); grabacion = null; resetBtn(); avisarError(err); }
+        onParcial: (parcial) => { pintarVivo(parcial, true); onParcial && onParcial(parcial); },
+        onFinal: (texto) => { limpiarWatchdog(); grabacion = null; resetBtn(); pintarVivo('', false); onFinal && onFinal(texto); },
+        onError: (err) => { limpiarWatchdog(); grabacion = null; resetBtn(); pintarVivo('', false); avisarError(err); }
       });
-      if (grabacion) { btn.classList.add('escuchando'); btn.innerHTML = '<i class="fas fa-stop"></i>'; decir(textoEscuchando); }
+      if (grabacion) { btn.classList.add('escuchando'); btn.innerHTML = '<i class="fas fa-stop"></i>'; decir(textoEscuchando); pintarVivo('', true); }
     };
   }
 
@@ -4272,10 +4347,12 @@ function openAbuChat() {
     turno.innerHTML = `
       <p class="text-[11px] font-black text-[#FF7A00] uppercase text-center px-4">Te toca — ${escapeHTML(personaje)}: "${escapeHTML(linea.en)}"</p>
       <button id="dom-conv-mic" class="mic-btn"><i class="fas fa-microphone"></i></button>
-      <p id="dom-conv-mic-msg" class="text-xs font-bold text-slate-400 min-h-[1.2em] text-center px-4">Toca el micrófono para empezar a hablar</p>`;
+      <div id="dom-conv-vivo" class="voz-vivo hidden"></div>
+      <p id="dom-conv-mic-msg" class="text-xs font-bold text-slate-400 min-h-[1.2em] text-center px-4">Toca el micrófono y habla: se enviará solo al terminar</p>`;
     const micBtn = document.getElementById('dom-conv-mic');
     const msg = document.getElementById('dom-conv-mic-msg');
     bindMicManual(micBtn, msg, {
+      vivo: 'dom-conv-vivo',
       onFinal: (texto) => {
         if (!texto) { msg.textContent = 'No escuché nada, intenta otra vez 🎙️'; return; }
         const bien = coincideVoz(texto, linea.en);
@@ -4424,7 +4501,7 @@ function openAbuChat() {
       etiqueta: '🦉 Abu',
       chipClase: 'bg-purple-100 text-purple-600',
       mensajes,
-      permitirTexto: false,        // aquí solo se responde hablando
+      permitirTexto: true,         // se puede hablar 🎤 o escribir ⌨️
       vozOtro: 'abu',
       vozTuya: 'a',
       barraGlobal: false,          // la barra de Dominar la maneja pasoDominar
@@ -4440,12 +4517,12 @@ function openAbuChat() {
     st.abuOk = true; st.paso = 'fin';
     await updateUserFlow();
     playSound('complete'); triggerConfetti();
-    showModal({
-      icon: '🦉', title: '¡Charla completada!',
-      body: `Dijiste bien <b class="text-green-600">${resumen?.aciertos ?? 0}</b> de <b>${resumen?.tuyos ?? 0}</b> frases. <span class="text-yellow-600 font-bold">+${DOM_PTS_ABU} puntos</span>`,
-      dismissable: false,
-      actions: [{ label: 'Continuar 👉', onClick: () => { closeModal(); pasoDominar(cs.nivel); } }]
+    const ok = gcPieFinal({
+      titulo: '🦉🎉 ¡Charla completada!',
+      resumen: `Dijiste bien <b class="text-green-600">${resumen?.aciertos ?? 0}</b> de <b>${resumen?.tuyos ?? 0}</b> frases. <span class="text-yellow-600 font-bold">+${DOM_PTS_ABU} puntos</span>`,
+      acciones: [{ label: 'Continuar 👉', onClick: () => pasoDominar(cs.nivel) }]
     });
+    if (!ok) pasoDominar(cs.nivel);
   }
 
   /* ------------------------------------------------------------
