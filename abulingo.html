@@ -3005,6 +3005,8 @@ function openAbuChat() {
   function gcClick(e) {
     const say = e.target.closest('[data-say]');
     if (say) { vozReal(decodeURIComponent(say.dataset.say || ''), { voz: say.dataset.voz || 'a' }); return; }
+    const msg = e.target.closest('[data-toggle-msg]');
+    if (msg) { document.getElementById(msg.dataset.toggleMsg)?.classList.remove('hidden'); msg.classList.add('hidden'); return; }
     const tr = e.target.closest('[data-toggle-tr]');
     if (tr) { const el = document.getElementById(tr.dataset.toggleTr); if (el) el.classList.toggle('hidden'); }
   }
@@ -3019,12 +3021,15 @@ function openAbuChat() {
 
   function gcBurbujaOtro(m) {
     const box = document.getElementById('gc-messages'); if (!box) return;
-    const idTr = 'gc-tr-' + Math.random().toString(36).slice(2, 9);
+    const idBase = Math.random().toString(36).slice(2, 9);
+    const idTr = 'gc-tr-' + idBase;
+    const idMsg = 'gc-msg-' + idBase;
     const div = document.createElement('div');
     div.className = 'flex justify-start items-end gap-1.5';
     div.innerHTML = `<div class="bg-white border border-slate-200 text-slate-800 rounded-2xl rounded-bl-sm px-3.5 py-2 max-w-[75%] shadow-sm">
         ${m.nombre ? `<div class="text-[10px] font-black text-purple-500 uppercase mb-0.5">${escapeHTML(m.nombre)}</div>` : ''}
-        <div class="font-medium leading-snug">${escapeHTML(m.en)}</div>
+        <div id="${idMsg}" class="hidden font-medium leading-snug">${escapeHTML(m.en)}</div>
+        <button data-toggle-msg="${idMsg}" class="block text-[11px] font-bold text-slate-500 underline">Ver mensaje</button>
         ${m.es ? `<button data-toggle-tr="${idTr}" class="text-[10px] font-bold text-slate-400 underline mt-1">Ver traducción</button>
         <div id="${idTr}" class="hidden text-xs text-slate-400 mt-0.5 leading-snug">${escapeHTML(m.es)}</div>` : ''}
       </div>
@@ -4282,6 +4287,8 @@ function openAbuChat() {
         else speak(decodeURIComponent(say.dataset.say || ''));
         return;
       }
+      const msg = e.target.closest('[data-toggle-msg]');
+      if (msg) { document.getElementById(msg.dataset.toggleMsg)?.classList.remove('hidden'); msg.classList.add('hidden'); return; }
       const tr = e.target.closest('[data-toggle-tr]');
       if (tr) { const el = document.getElementById(tr.dataset.toggleTr); if (el) el.classList.toggle('hidden'); }
     });
@@ -4295,7 +4302,9 @@ function openAbuChat() {
   function domConversarBubble(role, en, es, audioUrl, objetivo) {
     const box = document.getElementById('dom-conv-messages');
     if (!box) return;
-    const idTr = 'dom-tr-' + Math.random().toString(36).slice(2, 9);
+    const idBase = Math.random().toString(36).slice(2, 9);
+    const idTr = 'dom-tr-' + idBase;
+    const idMsg = 'dom-msg-' + idBase;
     const btnSay = `<button data-say="${encodeURIComponent(en)}" ${audioUrl ? `data-audio="${escapeHTML(audioUrl)}"` : ''} title="Escuchar" class="shrink-0 w-8 h-8 rounded-full bg-white border border-slate-200 text-slate-400 hover:text-[#FF7A00] hover:border-[#FF7A00] active:scale-90 transition flex items-center justify-center"><i class="fas fa-volume-up text-[11px]"></i></button>`;
     const div = document.createElement('div');
     if (role === 'user') {
@@ -4311,7 +4320,8 @@ function openAbuChat() {
       div.className = 'flex justify-start items-end gap-1.5';
       div.innerHTML = `<div class="bg-white border border-slate-200 text-slate-800 rounded-2xl rounded-bl-sm px-3.5 py-2 max-w-[75%] shadow-sm">
         <div class="text-[10px] font-black text-purple-500 uppercase mb-0.5">${escapeHTML(role)}</div>
-        <div class="font-medium leading-snug">${escapeHTML(en)}</div>
+        <div id="${idMsg}" class="hidden font-medium leading-snug">${escapeHTML(en)}</div>
+        <button data-toggle-msg="${idMsg}" class="block text-[11px] font-bold text-slate-500 underline">Ver mensaje</button>
         ${es ? `<button data-toggle-tr="${idTr}" class="text-[10px] font-bold text-slate-400 underline mt-1">Ver traducción</button>
         <div id="${idTr}" class="hidden text-xs text-slate-400 mt-0.5 leading-snug">${escapeHTML(es)}</div>` : ''}
       </div>${btnSay}`;

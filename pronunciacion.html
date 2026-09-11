@@ -987,6 +987,7 @@
   let pzConvRol = null;         // 'A' | 'B'
   let pzConvPuntajes = {};      // { indiceMensaje: puntaje }
   let pzConvVerTrad = false;
+  let pzConvRevelados = new Set(); // índices de líneas del otro personaje ya reveladas con "Ver mensaje"
   let pzVolverA = null;         // si está seteado, cerrarPractica() vuelve aquí en vez de cerrar el modal
 
   function renderFrases() {
@@ -1478,6 +1479,7 @@
     pzConvRol = null;
     pzConvPuntajes = { ...(pzConvCreadasPuntajes()[c.id] || {}) };
     pzConvVerTrad = false;
+    pzConvRevelados = new Set();
     pzVivoSelectorRol();
   }
 
@@ -1570,12 +1572,15 @@
     if (!box) return;
     const mia = m.rol === pzVivo.rol;
     const nombre = m.rol === 'A' ? pzVivo.conv.personajeA : pzVivo.conv.personajeB;
+    const idMsg = 'vivo-msg-' + Math.random().toString(36).slice(2, 9);
     const div = document.createElement('div');
     div.className = `flex ${mia ? 'justify-end' : 'justify-start'}`;
     div.innerHTML = `
       <div class="max-w-[85%] rounded-2xl p-2.5 ${mia ? 'bg-orange-50 border border-orange-100' : 'bg-white border border-slate-200'}">
         <p class="text-[10px] font-black uppercase ${mia ? 'text-[#FF7A00]' : 'text-slate-400'} mb-0.5">${escapeHTML(nombre)}</p>
-        <p class="text-sm font-semibold text-slate-700">${escapeHTML(m.en)}</p>
+        ${mia ? `<p class="text-sm font-semibold text-slate-700">${escapeHTML(m.en)}</p>` : `
+        <p id="${idMsg}" class="hidden text-sm font-semibold text-slate-700">${escapeHTML(m.en)}</p>
+        <button data-toggle-msg="${idMsg}" class="block text-[11px] font-bold text-slate-500 underline">Ver mensaje</button>`}
         <p class="vivo-trad text-xs text-slate-500 mt-0.5 ${pzVivo.verTrad ? '' : 'hidden'}">${escapeHTML(m.es || '')}</p>
         ${dicho ? `<p class="text-[11px] text-slate-500 mt-1.5 pt-1.5 border-t border-orange-200"><span class="font-black uppercase text-[9px] text-slate-400">Dijiste</span><br>${escapeHTML(dicho)}</p>` : ''}
         <div class="flex items-center gap-2 mt-1.5">
@@ -1584,6 +1589,11 @@
         </div>
       </div>`;
     div.querySelector('.vivo-repetir').onclick = (e) => pzReproducirLinea(pzVivo.conv, m, e.currentTarget);
+    div.querySelector('[data-toggle-msg]')?.addEventListener('click', (e) => {
+      const el = document.getElementById(e.currentTarget.dataset.toggleMsg);
+      if (el) el.classList.remove('hidden');
+      e.currentTarget.classList.add('hidden');
+    });
     box.appendChild(div);
     box.scrollTop = box.scrollHeight;
   }
@@ -2173,6 +2183,7 @@
     pzConvRol = null;
     pzConvPuntajes = {};
     pzConvVerTrad = false;
+    pzConvRevelados = new Set();
     pintarConversacionModal();
   }
 
@@ -2280,6 +2291,9 @@
         abrirPractica({ text: m.en, es: m.es, nivel: conv.nivel, conversacion: conv, msgIndex: i, audioUrl: m.audio_url || null, rol: m.rol });
       };
     });
+    document.querySelectorAll('.pz-conv-ver-mensaje').forEach(btn => {
+      btn.onclick = () => { pzConvRevelados.add(Number(btn.dataset.i)); pintarChatConversacion(); };
+    });
 
     // Restaurar el scroll: si es la primera pintura (no había contenedor
     // viejo) dejamos el chat arriba; si es un repintado, volvemos exacto
@@ -2291,10 +2305,12 @@
   function pzBurbujaHTML(m, i) {
     const esMia = m.rol === pzConvRol;
     const puntaje = pzConvPuntajes[i] || 0;
+    const oculto = !esMia && !pzConvRevelados.has(i);
     return `
       <div class="flex ${esMia ? 'justify-end' : 'justify-start'}">
         <div class="max-w-[85%] rounded-2xl p-2.5 ${esMia ? 'bg-orange-50 border border-orange-100' : 'bg-slate-50 border border-slate-100'}">
-          <p class="text-sm font-semibold text-slate-700">${escapeHTML(m.en)}</p>
+          ${oculto ? '' : `<p class="text-sm font-semibold text-slate-700">${escapeHTML(m.en)}</p>`}
+          ${oculto ? `<button class="pz-conv-ver-mensaje text-[11px] font-bold text-slate-500 underline" data-i="${i}">Ver mensaje</button>` : ''}
           ${pzConvVerTrad ? `<p class="text-xs text-slate-500 mt-0.5">${escapeHTML(m.es || '')}</p>` : ''}
           <div class="flex items-center gap-2 mt-1.5">
             <button class="pz-conv-reproducir w-7 h-7 rounded-full bg-white border border-slate-200 text-slate-500 flex items-center justify-center" data-i="${i}" title="Escuchar">
@@ -2382,6 +2398,7 @@
   let pzLibre = null;            // charla abierta: { id, tema, nivel, mensajes:[], ... }
   let pzLibrePensando = false;
   let pzLibreForm = { tema: '' };
+  let pzLibreRevelados = new Set(); // índices de mensajes de Emma ya revelados con "Ver mensaje"
 
   function pzConvLibres() {
     if (!Array.isArray(flujo.convLibres)) flujo.convLibres = [];
@@ -2443,6 +2460,7 @@
         const c = pzConvLibres().find(x => x.id === b.dataset.id);
         if (!c) return;
         pzLibre = { ...c, mensajes: (c.mensajes || []).map(m => ({ ...m })) };
+        pzLibreRevelados = new Set();
         pintarLibreChat();
       };
     });
@@ -2466,6 +2484,7 @@
       mensajes: [],
       creadaEn: new Date().toISOString()
     };
+    pzLibreRevelados = new Set();
     pintarLibreChat();
     await pzLibreTurnoIA();          // Emma rompe el hielo
   }
@@ -2585,6 +2604,8 @@
   /* ---------- Pintado del chat ---------- */
   function pzLibreBurbujaHTML(m, i) {
     const idTr = `libre-tr-${i}`;
+    const idMsg = `libre-msg-${i}`;
+    const oculto = !pzLibreRevelados.has(i);
     if (m.rol === 'tu') {
       return `
         <div class="flex justify-end items-end gap-1.5">
@@ -2598,7 +2619,8 @@
       <div class="flex justify-start items-end gap-1.5">
         <div class="bg-white border border-slate-200 text-slate-800 rounded-2xl rounded-bl-sm px-3.5 py-2 max-w-[78%] shadow-sm">
           <div class="text-[10px] font-black text-pink-500 uppercase mb-0.5">Emma</div>
-          <div class="font-medium leading-snug">${escapeHTML(m.en)}</div>
+          <div id="${idMsg}" class="${oculto ? 'hidden ' : ''}font-medium leading-snug">${escapeHTML(m.en)}</div>
+          ${oculto ? `<button data-libre-ver-mensaje="${i}" class="block text-[11px] font-bold text-slate-500 underline">Ver mensaje</button>` : ''}
           ${m.es ? `<button data-toggle-tr="${idTr}" class="text-[10px] font-bold text-slate-400 underline mt-1">Ver traducción</button>
           <div id="${idTr}" class="hidden text-xs text-slate-400 mt-0.5 leading-snug">${escapeHTML(m.es)}</div>` : ''}
         </div>
@@ -2661,6 +2683,8 @@
         abrirPractica({ text: m.en, es: m.es, nivel: pzLibre.nivel, audioUrl: m.audio_url || null, rol: 'mujer' });
         return;
       }
+      const ver = e.target.closest('[data-libre-ver-mensaje]');
+      if (ver) { pzLibreRevelados.add(Number(ver.dataset.libreVerMensaje)); pintarLibreChat(); return; }
       const tr = e.target.closest('[data-toggle-tr]');
       if (tr) { const el = document.getElementById(tr.dataset.toggleTr); if (el) el.classList.toggle('hidden'); }
     });
