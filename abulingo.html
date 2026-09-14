@@ -1237,7 +1237,7 @@ function openAbuChat() {
     { icon: '👁️👂', title: 'Paso 2 · Práctica',
       body: `Luego llegan dos ejercicios:<br><br>👁️ <b>Identifica la imagen</b><br>👂 <b>Escucha y escribe</b><br><br>Si fallas, esa palabra vuelve más seguido. 💪` },
     { icon: '💬', title: 'Paso 3 · Habla con Abu',
-      body: `Al final de cada grupo conversas con <b>Abu</b> 🦉.<br><br>Puedes <b>hablar</b> 🎙️ o <b>escribir</b> ⌨️, y Abu te corrige. ✏️` },
+      body: `Al final de cada grupo conversas con <b>Abu</b> 🦜.<br><br>Puedes <b>hablar</b> 🎙️ o <b>escribir</b> ⌨️, y Abu te corrige. ✏️` },
     { icon: '🧠', title: 'Tu memoria a largo plazo',
       body: `En <b>“¡Toca repasar!”</b> salen las palabras que estás por olvidar. Domínalas y se <b>gradúan</b> 🎓.<br><br>🔥 Cuida tu <b>racha diaria</b> y gana 💎 lingots.` },
     { icon: '🔁', title: 'Los repasos te siguen',
@@ -1337,7 +1337,7 @@ function openAbuChat() {
   }
 
   /* ------------------------------------------------------------
-     🦉 TUTOR ABU — chat flotante SIEMPRE disponible (botón "Hablar"
+     🦜 TUTOR ABU — chat flotante SIEMPRE disponible (botón "Hablar"
      de la barra superior). No depende del grupo/nivel en curso: es
      para preguntas sueltas de inglés en cualquier momento. Usa su
      PROPIA función de Supabase, "tutor-abu" (no "generar-dialogo"),
@@ -1406,7 +1406,7 @@ function openAbuChat() {
 
   function saludoTutorAbu() {
     const nivel = flujo?.currentNivel || 'A1';
-    return `¡Hola! Soy Abu 🦉, tu tutor de inglés (nivel ${nivel}). Puedo ayudarte con:\n` +
+    return `¡Hola! Soy Abu 🦜, tu tutor de inglés (nivel ${nivel}). Puedo ayudarte con:\n` +
       `• Dudas de gramática, vocabulario o pronunciación 📖\n` +
       `• La diferencia entre dos palabras o expresiones\n` +
       `• Cómo se dice algo en inglés\n` +
@@ -4434,7 +4434,7 @@ function openAbuChat() {
   }
 
   /* ------------------------------------------------------------
-     🦉 "CONVERSA CON ABU" — usa la MISMA función de IA que ya
+     🦜 "CONVERSA CON ABU" — usa la MISMA función de IA que ya
      habla con Abu en el flujo de vocabulario (generar-dialogo,
      mode:'chat'), pero aquí solo se puede responder por voz y las
      3 sugerencias son para ESCUCHAR (no para copiar y pegar).
@@ -4470,7 +4470,7 @@ function openAbuChat() {
   function domIntroConversaAbu(nivel, n, item) {
     appContainer.innerHTML = `
       <div class="card-3d p-6 text-center animate-pop mt-1">
-        <div class="text-5xl mb-3">🦉</div>
+        <div class="text-5xl mb-3">🦜</div>
         <h3 class="font-heading font-bold text-slate-800 text-xl mb-2">Conversa con Abu</h3>
         <p class="text-slate-500 mb-4">Abu te va a preguntar algo usando lo que acabas de estudiar. <b>Solo puedes responder con tu voz</b>, en inglés.</p>
         <button id="dom-abu-empezar" class="btn-juice bg-[#FF7A00] text-white font-bold py-3 px-8 rounded-xl text-lg">Empezar 🎙️</button>
@@ -4508,7 +4508,7 @@ function openAbuChat() {
     }
 
     gcIniciar({
-      etiqueta: '🦉 Abu',
+      etiqueta: '🦜 Abu',
       chipClase: 'bg-purple-100 text-purple-600',
       mensajes,
       permitirTexto: true,         // se puede hablar 🎤 o escribir ⌨️
@@ -4528,7 +4528,7 @@ function openAbuChat() {
     await updateUserFlow();
     playSound('complete'); triggerConfetti();
     const ok = gcPieFinal({
-      titulo: '🦉🎉 ¡Charla completada!',
+      titulo: '🦜🎉 ¡Charla completada!',
       resumen: `Dijiste bien <b class="text-green-600">${resumen?.aciertos ?? 0}</b> de <b>${resumen?.tuyos ?? 0}</b> frases. <span class="text-yellow-600 font-bold">+${DOM_PTS_ABU} puntos</span>`,
       acciones: [{ label: 'Continuar 👉', onClick: () => pasoDominar(cs.nivel) }]
     });
@@ -4695,7 +4695,7 @@ function openAbuChat() {
         <span class="bg-orange-100 text-[#FF7A00] px-3 py-1 rounded-full text-xs font-bold uppercase mb-3 inline-block">🏆 Dominar · ${escapeHTML(nivel)}</span>
         <h2 class="font-heading font-bold text-slate-800 text-xl mb-2">Subsección ${n} de ${DOMINAR_SUBS}</h2>
         <div class="sub-dots mb-4">${subDotsHTML(nivel, n)}</div>
-        <p class="text-slate-500 text-sm mb-5">📖 Lectura · 👂 Escucha · 🧩 Frases${n % 2 === 0 ? ' · 🎬 Video · 🎭 Conversación' : ''} · 🦉 Abu</p>
+        <p class="text-slate-500 text-sm mb-5">📖 Lectura · 👂 Escucha · 🧩 Frases${n % 2 === 0 ? ' · 🎬 Video · 🎭 Conversación' : ''} · 🦜 Abu</p>
         <button id="dom-empezar-sub" class="w-full btn-juice bg-[#FF7A00] text-white font-bold py-3 rounded-xl text-lg">Empezar 👉</button>
         ${hayAnteriores ? '<button id="dom-ver-anteriores" class="w-full mt-2 btn-juice bg-slate-100 text-slate-600 font-bold text-sm py-2.5 rounded-xl">📚 Repasar una subsección anterior</button>' : ''}
         <button id="dom-volver-hub" class="w-full mt-2 text-slate-400 font-bold text-sm py-2">Volver</button>
