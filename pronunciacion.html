@@ -207,7 +207,7 @@
       <p class="text-slate-500 text-sm mt-1.5 px-2">Elige una palabra, una frase o tu propio texto. Escucha el modelo, grábate y recibe consejos de un profesor con IA.</p>
     </div>-->
 
-    <div id="mode-tabs" class="grid grid-cols-3 sm:grid-cols-6 gap-2 mb-5"></div>
+    <div id="mode-tabs" class="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-7 gap-2 mb-5"></div>
     <div id="mode-panel"></div>
   </main>
 
@@ -473,6 +473,7 @@
   // El mensaje de error se guarda aparte para NO reenviarlo a DeepSeek
   // como si fuera algo que dijo Abu: ensucia el historial.
   const TUTOR_ABU_FALLBACK = 'Uy, se me trabó la lengua 😅 ¿me lo puedes preguntar de nuevo en un momento?';
+  const TUTOR_ABU_SIN_RED  = 'No pude conectarme 📶 Revisa tu internet y vuelve a enviarme la pregunta.';
   let tutorAbuUsadosHoy = 0;
 
 
@@ -615,20 +616,32 @@
 
     let respuesta = null;
     let rechazado = false;
+    let fallaDeRed = false;
     try {
       const headers = await cabecerasIA();
       if (!headers) throw new Error('sin sesión');
-      const resp = await fetch(`${SUPABASE_URL}/functions/v1/tutor-abu`, {
-        method: 'POST',
-        headers,
-        // Solo conversación real: fuera el saludo y los mensajes de error.
-        body: JSON.stringify({
-          messages: msgs
-            .filter(m => m.content && m.content !== TUTOR_ABU_FALLBACK && !m.content.startsWith('¡Hola! Soy Abu'))
-            .slice(-8),
-          nivel: userProfile?.nivel || 'A1'
-        })
-      });
+      // Todo el hilo de esta sesión, para que las repreguntas tengan sentido.
+      const historial = msgs
+        .filter(m => m.content && m.content !== TUTOR_ABU_FALLBACK && !m.content.startsWith('¡Hola! Soy Abu'))
+        .slice(-12);
+      const cuerpo = JSON.stringify({ messages: historial, nivel: userProfile?.nivel || 'A1' });
+      // 45 s de tope y un reintento: sin esto la petición podía quedarse
+      // colgada y el "Abu escribe…" no se iba nunca.
+      const pedir = async () => {
+        const ctrl = new AbortController();
+        const t0 = setTimeout(() => ctrl.abort(), 45000);
+        try {
+          return await fetch(`${SUPABASE_URL}/functions/v1/tutor-abu`, {
+            method: 'POST', headers, body: cuerpo, signal: ctrl.signal
+          });
+        } finally { clearTimeout(t0); }
+      };
+      let resp;
+      try { resp = await pedir(); }
+      catch (e1) {
+        console.warn('[Tutor Abu] primer intento falló, reintento:', e1?.message || e1);
+        resp = await pedir();
+      }
       const payload = await resp.json().catch(() => null);
       const r = payload?.reply;
       if (resp.ok && r) respuesta = (r.text || [r.es, r.en].filter(Boolean).join('\n\n') || '').trim();
@@ -643,14 +656,20 @@
         if (payload?.diag) console.warn('[Tutor Abu] diag:', payload.diag);
         if (payload?.comoArreglarlo) console.warn('[Tutor Abu] ' + payload.comoArreglarlo);
       }
-    } catch (err) { console.warn('[Tutor Abu] fallo de red:', err?.message || err); }
+    } catch (err) {
+      fallaDeRed = true;
+      console.warn('[Tutor Abu] fallo de red:', err?.message || err);
+    }
     typing.remove();
 
-    if (rechazado) return;   // el modal / toast ya explicó qué pasó
-    if (!respuesta) respuesta = TUTOR_ABU_FALLBACK;
+    if (rechazado) { msgs.pop(); return; }   // el modal / toast ya explicó qué pasó
+    if (!respuesta) {
+      // El aviso se pinta pero NO entra al historial que ve el modelo.
+      tutorAbuBubble('assistant', fallaDeRed ? TUTOR_ABU_SIN_RED : TUTOR_ABU_FALLBACK);
+      return;
+    }
     msgs.push({ role: 'assistant', content: respuesta });
     tutorAbuBubble('assistant', respuesta);
-    await tutorAbuGuardar();
   }
 
   /* ---------- Micrófono del tutor (inicio/parada manual) ----------
@@ -707,23 +726,26 @@
 
   let tutorRecActivo = null;
 
+  /* Mismo motor que el micrófono del modal de práctica: una sola
+     sesión de reconocimiento, sin rearranques dentro de onend. El
+     bucle de arranques que había antes (`if (!detenidoManual) rec.start()`)
+     era lo que dejaba el botón atascado en rojo cuando no se oía nada. */
   function tutorIniciarVoz({ onFinal, onError }) {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) { onError && onError('no-soportado'); return null; }
     if (tutorRecActivo) { try { tutorRecActivo.abort(); } catch {} tutorRecActivo = null; }
 
     const rec = new SR();
-    rec.lang = 'es-MX';
-    rec.continuous = !esMovilVoz;   // Android lo ignora y duplica
+    rec.lang = 'es-MX';           // aquí se PREGUNTA en español
+    rec.continuous = false;
     rec.interimResults = true;
     rec.maxAlternatives = 1;
 
-    let previo = '', sesion = '', detenidoManual = false, cerrado = false;
-    const textoTotal = () => limpiarRepeticionesVoz((previo + ' ' + sesion).trim());
-    const t0 = Date.now(), MAX_MS = 120000;
+    let dicho = '', cerrado = false, errorDuro = null, tope = null;
     const cerrar = (fn, arg) => {
       if (cerrado) return;
       cerrado = true;
+      if (tope) { clearTimeout(tope); tope = null; }
       if (tutorRecActivo === rec) tutorRecActivo = null;
       fn && fn(arg);
     };
@@ -732,29 +754,24 @@
       // Se rearma entero: acumular desde resultIndex duplica en Android.
       let texto = '';
       for (let i = 0; i < e.results.length; i++) texto += e.results[i][0].transcript + ' ';
-      sesion = texto.trim();
+      dicho = limpiarRepeticionesVoz(texto.trim());
     };
     rec.onerror = (e) => {
       const err = e.error || 'error';
       if (err === 'no-speech' || err === 'aborted') return;   // que decida onend
-      if (err === 'not-allowed' || err === 'service-not-allowed') cerrar(onError, 'sin-permiso');
-      else if (!detenidoManual) cerrar(onError, err);
+      if (err === 'not-allowed' || err === 'service-not-allowed') errorDuro = 'sin-permiso';
+      else if (err === 'audio-capture') errorDuro = 'microfono-ocupado';
+      else errorDuro = err;
     };
     rec.onend = () => {
-      if (cerrado) return;
-      if (sesion) { previo = (previo + ' ' + sesion).trim(); sesion = ''; }
-      if (detenidoManual) { cerrar(onFinal, textoTotal()); return; }
-      // Chrome corta solo tras un silencio aunque continuous sea true: se
-      // reanuda para que el botón no quede trabado ni se corte la frase.
-      if (Date.now() - t0 < MAX_MS) { try { rec.start(); return; } catch {} }
-      cerrar(onFinal, textoTotal());
+      if (errorDuro) return cerrar(onError, errorDuro);
+      cerrar(onFinal, dicho.trim());
     };
-    rec.detener = () => {
-      detenidoManual = true;
-      try { rec.stop(); } catch { cerrar(onFinal, textoTotal()); }
-    };
+    rec.detener = () => { try { rec.stop(); } catch { cerrar(onFinal, dicho.trim()); } };
+
     try { rec.start(); } catch { cerrar(onError, 'no-inicio'); return null; }
     tutorRecActivo = rec;
+    tope = setTimeout(() => { try { rec.stop(); } catch {} }, 20000);
     return rec;
   }
 
@@ -769,6 +786,7 @@
       if (err === 'no-soportado') decir('Tu navegador no reconoce voz — escribe tu duda 😉');
       else if (err === 'sin-permiso') decir('Bloqueaste el micrófono 🔒 — actívalo en el candado de la barra de direcciones');
       else if (err === 'no-inicio') decir('El micrófono está ocupado — intenta otra vez');
+      else if (err === 'microfono-ocupado') decir('Otra app está usando el micrófono. Ciérrala e intenta de nuevo.');
       else decir('No te escuché, intenta de nuevo');
     };
     btn.onclick = () => {
@@ -885,7 +903,8 @@
     { id: 'texto', icon: 'fa-file-lines', label: 'Mi texto' },
     { id: 'conversar', icon: 'fa-comments', label: 'Conversar' },
     { id: 'crear', icon: 'fa-wand-magic-sparkles', label: 'Crear conversación' },
-    { id: 'libre', icon: 'fa-comment-dots', label: 'Conversar libre' }
+    { id: 'libre', icon: 'fa-comment-dots', label: 'Conversar libre' },
+    { id: 'listening', icon: 'fa-headphones', label: 'Listening' }
   ];
   let modoActual = 'buscar';
 
@@ -905,6 +924,7 @@
     else if (modoActual === 'conversar') renderConversar();
     else if (modoActual === 'crear') renderCrear();
     else if (modoActual === 'libre') renderLibre();
+    else if (modoActual === 'listening') renderListening();
     else renderTexto();
   }
 
@@ -1666,65 +1686,96 @@
      en sesiones separadas (limpiarRepeticionesVoz quita el eco que deja
      unir sesiones). En escritorio si se puede dejar continuous true y
      que decida el temporizador de silencio de abajo. */
-  const PZ_VIVO_SILENCIO_MS = 2200;
-  const pzVivoEsMovil = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-  function pzVivoGrabar(btn, msg, m) {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) {
-      msg.innerHTML = 'Tu navegador no reconoce voz. <button id="vivo-continuar-sin" class="underline text-[#FF7A00] font-bold">Continuar</button>';
-      document.getElementById('vivo-continuar-sin').onclick = () => { pzVivo.idx++; pzVivoPaso(); };
-      return;
-    }
-    // Segundo toque = parar antes de que actúe el silencio automático
-    if (pzVivoRec) { try { pzVivoRec.detenerYa(); } catch {} return; }
+  /* ════════════════════════════════════════════════════════════════
+     UN SOLO MICRÓFONO PARA TODA LA PÁGINA — el del modal de práctica
+     ────────────────────────────────────────────────────────────────
+     Había tres reconocedores casi iguales (modo en vivo, conversar
+     libre y el tutor) y los tres tenían el mismo defecto: dentro de
+     onend volvían a llamar a rec.start() cuando el navegador cortaba
+     por silencio. Eso hacía que:
+       · con 'no-speech' se entrara en un bucle de arranques y el botón
+         se quedara en rojo sin devolver nunca nada;
+       · el auto-envío por silencio no se volviera a armar (la variable
+         `sesion` quedaba vacía tras cada rearranque);
+       · al pegar el texto de varias sesiones, el limpiador de
+         repeticiones se comiera palabras buenas.
 
-    let previo = '';    // lo dicho en sesiones YA cerradas (cortes naturales en celular)
-    let sesion = '';    // lo de la sesión de reconocimiento en curso
-    const textoTotal = () => limpiarRepeticionesVoz((previo + ' ' + sesion).trim());
-    let detenido = false;
-    let temporizador = null;
-    const t0 = Date.now();
+     El modal de práctica (pzIniciarGrabacion) nunca tuvo ese problema
+     porque hace lo simple: una sola sesión, deja que el navegador
+     corte por silencio y entrega lo que oyó. Esta función es eso
+     mismo, reutilizable. `pzEscuchar` devuelve el reconocedor (o null)
+     y siempre termina llamando a onFin, con texto o con cadena vacía.
+     ════════════════════════════════════════════════════════════════ */
+  const PZ_VOZ_TOPE_MS = 20000;   // red de seguridad si el navegador no cierra
+
+  function pzEscuchar(btn, msg, { lang = 'en-US', onFin, textoEscuchando = 'Escuchando... habla y se enviará solo 🎙️' }) {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { if (msg) msg.textContent = 'Tu navegador no reconoce voz — escribe tu respuesta 😉'; return null; }
 
     const rec = new SR();
-    pzVivoRec = rec;
-    rec.lang = 'en-US';
+    rec.lang = lang;
     rec.interimResults = true;
     rec.maxAlternatives = 1;
-    rec.continuous = !pzVivoEsMovil;
+    rec.continuous = false;        // que corte solo, como en el modal
 
-    btn.classList.add('recording');
-    msg.textContent = 'Escuchando... habla y se enviará solo 🎙️';
+    let dicho = '', cerrado = false, errorDuro = null, tope = null;
+    if (btn) btn.classList.add('recording');
+    if (msg) msg.textContent = textoEscuchando;
 
-    const limpiarTemporizador = () => { if (temporizador) { clearTimeout(temporizador); temporizador = null; } };
-    const reprogramarAutoDetener = () => {
-      limpiarTemporizador();
-      if (!sesion.trim()) return; // no cuenta silencio antes de la primera palabra
-      temporizador = setTimeout(() => { detenido = true; try { rec.stop(); } catch {} }, PZ_VIVO_SILENCIO_MS);
+    const cerrar = (texto) => {
+      if (cerrado) return;
+      cerrado = true;
+      if (tope) { clearTimeout(tope); tope = null; }
+      if (btn) btn.classList.remove('recording');
+      onFin && onFin(texto, errorDuro);
     };
 
     rec.onresult = (e) => {
       let texto = '';
       for (let i = 0; i < e.results.length; i++) texto += e.results[i][0].transcript + ' ';
-      sesion = texto.trim();
-      msg.textContent = sesion || 'Escuchando...';
-      reprogramarAutoDetener();
+      dicho = limpiarRepeticionesVoz(texto.trim());
+      if (msg) msg.textContent = dicho ? `"${dicho}"` : 'Escuchando...';
     };
-    rec.onerror = () => { /* onend se encarga */ };
-    rec.onend = () => {
-      if (sesion) { previo = (previo + ' ' + sesion).trim(); sesion = ''; }
-      if (!detenido && Date.now() - t0 < 120000) {
-        // Corte natural del navegador (típico en celular): se reanuda sin perder lo dicho.
-        try { rec.start(); return; } catch {}
+    rec.onerror = (e) => {
+      const err = e.error || 'error';
+      if (err === 'no-speech' || err === 'aborted') return;   // los resuelve onend
+      if (err === 'not-allowed' || err === 'service-not-allowed') errorDuro = 'sin-permiso';
+      else if (err === 'audio-capture') errorDuro = 'microfono-ocupado';
+      else errorDuro = err;
+    };
+    rec.onend = () => cerrar(dicho.trim());
+    rec.detenerYa = () => { try { rec.stop(); } catch { cerrar(dicho.trim()); } };
+
+    try { rec.start(); } catch (err) {
+      console.warn('[voz] no se pudo iniciar:', err);
+      errorDuro = 'no-inicio';
+      cerrar('');
+      return null;
+    }
+    tope = setTimeout(() => { try { rec.stop(); } catch {} }, PZ_VOZ_TOPE_MS);
+    return rec;
+  }
+
+  // Texto para los errores que el usuario SÍ puede resolver.
+  function pzTextoErrorVoz(err) {
+    if (err === 'sin-permiso') return 'Bloqueaste el micrófono 🔒 — actívalo en el candado de la barra de direcciones';
+    if (err === 'microfono-ocupado') return 'Otra app está usando el micrófono. Ciérrala e intenta de nuevo.';
+    if (err === 'no-inicio') return 'El micrófono está ocupado — espera un segundo e inténtalo otra vez';
+    return 'No te escuché, inténtalo otra vez 🎙️';
+  }
+
+  const pzVivoEsMovil = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+  function pzVivoGrabar(btn, msg, m) {
+    // Segundo toque = cortar antes de que actúe el silencio automático.
+    if (pzVivoRec) { try { pzVivoRec.detenerYa(); } catch {} return; }
+    pzVivoRec = pzEscuchar(btn, msg, {
+      onFin: (dicho, err) => {
+        pzVivoRec = null;
+        if (!dicho) { msg.textContent = pzTextoErrorVoz(err); return; }
+        pzVivoResolverTurno(m, dicho, msg);
       }
-      limpiarTemporizador();
-      pzVivoRec = null;
-      btn.classList.remove('recording');
-      const dicho = textoTotal();
-      if (!dicho) { msg.textContent = 'No te escuché, inténtalo otra vez 🎙️'; return; }
-      pzVivoResolverTurno(m, dicho, msg);
-    };
-    rec.detenerYa = () => { detenido = true; limpiarTemporizador(); try { rec.stop(); } catch {} };
-    try { rec.start(); } catch (err) { pzVivoRec = null; btn.classList.remove('recording'); console.warn('[vivo] micrófono:', err); }
+    });
   }
 
   async function pzVivoResolverTurno(m, dicho, msg) {
@@ -2363,6 +2414,450 @@
   }
 
   /* ============================================================
+     Modo 7: LISTENING — "Shadowing + Audio + transcript"
+     ------------------------------------------------------------
+     El método, en tres pasos, es el que usan los intérpretes:
+
+       1. ESCUCHAR el texto entero sin leer nada, para acostumbrar el
+          oído al ritmo real.
+       2. LEER el transcript mientras vuelve a sonar, así cada sonido
+          se ata a su palabra escrita.
+       3. SHADOWING frase por frase: se reproduce UNA frase, se baja la
+          velocidad si hace falta y se repite encima hasta que sale.
+
+     Por eso la pantalla está partida igual que el método: arriba el
+     texto completo con su reproductor, y abajo una tarjeta por frase
+     con SUS palabras sueltas, su propio botón de play, su control de
+     velocidad y su micrófono.
+
+     Los audios viven en el bucket público "listening" de Supabase
+     (un mp3 por texto + un mp3 por frase, voz en-US-Chirp3-HD-Leda —
+     la misma de Abu). Se generan con scripts/generar_audios_listening.py.
+     Se guardan a velocidad 1.0 y el navegador los ralentiza con
+     `playbackRate`: así un solo archivo sirve para todas las
+     velocidades y no hay que descargar cuatro versiones.
+  ============================================================ */
+  const LISTENING_BUCKET = `${SUPABASE_URL}/storage/v1/object/public/listening/`;
+  const LS_VELOCIDADES = [0.5, 0.75, 1, 1.25];
+
+  let lsNivelElegido = null;
+  let lsTextosNivel = [];
+  let lsTextoActual = null;     // el texto abierto en la vista de práctica
+  let lsProgreso = {};          // { [textoId]: { "0": 5, "1": 4 } }
+  let lsVelocidad = 1;          // velocidad global elegida por la persona
+  let lsAudio = null;           // <audio> en curso (uno a la vez)
+  let lsFraseSonando = null;    // índice de la frase que está sonando
+  let lsVerTraduccion = false;
+  let lsRec = null;             // reconocimiento de voz del shadowing
+
+  const lsUrl = (ruta) => (ruta ? LISTENING_BUCKET + ruta : null);
+
+  function lsDetenerAudio() {
+    if (lsAudio) { try { lsAudio.pause(); } catch {} lsAudio = null; }
+    lsFraseSonando = null;
+  }
+
+  /* Reproduce una pista a la velocidad elegida. `playbackRate` se aplica
+     DESPUÉS de play() en algunos navegadores móviles, por eso se pone en
+     los dos sitios. */
+  function lsTocar(url, { onFin } = {}) {
+    lsDetenerAudio();
+    stopSpeaking();
+    const a = new Audio(url);
+    a.playbackRate = lsVelocidad;
+    a.preservesPitch = true;          // que no suene a ardilla al bajarla
+    a.mozPreservesPitch = true;
+    a.webkitPreservesPitch = true;
+    lsAudio = a;
+    const fin = () => {
+      if (lsAudio === a) { lsAudio = null; lsFraseSonando = null; }
+      lsPintarEstadoBotones();
+      if (onFin) onFin();
+    };
+    a.onended = fin;
+    a.onerror = fin;
+    a.onplay = () => { a.playbackRate = lsVelocidad; };
+    a.play().catch(fin);
+    return a;
+  }
+
+  /* ---------- Pantalla 1: elegir nivel y texto ---------- */
+  function renderListening() {
+    lsDetenerAudio();
+    lsTextoActual = null;
+    document.getElementById('mode-panel').innerHTML = `
+      <div class="card-3d p-4 sm:p-5">
+        <div class="flex items-start gap-3 mb-4">
+          <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-[#FF7A00] to-orange-600 text-white flex items-center justify-center shrink-0 shadow">
+            <i class="fas fa-headphones text-lg"></i>
+          </div>
+          <div class="min-w-0">
+            <h2 class="font-heading font-black text-slate-800 leading-tight">Listening con Shadowing</h2>
+            <p class="text-[11px] text-slate-400 leading-snug">Escucha el texto, léelo mientras suena y repite frase por frase encima del audio. Puedes bajar la velocidad cuando quieras.</p>
+          </div>
+        </div>
+
+        <p class="text-xs font-black uppercase tracking-wide text-slate-400 mb-2">Elige un nivel</p>
+        <div class="grid grid-cols-4 gap-2 mb-4">
+          ${NIVELES_FIJOS.map(n => `
+            <button class="ls-nivel-chip btn-juice ${n === lsNivelElegido ? 'bg-[#FF7A00] text-white' : 'bg-slate-100 text-slate-600'} font-black text-sm py-3 rounded-xl" data-nivel="${n}">${n}</button>
+          `).join('')}
+        </div>
+        <div id="ls-lista-wrap">
+          ${lsNivelElegido ? lsListaHTML() : '<p class="text-center text-slate-400 text-sm py-6">Elige un nivel para ver sus textos de escucha. 🎧</p>'}
+        </div>
+      </div>`;
+
+    document.querySelectorAll('.ls-nivel-chip').forEach(b => {
+      b.onclick = () => lsElegirNivel(b.dataset.nivel);
+    });
+    lsBindLista();
+  }
+
+  async function lsElegirNivel(nivel) {
+    lsNivelElegido = nivel;
+    renderListening();
+    const wrap = document.getElementById('ls-lista-wrap');
+    if (wrap) wrap.innerHTML = '<p class="text-center text-slate-300 text-lg py-6"><i class="fas fa-circle-notch fa-spin"></i></p>';
+
+    const { data, error } = await dbClient.from('textos_listening')
+      .select('id,nivel,titulo,tema,texto,traduccion,frases,audio_url,palabras')
+      .eq('nivel', nivel)
+      .order('orden', { ascending: true });
+
+    // El usuario pudo cambiar de nivel o de modo mientras cargaba.
+    if (!document.getElementById('ls-lista-wrap') || lsNivelElegido !== nivel) return;
+    if (error) {
+      document.getElementById('ls-lista-wrap').innerHTML =
+        `<p class="text-center text-red-400 text-sm py-6">No se pudieron cargar los textos.<br><span class="text-[11px] text-slate-400">${escapeHTML(error.message)}</span></p>`;
+      return;
+    }
+    lsTextosNivel = data || [];
+    if (!lsTextosNivel.length) {
+      document.getElementById('ls-lista-wrap').innerHTML = '<p class="text-center text-slate-400 text-sm py-6">Todavía no hay textos cargados para este nivel.</p>';
+      return;
+    }
+    await lsCargarProgreso(lsTextosNivel.map(t => t.id));
+    lsPintarLista();
+  }
+
+  // Cuántas frases lleva dominadas (4-5 estrellas) en cada texto.
+  async function lsCargarProgreso(ids) {
+    if (!ids.length || !currentUser) return;
+    const { data, error } = await dbClient.from('listening_progreso')
+      .select('texto_id,frases_ok,completado')
+      .eq('user_id', currentUser.id).in('texto_id', ids);
+    if (error) { console.warn('[listening] progreso:', error.message); return; }
+    (data || []).forEach(r => { lsProgreso[r.texto_id] = r.frases_ok || {}; });
+  }
+
+  const lsFrasesOk = (textoId) =>
+    Object.values(lsProgreso[textoId] || {}).filter(p => Number(p) >= 4).length;
+
+  function lsListaHTML() {
+    if (!lsTextosNivel.length) return '';
+    return `
+      <p class="text-xs font-black uppercase tracking-wide text-slate-400 mb-2">Toca un texto para practicarlo</p>
+      <div class="space-y-2">
+        ${lsTextosNivel.map(t => {
+          const total = (t.frases || []).length;
+          const ok = lsFrasesOk(t.id);
+          const pct = total ? Math.round((ok / total) * 100) : 0;
+          return `
+          <button class="ls-abrir w-full text-left btn-juice bg-slate-50 border-2 ${pct === 100 ? 'border-green-300' : 'border-slate-100'} hover:border-[#FF7A00] rounded-xl p-3" data-id="${t.id}">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-xl ${pct === 100 ? 'bg-green-500' : 'bg-white border-2 border-slate-200'} flex items-center justify-center shrink-0">
+                <i class="fas ${pct === 100 ? 'fa-check text-white' : 'fa-play text-[#FF7A00] text-xs'}"></i>
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="font-heading font-black text-slate-800 leading-tight truncate">${escapeHTML(t.titulo)}</p>
+                <p class="text-[11px] text-slate-400 truncate">${escapeHTML(t.tema || '')} · ${t.palabras || 0} palabras · ${total} frases</p>
+              </div>
+              <span class="shrink-0 text-[10px] font-black ${pct === 100 ? 'text-green-600' : 'text-slate-400'}">${ok}/${total}</span>
+            </div>
+            <div class="h-1.5 bg-slate-200 rounded-full mt-2 overflow-hidden">
+              <div class="h-full ${pct === 100 ? 'bg-green-500' : 'bg-[#FF7A00]'} rounded-full transition-all" style="width:${pct}%"></div>
+            </div>
+          </button>`;
+        }).join('')}
+      </div>`;
+  }
+
+  function lsPintarLista() {
+    const wrap = document.getElementById('ls-lista-wrap');
+    if (!wrap) return;
+    wrap.innerHTML = lsListaHTML();
+    lsBindLista();
+  }
+
+  function lsBindLista() {
+    document.querySelectorAll('.ls-abrir').forEach(b => {
+      b.onclick = () => {
+        const t = lsTextosNivel.find(x => String(x.id) === b.dataset.id);
+        if (t) lsAbrirTexto(t);
+      };
+    });
+  }
+
+  /* ---------- Pantalla 2: practicar un texto ---------- */
+  function lsAbrirTexto(t) {
+    lsDetenerAudio();
+    lsTextoActual = t;
+    lsVelocidad = 1;
+    lsVerTraduccion = false;
+    lsPintarPractica();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function lsChipsVelocidadHTML() {
+    return LS_VELOCIDADES.map(v => `
+      <button class="ls-vel btn-juice px-2.5 py-1.5 rounded-lg text-[11px] font-black ${v === lsVelocidad ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-500'}" data-v="${v}">${v}×</button>
+    `).join('');
+  }
+
+  function lsPintarPractica() {
+    const t = lsTextoActual;
+    if (!t) return;
+    const frases = t.frases || [];
+    const ok = lsFrasesOk(t.id);
+
+    document.getElementById('mode-panel').innerHTML = `
+      <!-- ── Cabecera + texto completo ─────────────────────────── -->
+      <div class="card-3d p-4 sm:p-5 mb-3">
+        <button id="ls-volver" class="text-[11px] font-black text-slate-400 hover:text-[#FF7A00] mb-3"><i class="fas fa-arrow-left mr-1"></i>Volver a los textos</button>
+
+        <p class="text-[10px] font-black uppercase tracking-widest text-slate-400">Nivel ${escapeHTML(t.nivel)} · ${t.palabras || 0} palabras</p>
+        <h2 class="font-heading font-black text-2xl text-[#FF7A00] leading-tight mb-1">${escapeHTML(t.titulo)}</h2>
+        <p class="text-slate-400 text-xs mb-4">${escapeHTML(t.tema || '')} · ${ok}/${frases.length} frases dominadas</p>
+
+        <!-- Paso 1 y 2 del método: escuchar entero y leer el transcript -->
+        <div class="bg-slate-50 border border-slate-100 rounded-xl p-3 mb-3">
+          <p id="ls-transcript" class="text-slate-700 text-[15px] leading-relaxed font-medium">${escapeHTML(t.texto)}</p>
+          <p id="ls-transcript-es" class="text-slate-400 text-[13px] leading-relaxed mt-2 ${lsVerTraduccion ? '' : 'hidden'}">${escapeHTML(t.traduccion || '')}</p>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2 mb-2">
+          <button id="ls-play-full" class="btn-juice bg-slate-800 text-white font-bold py-2.5 px-4 rounded-xl text-sm">
+            <i class="fas fa-play mr-2"></i>Escuchar el texto
+          </button>
+          <button id="ls-ver-trad" class="btn-juice bg-slate-100 text-slate-600 font-bold py-2.5 px-3 rounded-xl text-xs">
+            <i class="fas fa-language mr-1"></i>${lsVerTraduccion ? 'Ocultar' : 'Ver'} traducción
+          </button>
+        </div>
+
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="text-[10px] font-black uppercase tracking-wide text-slate-400">Velocidad</span>
+          <div id="ls-velocidades" class="flex gap-1.5">${lsChipsVelocidadHTML()}</div>
+        </div>
+        <p class="text-[10px] text-slate-300 mt-2">La velocidad vale para el texto completo y para cada frase. Baja a 0.5× al empezar y sube cuando te salga natural. 🐢→🐇</p>
+      </div>
+
+      <!-- ── Paso 3: shadowing frase por frase ──────────────────── -->
+      <div class="card-3d p-4 sm:p-5">
+        <p class="text-xs font-black uppercase tracking-wide text-slate-400 mb-1">Shadowing · frase por frase</p>
+        <p class="text-[11px] text-slate-400 mb-3">Reproduce la frase, mira sus palabras y repítela en voz alta encima del audio. Toca el micrófono para que te califique.</p>
+        <div id="ls-frases" class="space-y-2">${frases.map((f, i) => lsFraseHTML(f, i)).join('')}</div>
+
+        <button id="ls-play-todo" class="w-full btn-juice bg-[#FF7A00] text-white font-bold py-3 rounded-xl mt-4 text-sm">
+          <i class="fas fa-list-ol mr-2"></i>Reproducir frase por frase, en orden
+        </button>
+      </div>`;
+
+    document.getElementById('ls-volver').onclick = () => { lsDetenerAudio(); renderListening(); };
+    document.getElementById('ls-play-full').onclick = () => lsPlayFull();
+    document.getElementById('ls-play-todo').onclick = () => lsPlaySecuencia(0);
+    document.getElementById('ls-ver-trad').onclick = () => {
+      lsVerTraduccion = !lsVerTraduccion;
+      lsPintarPractica();
+    };
+    lsBindVelocidades();
+    lsBindFrases();
+  }
+
+  /* Cada frase se pinta con SUS palabras sueltas (chips): así se ve de un
+     vistazo qué contiene la frase y es más fácil cazar la que se escapa
+     al escuchar. */
+  function lsFraseHTML(f, i) {
+    const puntaje = Number((lsProgreso[lsTextoActual?.id] || {})[String(i)] || 0);
+    const palabras = String(f.en || '').split(/\s+/).filter(Boolean);
+    const estrellas = puntaje
+      ? Array.from({ length: 5 }, (_, k) => `<i class="fas fa-star text-[9px] ${k < puntaje ? 'text-yellow-400' : 'text-slate-200'}"></i>`).join('')
+      : '';
+    return `
+      <div class="ls-frase rounded-xl border-2 ${puntaje >= 4 ? 'border-green-200 bg-green-50/40' : 'border-slate-100 bg-slate-50'} p-3" data-i="${i}">
+        <div class="flex items-start gap-2.5">
+          <button class="ls-play-frase shrink-0 w-9 h-9 rounded-full bg-white border-2 border-slate-200 text-[#FF7A00] hover:border-[#FF7A00] flex items-center justify-center" data-i="${i}" title="Escuchar esta frase">
+            <i class="fas fa-play text-xs"></i>
+          </button>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 mb-1">
+              <span class="text-[10px] font-black text-slate-300">FRASE ${i + 1}</span>
+              <span class="ls-estrellas">${estrellas}</span>
+            </div>
+            <!-- las PALABRAS de esta frase, una a una -->
+            <div class="flex flex-wrap gap-1 mb-1">
+              ${palabras.map(w => `<span class="ls-palabra bg-white border border-slate-200 rounded-md px-1.5 py-0.5 text-[13px] font-semibold text-slate-700">${escapeHTML(w)}</span>`).join('')}
+            </div>
+            ${f.es ? `<p class="ls-frase-es text-[11px] text-slate-400 ${lsVerTraduccion ? '' : 'hidden'}">${escapeHTML(f.es)}</p>` : ''}
+          </div>
+          <button class="ls-mic shrink-0 w-9 h-9 rounded-full bg-[#FF7A00] text-white flex items-center justify-center" data-i="${i}" title="Repetir esta frase">
+            <i class="fas fa-microphone text-xs"></i>
+          </button>
+        </div>
+        <p class="ls-msg text-[11px] font-bold text-slate-400 mt-1.5 hidden"></p>
+      </div>`;
+  }
+
+  function lsBindVelocidades() {
+    document.querySelectorAll('.ls-vel').forEach(b => {
+      b.onclick = () => {
+        lsVelocidad = Number(b.dataset.v);
+        // Si algo está sonando, el cambio se nota al instante.
+        if (lsAudio) lsAudio.playbackRate = lsVelocidad;
+        document.querySelectorAll('.ls-vel').forEach(x => {
+          const activo = Number(x.dataset.v) === lsVelocidad;
+          x.className = `ls-vel btn-juice px-2.5 py-1.5 rounded-lg text-[11px] font-black ${activo ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-500'}`;
+        });
+      };
+    });
+  }
+
+  function lsBindFrases() {
+    document.querySelectorAll('.ls-play-frase').forEach(b => {
+      b.onclick = () => lsPlayFrase(Number(b.dataset.i));
+    });
+    document.querySelectorAll('.ls-mic').forEach(b => {
+      b.onclick = () => lsShadow(Number(b.dataset.i), b);
+    });
+  }
+
+  function lsPlayFull() {
+    const t = lsTextoActual;
+    const btn = document.getElementById('ls-play-full');
+    if (!t?.audio_url) { showToast('⚠️ Este texto todavía no tiene audio generado.'); return; }
+    if (lsAudio && lsFraseSonando === null) {   // segundo toque = parar
+      lsDetenerAudio();
+      if (btn) btn.innerHTML = '<i class="fas fa-play mr-2"></i>Escuchar el texto';
+      return;
+    }
+    lsTocar(lsUrl(t.audio_url), {
+      onFin: () => { const b = document.getElementById('ls-play-full'); if (b) b.innerHTML = '<i class="fas fa-play mr-2"></i>Escuchar el texto'; }
+    });
+    if (btn) btn.innerHTML = '<i class="fas fa-stop mr-2"></i>Detener';
+  }
+
+  function lsPlayFrase(i, onFin) {
+    const f = (lsTextoActual?.frases || [])[i];
+    if (!f) return;
+    if (!f.audio) { showToast('⚠️ Esta frase todavía no tiene audio generado.'); return; }
+    // Segundo toque en la misma frase = parar.
+    if (lsFraseSonando === i && lsAudio) { lsDetenerAudio(); lsPintarEstadoBotones(); return; }
+    lsTocar(lsUrl(f.audio), { onFin });
+    lsFraseSonando = i;
+    lsPintarEstadoBotones();
+  }
+
+  // Encadena todas las frases con una pausa para repetir en medio.
+  function lsPlaySecuencia(i) {
+    const frases = lsTextoActual?.frases || [];
+    if (i >= frases.length) { lsPintarEstadoBotones(); return; }
+    const fila = document.querySelector(`.ls-frase[data-i="${i}"]`);
+    if (fila) fila.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    lsPlayFrase(i, () => setTimeout(() => {
+      // Si el usuario tocó otra cosa mientras tanto, la cadena se corta.
+      if (lsFraseSonando === null && lsTextoActual) lsPlaySecuencia(i + 1);
+    }, 900));
+  }
+
+  function lsPintarEstadoBotones() {
+    document.querySelectorAll('.ls-play-frase').forEach(b => {
+      const activa = Number(b.dataset.i) === lsFraseSonando;
+      b.innerHTML = `<i class="fas ${activa ? 'fa-stop' : 'fa-play'} text-xs"></i>`;
+      b.classList.toggle('border-[#FF7A00]', activa);
+    });
+  }
+
+  /* ---------- Shadowing: repetir una frase y que te califique ----------
+     Usa el MISMO motor de voz que el modal de práctica (pzEscuchar), así
+     el micrófono se comporta igual en toda la app. */
+  function lsShadow(i, btn) {
+    const f = (lsTextoActual?.frases || [])[i];
+    if (!f) return;
+    const fila = document.querySelector(`.ls-frase[data-i="${i}"]`);
+    const msg = fila?.querySelector('.ls-msg');
+    if (msg) msg.classList.remove('hidden');
+
+    if (lsRec) { try { lsRec.detenerYa(); } catch {} return; }   // segundo toque = cortar
+
+    lsDetenerAudio();
+    btn.innerHTML = '<i class="fas fa-stop text-xs"></i>';
+    lsRec = pzEscuchar(btn, msg, {
+      textoEscuchando: 'Repite la frase… 🎙️',
+      onFin: async (dicho, err) => {
+        lsRec = null;
+        btn.innerHTML = '<i class="fas fa-microphone text-xs"></i>';
+        if (!dicho) { if (msg) msg.textContent = pzTextoErrorVoz(err); return; }
+        const puntaje = pzCalificarLocal(f.en, dicho);
+        if (msg) {
+          msg.innerHTML = puntaje >= 4
+            ? `<span class="text-green-600">✅ ¡Bien dicho!</span> <span class="text-slate-400 font-normal">"${escapeHTML(dicho)}"</span>`
+            : `<span class="text-slate-500">Casi. Escucha el modelo y repite 👇</span> <span class="text-slate-400 font-normal">"${escapeHTML(dicho)}"</span>`;
+        }
+        await lsGuardarPuntaje(i, puntaje);
+        lsRefrescarFrase(i, puntaje);
+        if (puntaje >= 5 && window.confetti) {
+          confetti({ particleCount: 60, spread: 55, origin: { y: 0.7 }, colors: ['#FF7A00', '#fbbf24'] });
+        }
+        if (puntaje < 4) setTimeout(() => lsPlayFrase(i), 500);   // vuelve a sonar el modelo
+      }
+    });
+    if (!lsRec) btn.innerHTML = '<i class="fas fa-microphone text-xs"></i>';
+  }
+
+  // Repinta solo esa tarjeta: repintar el panel entero cortaría el audio y
+  // haría saltar el scroll justo cuando la persona está repitiendo.
+  function lsRefrescarFrase(i, puntaje) {
+    const fila = document.querySelector(`.ls-frase[data-i="${i}"]`);
+    if (!fila) return;
+    const est = fila.querySelector('.ls-estrellas');
+    if (est) {
+      est.innerHTML = Array.from({ length: 5 }, (_, k) =>
+        `<i class="fas fa-star text-[9px] ${k < puntaje ? 'text-yellow-400' : 'text-slate-200'}"></i>`).join('');
+    }
+    fila.classList.toggle('border-green-200', puntaje >= 4);
+    fila.classList.toggle('bg-green-50/40', puntaje >= 4);
+    fila.classList.toggle('border-slate-100', puntaje < 4);
+    fila.classList.toggle('bg-slate-50', puntaje < 4);
+  }
+
+  /* Solo se guarda si MEJORA la marca anterior: así una repetición mala
+     no borra una buena (mismo criterio que frases_puntuaciones). */
+  async function lsGuardarPuntaje(i, puntaje) {
+    const t = lsTextoActual;
+    if (!t || !currentUser) return;
+    const previo = lsProgreso[t.id] || (lsProgreso[t.id] = {});
+    if (Number(previo[String(i)] || 0) >= puntaje) return;
+    previo[String(i)] = puntaje;
+
+    const total = (t.frases || []).length;
+    const ok = lsFrasesOk(t.id);
+    const { error } = await dbClient.from('listening_progreso').upsert({
+      user_id: currentUser.id,
+      texto_id: t.id,
+      frases_ok: previo,
+      mejor_puntaje: Math.max(...Object.values(previo).map(Number), 0),
+      completado: total > 0 && ok >= total,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'user_id,texto_id' });
+    if (error) console.warn('[listening] no se pudo guardar el avance:', error.message);
+
+    if (total > 0 && ok >= total) {
+      showToast('🎧 ¡Texto completo! Dominaste todas sus frases.', 3200);
+      if (window.confetti) confetti({ particleCount: 110, spread: 70, origin: { y: 0.6 }, colors: ['#FF7A00', '#3b82f6', '#fbbf24'] });
+    }
+  }
+
+  /* ============================================================
      Modo 6: CONVERSACIÓN LIBRE CON EMMA
      ------------------------------------------------------------
      La diferencia con "Crear conversación": allá la IA escribe un
@@ -2731,55 +3226,17 @@
      entre cortes. */
   let pzLibreRec = null;
   function pzLibreMic(btn, msg) {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) { msg.textContent = 'Tu navegador no reconoce voz — escribe tu respuesta 😉'; return; }
     if (pzLibreRec) { try { pzLibreRec.detenerYa(); } catch {} return; }
     if (pzLibrePensando) return;
-
     stopSpeaking();
-    let previo = '', sesion = '';
-    const textoTotal = () => limpiarRepeticionesVoz((previo + ' ' + sesion).trim());
-    let detenido = false, temporizador = null;
-    const t0 = Date.now();
-
-    const rec = new SR();
-    pzLibreRec = rec;
-    rec.lang = 'en-US';
-    rec.interimResults = true;
-    rec.maxAlternatives = 1;
-    rec.continuous = !pzVivoEsMovil;
-
-    btn.classList.add('recording');
-    msg.textContent = 'Escuchando... habla y se enviará solo 🎙️';
-
-    const limpiar = () => { if (temporizador) { clearTimeout(temporizador); temporizador = null; } };
-    const reprogramar = () => {
-      limpiar();
-      if (!sesion.trim()) return;
-      temporizador = setTimeout(() => { detenido = true; try { rec.stop(); } catch {} }, PZ_VIVO_SILENCIO_MS);
-    };
-
-    rec.onresult = (e) => {
-      let texto = '';
-      for (let i = 0; i < e.results.length; i++) texto += e.results[i][0].transcript + ' ';
-      sesion = texto.trim();
-      msg.textContent = sesion || 'Escuchando...';
-      reprogramar();
-    };
-    rec.onerror = () => { /* onend se encarga */ };
-    rec.onend = () => {
-      if (sesion) { previo = (previo + ' ' + sesion).trim(); sesion = ''; }
-      if (!detenido && Date.now() - t0 < 120000) { try { rec.start(); return; } catch {} }
-      limpiar();
-      pzLibreRec = null;
-      btn.classList.remove('recording');
-      const dicho = textoTotal();
-      if (!dicho) { msg.textContent = 'No te escuché, inténtalo otra vez 🎙️'; return; }
-      msg.textContent = 'Habla 🎙️ o escribe tu respuesta en inglés';
-      pzLibreEnviar(dicho);
-    };
-    rec.detenerYa = () => { detenido = true; limpiar(); try { rec.stop(); } catch {} };
-    try { rec.start(); } catch (err) { pzLibreRec = null; btn.classList.remove('recording'); console.warn('[libre] micrófono:', err); }
+    pzLibreRec = pzEscuchar(btn, msg, {
+      onFin: (dicho, err) => {
+        pzLibreRec = null;
+        if (!dicho) { msg.textContent = pzTextoErrorVoz(err); return; }
+        msg.textContent = 'Habla 🎙️ o escribe tu respuesta en inglés';
+        pzLibreEnviar(dicho);
+      }
+    });
   }
 
   /* ============================================================

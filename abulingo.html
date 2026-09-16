@@ -1380,10 +1380,24 @@ function openAbuChat() {
     }
   }
 
+  /* El chat del Tutor YA NO SE GUARDA.
+     Antes vivía en flujo.tutorAbu y se subía a Supabase en cada mensaje,
+     así que al reabrir la ventana aparecía (y se reenviaba a Gemini) una
+     conversación de hace días: el modelo respondía siguiendo ese hilo
+     viejo y lo que contestaba no tenía nada que ver con lo que la
+     persona acababa de preguntar. Ahora la conversación vive SOLO en
+     memoria mientras la ventana está abierta: al cerrarla se borra y la
+     próxima empieza limpia. Dentro de una misma sesión sí se manda todo
+     el hilo, que es lo que le da coherencia a la respuesta. */
+  let tutorAbuSesion = { messages: [] };
   function ensureTutorAbu() {
-    if (!flujo.tutorAbu) flujo.tutorAbu = { messages: [] };
-    if (!Array.isArray(flujo.tutorAbu.messages)) flujo.tutorAbu.messages = [];
-    return flujo.tutorAbu;
+    if (!Array.isArray(tutorAbuSesion.messages)) tutorAbuSesion.messages = [];
+    return tutorAbuSesion;
+  }
+  function reiniciarTutorAbu() { tutorAbuSesion = { messages: [] }; }
+  // Limpia de una vez los hilos que quedaron guardados con la versión vieja.
+  function borrarTutorAbuGuardado() {
+    if (flujo && flujo.tutorAbu) { delete flujo.tutorAbu; updateUserFlow(); }
   }
 
   // Cuántos mensajes le mandaste hoy al tutor (se cuenta en la tabla
@@ -1415,6 +1429,9 @@ function openAbuChat() {
   }
 
   function abrirTutorAbu() {
+    // Cada apertura es una conversación NUEVA (ver nota en ensureTutorAbu).
+    reiniciarTutorAbu();
+    borrarTutorAbuGuardado();
     const t = ensureTutorAbu();
     sfx('pop');
     modalRoot.innerHTML = `
@@ -1438,7 +1455,7 @@ function openAbuChat() {
                 <button id="abu-tutor-mic" title="Hablar por voz" class="mic-btn shrink-0"><i class="fas fa-microphone"></i></button>
                 <button id="abu-tutor-send" class="btn-juice bg-[#FF7A00] text-white font-bold px-4 py-2 rounded-xl shrink-0"><i class="fas fa-paper-plane"></i></button>
               </div>
-              <p class="text-[10px] text-slate-300 text-center mt-2">Puedes cerrar esta ventana cuando quieras: tu conversación y lo que estés escribiendo quedan guardados.</p>
+              <p class="text-[10px] text-slate-300 text-center mt-2">Esta charla no se guarda: al cerrar la ventana empieza una nueva 🧹</p>
             </div>
           </div>
         </div>
@@ -1447,11 +1464,9 @@ function openAbuChat() {
     modalRoot.querySelector('.modal-overlay').addEventListener('click', (e) => { if (e.target.classList.contains('modal-overlay')) closeModal(); });
 
     const box = document.getElementById('abu-tutor-messages');
-    if (!t.messages.length) {
-      const saludo = { role: 'assistant', content: saludoTutorAbu() };
-      t.messages.push(saludo);
-      updateUserFlow();
-    }
+    // Saludo de bienvenida: se pinta, pero NO entra al historial que se
+    // manda al modelo (es ruido) ni se guarda en ningún lado.
+    tutorAbuBubble('assistant', saludoTutorAbu());
     t.messages.forEach(m => tutorAbuBubble(m.role, m.content));
     box.scrollTop = box.scrollHeight;
 
@@ -1514,6 +1529,7 @@ function openAbuChat() {
   // un historial lleno de "se me trabó la lengua" confunde al modelo y hace
   // que las siguientes respuestas salgan peor.
   const TUTOR_ABU_FALLBACK = 'Uy, se me trabó la lengua 😅 ¿me lo puedes preguntar de nuevo en un momento?';
+  const TUTOR_ABU_SIN_RED  = 'No pude conectarme 📶 Revisa tu internet y vuelve a enviarme la pregunta.';
 
   async function tutorAbuEnviar(texto) {
     if (tutorAbuUsadosHoy >= TUTOR_MSG_DAILY_MAX) {
@@ -1524,7 +1540,6 @@ function openAbuChat() {
     const t = ensureTutorAbu();
     t.messages.push({ role: 'user', content: texto });
     tutorAbuBubble('user', texto);
-    await updateUserFlow();
 
     // Ya no se cuenta desde el navegador (eso se rodeaba recargando la
     // página): el cupo lo descuenta la función Edge y viene de vuelta en
@@ -1540,21 +1555,38 @@ function openAbuChat() {
 
     let respuesta = null;
     let rechazado = false;
+    let fallaDeRed = false;
     try {
       const headers = await cabecerasIA();
       if (!headers) throw new Error('sin sesión');
-      const resp = await fetch(`${SUPABASE_URL}/functions/v1/tutor-abu`, {
-        method: 'POST',
-        headers,
-        // Se manda solo conversación real: fuera el saludo de bienvenida y
-        // fuera los mensajes de error de intentos anteriores.
-        body: JSON.stringify({
-          messages: t.messages
-            .filter(m => m.content && m.content !== TUTOR_ABU_FALLBACK && !m.content.startsWith('¡Hola! Soy Abu'))
-            .slice(-8),
-          nivel: flujo?.currentNivel || 'A1'
-        })
-      });
+      // Se manda TODO el hilo de esta sesión (hasta 12 turnos): es lo que
+      // hace que "¿y en plural?" o "dame otro ejemplo" tengan sentido.
+      // Fuera queda el saludo de bienvenida y cualquier mensaje de error
+      // de un intento anterior, que solo confunden al modelo.
+      const historial = t.messages
+        .filter(m => m.content && m.content !== TUTOR_ABU_FALLBACK && !m.content.startsWith('¡Hola! Soy Abu'))
+        .slice(-12);
+      const cuerpo = JSON.stringify({ messages: historial, nivel: flujo?.currentNivel || 'A1' });
+
+      // Gemini a veces tarda. Sin tope, la petición se quedaba colgada y
+      // el usuario veía "Abu escribe…" para siempre; con un tope corto se
+      // cortaba una respuesta que iba a llegar. 45 s + un reintento.
+      const pedir = async () => {
+        const ctrl = new AbortController();
+        const t0 = setTimeout(() => ctrl.abort(), 45000);
+        try {
+          return await fetch(`${SUPABASE_URL}/functions/v1/tutor-abu`, {
+            method: 'POST', headers, body: cuerpo, signal: ctrl.signal
+          });
+        } finally { clearTimeout(t0); }
+      };
+      let resp;
+      try {
+        resp = await pedir();
+      } catch (e1) {
+        console.warn('[Tutor Abu] primer intento falló, reintento:', e1?.message || e1);
+        resp = await pedir();        // un solo reintento
+      }
       const payload = await resp.json().catch(() => null);
       // La función devuelve { reply: { es, en, text } }. Antes solo se leía
       // .text, así que cualquier respuesta buena se descartaba en silencio.
@@ -1575,14 +1607,27 @@ function openAbuChat() {
         if (payload?.diag) console.warn('[Tutor Abu] diag:', payload.diag);
         if (payload?.comoArreglarlo) console.warn('[Tutor Abu] ' + payload.comoArreglarlo);
       }
-    } catch (err) { console.warn('[Tutor Abu] fallo de red:', err?.message || err); }
+    } catch (err) {
+      fallaDeRed = true;
+      console.warn('[Tutor Abu] fallo de red:', err?.message || err);
+    }
     typing.remove();
 
-    if (rechazado) return;   // el modal / toast ya explicó qué pasó
-    if (!respuesta) respuesta = TUTOR_ABU_FALLBACK;
+    if (rechazado) {
+      // El modal / toast ya explicó qué pasó. El mensaje del usuario se
+      // saca del hilo para que un reintento no lo mande dos veces.
+      t.messages.pop();
+      return;
+    }
+    if (!respuesta) {
+      // Se pinta el aviso PERO no entra al historial: si se guardara,
+      // el siguiente turno le mandaría a Gemini un "se me trabó la
+      // lengua" como si Abu lo hubiera dicho de verdad.
+      tutorAbuBubble('assistant', fallaDeRed ? TUTOR_ABU_SIN_RED : TUTOR_ABU_FALLBACK);
+      return;
+    }
     t.messages.push({ role: 'assistant', content: respuesta });
     tutorAbuBubble('assistant', respuesta);
-    await updateUserFlow();
   }
 
   function showProModal() {
@@ -2163,11 +2208,11 @@ function openAbuChat() {
       if (words.gratisLimitReached) {
         return renderMessage('🔒', 'Ya usaste tus palabras gratis',
           `Con el plan <b>Gratis</b> puedes estudiar las primeras <b>${GRATIS_WORD_LIMIT} palabras</b> del nivel A1. Mejora tu plan para seguir aprendiendo sin límite.`,
-          'Ver planes ✨', () => openPlanesPro('gratis_limite'));
+          'Ver planes ✨', () => openPlanesPro('gratis_limite'), salidaDominar(nivel));
       }
       return renderMessage('📭', 'Grupo sin contenido',
         `El grupo <b>${group}</b> del nivel <b>${nivel}</b> no tiene palabras.`,
-        'Elegir otro nivel', openNivelSelector);
+        'Elegir otro nivel', openNivelSelector, salidaDominar(nivel));
     }
 
     console.log(`[runFlow] estado grupo ${group}: review.done=${g.review.done} practice.done=${g.practice.done}`);
@@ -2218,11 +2263,18 @@ function openAbuChat() {
         // antes decía "no tienes repasos pendientes" aunque sí los hubiera.
         if (repasosRestantesHoy() <= 0) {
           return renderMessage('✅', 'Repasos de hoy, completos',
-            `Ya hiciste tus <b>${SRS_DAILY_MAX} repasos de hoy</b>. Lo que quede pendiente vuelve mañana: repasar de más no fija mejor la memoria. 🧠<br><span class="block mt-3 text-slate-500">A las <b>${hora}</b> te esperan palabras nuevas.</span>`);
+            `Ya hiciste tus <b>${SRS_DAILY_MAX} repasos de hoy</b>. Lo que quede pendiente vuelve mañana: repasar de más no fija mejor la memoria. 🧠<br><span class="block mt-3 text-slate-500">A las <b>${hora}</b> te esperan palabras nuevas.</span>`,
+            null, null, salidaDominar(nivel));
         }
         renderMessage('😴', 'Todo al día',
-          `No tienes repasos pendientes. Descansa: a las <b>${hora}</b> te esperan palabras nuevas. 🌙`);
-      });
+          `No tienes repasos pendientes. Descansa: a las <b>${hora}</b> te esperan palabras nuevas. 🌙`,
+          null, null, salidaDominar(nivel));
+      },
+      // ⬅️ El tope de palabras nuevas SOLO frena el vocabulario. Frases,
+      //    escucha, videos y conversaciones de Dominar siguen abiertos:
+      //    antes esta pantalla dejaba el nivel entero bloqueado hasta la
+      //    hora indicada, aunque quedaran 30 subsecciones por hacer.
+      salidaDominar(nivel));
 
     // Cuenta atrás en vivo + recarga automática cuando se cumple el tiempo
     clearInterval(pauseTimer);
@@ -2246,7 +2298,14 @@ function openAbuChat() {
   ============================================================ */
   async function renderReview(nivel, group, words) {
     const g = flujo.niveles[nivel].grupos[group];
-    reviewList = words;
+    /* Las palabras YA DOMINADAS no vuelven a la tanda de tarjetas.
+       La práctica (buildPracticeQueue) ya las saltaba, pero el repaso no:
+       por eso lo que dominabas en el Mazo —o en un repaso SRS— reaparecía
+       igual aquí y daba la sensación de que ese avance no contaba para
+       nada. Ahora el Mazo y el flujo de vocabulario comparten de verdad
+       el mismo estado: flujo.srs[id].learned. */
+    const pendientes = words.filter(w => !flujo.srs[String(w.id)]?.learned);
+    reviewList = pendientes.length ? pendientes : words;
     const i = g.review.index || 0;
 
     if (i >= reviewList.length) {
@@ -2802,7 +2861,24 @@ function openAbuChat() {
       await updateUserFlow();
       runFlow();
     } else {
-      // Nivel terminado
+      /* ── Se acabó el VOCABULARIO del nivel, no el nivel ──────────────
+         Antes aquí salía "¡Nivel completado!" con tres botones y ninguno
+         llevaba a Dominar; "Repasar lo aprendido" volvía a runFlow(), que
+         terminaba otra vez en este mismo modal. Resultado: con todas las
+         palabras estudiadas el nivel quedaba en bucle y las secciones de
+         Dominar que faltaban eran inalcanzables.
+
+         Ahora: (1) el modal ofrece Dominar cuando queda pendiente, y
+         (2) la felicitación se muestra UNA vez — después se entra directo
+         al centro de decisión, que sí tiene los dos caminos abiertos. */
+      const d = ensureDominar(nivel);
+      const dominarPendiente = !d.completado;
+      const yaFelicitado = !!flujo.niveles[nivel].vocabFelicitado;
+      flujo.niveles[nivel].vocabFelicitado = true;
+      await updateUserFlow();
+
+      if (yaFelicitado && dominarPendiente) return mostrarEleccionVocabularioODominar(nivel, group);
+
       playSound('complete'); triggerConfetti();
       // El certificado no se gana por terminar los grupos, sino por tener
       // TODAS las palabras del nivel dominadas. Aquí se le dice cuánto falta.
@@ -2810,15 +2886,21 @@ function openAbuChat() {
       const notaCert = cert.listo
         ? `<span class="block mt-3 text-green-600 font-bold">🎓 ¡Dominaste las ${cert.total} palabras! Tu certificado del nivel ${nivel} ya está disponible.</span>`
         : `<span class="block mt-3 text-slate-500">Para tu <b>certificado del nivel ${nivel}</b> te faltan <b class="text-[#FF7A00]">${cert.faltan} palabra${cert.faltan === 1 ? '' : 's'}</b> por dominar. Puedes seguir repasándolas aunque cambies de nivel. 🔁</span>`;
+      const notaDominar = dominarPendiente
+        ? `<span class="block mt-3 text-slate-500">Todavía te quedan secciones de <b>Dominar</b> en ${nivel} (vas por la <b>${d.subseccionActual}</b> de ${DOMINAR_SUBS}): frases, escucha, videos y conversaciones.</span>`
+        : '';
       showModal({
         icon: '🎓',
-        title: `¡Nivel ${nivel} completado!`,
-        body: `Dominaste todos los grupos de este nivel. ¿Subimos de nivel?${notaCert}`,
+        title: `¡Terminaste el vocabulario de ${nivel}!`,
+        body: `Completaste todos los grupos de palabras de este nivel.${notaDominar}${notaCert}`,
         dismissable: false,
         actions: [
-          { label: 'Elegir nivel', onClick: () => { closeModal(); openNivelSelector(); } },
+          ...(dominarPendiente
+            ? [{ label: 'Seguir con Dominar 🏆', onClick: () => { closeModal(); iniciarDominar(nivel); } }]
+            : []),
+          { label: 'Elegir nivel', style: dominarPendiente ? 'bg-slate-100 text-slate-500' : '', onClick: () => { closeModal(); openNivelSelector(); } },
           { label: cert.listo ? 'Pedir mi certificado 📜' : 'Ver certificados 🎓', style: 'bg-slate-100 text-slate-500', onClick: () => { closeModal(); openCertificados(); } },
-          { label: 'Repasar lo aprendido', style: 'bg-slate-100 text-slate-500', onClick: () => { closeModal(); runFlow(); } }
+          { label: 'Repasar lo aprendido', style: 'bg-slate-100 text-slate-500', onClick: () => { closeModal(); volverAlHub(); } }
         ]
       });
     }
@@ -4048,29 +4130,47 @@ function openAbuChat() {
 
   let recActivoGlobal = null;
 
+  /* ════════════════════════════════════════════════════════════════
+     MOTOR DE VOZ — el MISMO que usa el modal de Pronunciación
+     ────────────────────────────────────────────────────────────────
+     El micrófono de las conversaciones (Abu, diálogo del grupo,
+     "Ahora, a conversar") fallaba y el del modal de Pronunciación no.
+     La diferencia estaba aquí: esta versión usaba `continuous = true`
+     y, sobre todo, REARRANCABA el reconocedor dentro de onend cada vez
+     que el navegador cortaba por silencio. Eso provocaba tres cosas:
+
+       · un bucle de arranques cuando el error era 'no-speech'
+         (no se cerraba nada y onend volvía a llamar a start());
+       · el auto-envío por silencio dejaba de armarse tras cada
+         rearranque (la variable `sesion` volvía a quedar vacía), así
+         que el botón se quedaba en "stop" esperando para siempre;
+       · el texto de sesiones distintas se pegaba y el limpiador de
+         repeticiones se comía palabras buenas.
+
+     El modal de Pronunciación hace lo simple y por eso funciona: una
+     sola sesión, se deja que el navegador corte por silencio, y en
+     onend se entrega lo que se haya oído. Eso es lo que hay ahora
+     aquí — con la misma parada manual, el mismo texto en vivo y los
+     mismos mensajes de error accionables.
+     ════════════════════════════════════════════════════════════════ */
   function crearReconocedorVoz(lang) {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) return null;
     const rec = new SR();
     rec.lang = lang || 'en-US';
-    // En celular NO se usa continuous: Chrome de Android lo ignora y es
-    // parte del problema de los duplicados. El reinicio de onend cubre
-    // las pausas en ambos casos.
-    rec.continuous = !esMovilVoz;
-    rec.interimResults = true;  // así se va acumulando todo lo dicho
+    // `continuous` queda en false SIEMPRE (igual que en Pronunciación):
+    // deja que el navegador cierre solo cuando dejas de hablar, que es
+    // justo lo que se quiere para una línea de conversación.
+    rec.continuous = false;
+    rec.interimResults = true;  // para pintar en vivo lo que se va oyendo
     rec.maxAlternatives = 1;
     return rec;
   }
-  // Grabación con inicio MANUAL y parada AUTOMÁTICA por silencio: el
-  // usuario toca el micrófono para empezar, y en cuanto deja de hablar
-  // unos segundos se envía solo. También se puede tocar el botón de
-  // nuevo para cortar antes, sin esperar el silencio.
-  // (Antes la parada era 100% manual porque el auto-stop NATIVO del
-  // navegador cortaba a mitad de frase apenas detectaba una pausa corta.
-  // Ese riesgo lo evita el temporizador de abajo: solo cuenta silencio
-  // DESPUÉS de que ya se dijo algo, y con un margen generoso — así no se
-  // corta a media frase, pero tampoco hace falta tocar dos veces.)
-  const SILENCIO_AUTO_DETENER_MS = 2800;
+
+  // Tope duro por si el navegador no cierra nunca (pasa en algunos
+  // Android): 20 s son de sobra para una línea de conversación.
+  const VOZ_TOPE_MS = 20000;
+
   function iniciarGrabacionVoz({ onFinal, onError, onParcial, lang }) {
     // Mata cualquier grabación anterior que haya quedado viva.
     if (recActivoGlobal) { try { recActivoGlobal.abort(); } catch {} recActivoGlobal = null; }
@@ -4078,84 +4178,49 @@ function openAbuChat() {
     const rec = crearReconocedorVoz(lang);
     if (!rec) { onError && onError('no-soportado'); return null; }
 
-    let previo = '';           // lo dicho en sesiones YA cerradas
-    let sesion = '';           // lo de la sesión en curso (se rearma entero)
-    const textoTotal = () => limpiarRepeticionesVoz((previo + ' ' + sesion).trim());
-    let detenidoManual = false;
-    let cerrado = false;       // onFinal/onError se disparan UNA sola vez
-    let temporizadorSilencio = null;
-    const t0 = Date.now();
-    const MAX_MS = 120000;     // tope duro de 2 min por grabación
-
-    const limpiarTemporizador = () => { if (temporizadorSilencio) { clearTimeout(temporizadorSilencio); temporizadorSilencio = null; } };
-    // Se reprograma en cada resultado nuevo: si pasan SILENCIO_AUTO_DETENER_MS
-    // sin que llegue nada más, se envía solo. Antes de que se diga la
-    // primera palabra no cuenta silencio — se espera lo que haga falta.
-    const reprogramarAutoDetener = () => {
-      limpiarTemporizador();
-      if (!sesion.trim()) return;
-      temporizadorSilencio = setTimeout(() => { if (!detenidoManual) rec.detener(); }, SILENCIO_AUTO_DETENER_MS);
-    };
+    let dicho = '';
+    let cerrado = false;        // onFinal/onError se disparan UNA sola vez
+    let errorDuro = null;       // 'sin-permiso' | 'microfono-ocupado' | …
+    let tope = null;
 
     const cerrar = (fn, arg) => {
       if (cerrado) return;
       cerrado = true;
-      limpiarTemporizador();
+      if (tope) { clearTimeout(tope); tope = null; }
       if (recActivoGlobal === rec) recActivoGlobal = null;
       fn && fn(arg);
     };
 
     rec.onresult = (e) => {
-      // Se REARMA desde cero con todos los resultados de esta sesión.
-      // Nada de ir sumando: eso es lo que duplicaba en Android.
+      // Se REARMA desde cero con todos los resultados. Ir sumando desde
+      // e.resultIndex duplicaba palabras en Chrome de Android.
       let texto = '';
       for (let i = 0; i < e.results.length; i++) texto += e.results[i][0].transcript + ' ';
-      sesion = texto.trim();
-      // Se va pintando en pantalla lo que llevas dicho, aunque todavía no
-      // sea definitivo: así se ve que el micrófono te está siguiendo.
-      if (onParcial) { try { onParcial(textoTotal()); } catch {} }
-      reprogramarAutoDetener();
+      dicho = limpiarRepeticionesVoz(texto.trim());
+      if (onParcial) { try { onParcial(dicho); } catch {} }
     };
 
     rec.onerror = (e) => {
       const err = e.error || 'error';
-      // 'no-speech' y 'aborted' NO son fallas reales: llegan cuando hubo
-      // un silencio o cuando tú mismo detuviste. Que decida onend.
+      // 'no-speech' y 'aborted' NO son fallas: significan "no dijiste
+      // nada" o "lo detuviste tú". Los resuelve onend, que siempre llega.
       if (err === 'no-speech' || err === 'aborted') return;
-      if (err === 'not-allowed' || err === 'service-not-allowed') {
-        cerrar(onError, 'sin-permiso');
-      } else if (!detenidoManual) {
-        cerrar(onError, err);
-      }
+      if (err === 'not-allowed' || err === 'service-not-allowed') errorDuro = 'sin-permiso';
+      else if (err === 'audio-capture') errorDuro = 'microfono-ocupado';
+      else errorDuro = err;
     };
 
+    // Una sola vez, sin rearranques: lo que se oyó es lo que se entrega.
     rec.onend = () => {
-      if (cerrado) return;
-      limpiarTemporizador();
-      // Se cierra la sesión: lo suyo pasa a 'previo' y la siguiente
-      // empieza limpia (e.results se reinicia en cada sesión).
-      if (sesion) { previo = (previo + ' ' + sesion).trim(); sesion = ''; }
-      if (detenidoManual) { cerrar(onFinal, textoTotal()); return; }
-      // Chrome corta solo tras unos segundos de silencio aunque continuous
-      // sea true: se reanuda sin perder lo dicho, para que el botón nunca
-      // quede trabado en "stop" y las pausas no corten la frase. (El
-      // auto-detener de arriba normalmente ya habrá actuado antes de que
-      // esto ocurra; esto es solo la red de seguridad si el navegador
-      // corta primero por su cuenta.)
-      if (Date.now() - t0 < MAX_MS) {
-        try { rec.start(); return; } catch {}
-      }
-      cerrar(onFinal, textoTotal());
+      if (errorDuro) return cerrar(onError, errorDuro);
+      cerrar(onFinal, dicho.trim());
     };
 
-    rec.detener = () => {
-      detenidoManual = true;
-      limpiarTemporizador();
-      try { rec.stop(); } catch { cerrar(onFinal, textoTotal()); }
-    };
+    rec.detener = () => { try { rec.stop(); } catch { cerrar(onFinal, dicho.trim()); } };
 
     try { rec.start(); } catch { cerrar(onError, 'no-inicio'); return null; }
     recActivoGlobal = rec;
+    tope = setTimeout(() => { try { rec.stop(); } catch {} }, VOZ_TOPE_MS);
     return rec;
   }
   // Coincidencia flexible: cuánto de lo esperado apareció en lo que dijiste.
@@ -4189,9 +4254,13 @@ function openAbuChat() {
     };
     const avisarError = (err) => {
       onError && onError(err);
-      // Mensajes claros para los dos casos que el usuario SÍ puede resolver.
+      // Mensajes claros para los casos que el usuario SÍ puede resolver
+      // (los mismos textos que el modal de Pronunciación).
       if (err === 'sin-permiso') decir('Bloqueaste el micrófono 🔒 — actívalo en el candado de la barra de direcciones');
       if (err === 'no-inicio') decir('El micrófono está ocupado — espera un segundo e inténtalo otra vez');
+      if (err === 'microfono-ocupado') decir('Otra app está usando el micrófono. Ciérrala e intenta de nuevo.');
+      if (err === 'no-soportado') decir('Tu navegador no reconoce voz — escribe tu respuesta 😉');
+      if (err === 'atascado') decir('El micrófono no respondió. Toca otra vez para reintentar 🎙️');
     };
     // "Se queda en Enviando..." — a veces, tras stop(), el navegador NO
     // dispara ni onend ni onerror (falla conocida en algunos Chrome /
@@ -4220,7 +4289,13 @@ function openAbuChat() {
       }
       grabacion = iniciarGrabacionVoz({
         lang,
-        onParcial: (parcial) => { pintarVivo(parcial, true); onParcial && onParcial(parcial); },
+        onParcial: (parcial) => {
+          pintarVivo(parcial, true);
+          // Eco de lo que se va entendiendo: sin esto el usuario no sabe
+          // si el micrófono lo está siguiendo (en Pronunciación sí lo ve).
+          decir(parcial ? `"${parcial}"` : textoEscuchando);
+          onParcial && onParcial(parcial);
+        },
         onFinal: (texto) => { limpiarWatchdog(); grabacion = null; resetBtn(); pintarVivo('', false); onFinal && onFinal(texto); },
         onError: (err) => { limpiarWatchdog(); grabacion = null; resetBtn(); pintarVivo('', false); avisarError(err); }
       });
@@ -4643,11 +4718,24 @@ function openAbuChat() {
     mostrarEleccionVocabularioODominar(nivel, group);
   }
 
-  function mostrarEleccionVocabularioODominar(nivel, group) {
+  async function mostrarEleccionVocabularioODominar(nivel, group) {
     toolsBar.classList.remove('hidden');
     updateProgressBar(70);
     const d = flujo.dominar?.[nivel];
     const hayAvanceDominar = d && (d.subseccionActual > 1 || Object.keys(d.subs || {}).length);
+    const dominarListo = !!d?.completado;
+
+    /* ¿Queda vocabulario de verdad en este nivel?
+       Antes el botón decía siempre "Continúa con el siguiente grupo" y,
+       cuando ya no había grupos, llevaba a runFlow() → "nivel completado"
+       → aquí otra vez: el botón no hacía nada visible y parecía que la
+       app se había trabado. Ahora se calcula y el botón cambia de texto
+       y de destino. */
+    const grupos = await getGroups(nivel);
+    const est = flujo.niveles?.[nivel]?.grupos || {};
+    const idx = group ? grupos.indexOf(group) : -1;
+    const hayMasVocab = grupos.some((gk, i) => i > idx && !est[gk]?.completed);
+
     appContainer.innerHTML = `
       <div class="card-3d p-6 text-center animate-pop mt-4">
         <div class="text-5xl mb-3">🚀</div>
@@ -4655,21 +4743,30 @@ function openAbuChat() {
         <p class="text-slate-500 mb-5">${group ? `Ya terminaste el repaso y la práctica de <b>${escapeHTML(group)}</b>. ` : ''}Elige por dónde seguir:</p>
         <div class="space-y-3">
           <button id="dom-ir-vocab" class="w-full btn-juice bg-white border-2 border-slate-200 text-slate-700 font-bold py-4 rounded-xl text-left px-5">
-            <span class="block text-lg">📚 Seguir con Vocabulario</span>
-            <span class="block text-xs font-normal text-slate-400 mt-0.5">Continúa con el siguiente grupo de palabras</span>
+            <span class="block text-lg">${hayMasVocab ? '📚 Seguir con Vocabulario' : '🔁 Repasar mis palabras'}</span>
+            <span class="block text-xs font-normal text-slate-400 mt-0.5">${hayMasVocab ? 'Continúa con el siguiente grupo de palabras' : `Ya viste todas las palabras de ${escapeHTML(nivel)}: aquí solo repasas las que toquen hoy`}</span>
           </button>
-          <button id="dom-ir-dominar" class="w-full btn-juice bg-[#FF7A00] text-white font-bold py-4 rounded-xl text-left px-5">
-            <span class="block text-lg">🏆 Dominar</span>
-            <span class="block text-xs font-normal text-orange-100 mt-0.5">${hayAvanceDominar ? `Sigue en la subsección ${d.subseccionActual}/${DOMINAR_SUBS}` : `Frases, videos y conversaciones del nivel ${escapeHTML(nivel)}`}</span>
+          <button id="dom-ir-dominar" class="w-full btn-juice ${dominarListo ? 'bg-white border-2 border-slate-200 text-slate-700' : 'bg-[#FF7A00] text-white'} font-bold py-4 rounded-xl text-left px-5">
+            <span class="block text-lg">🏆 Dominar${dominarListo ? ' (completado)' : ''}</span>
+            <span class="block text-xs font-normal ${dominarListo ? 'text-slate-400' : 'text-orange-100'} mt-0.5">${dominarListo ? 'Puedes volver a repasar cualquier subsección' : (hayAvanceDominar ? `Sigue en la subsección ${d.subseccionActual}/${DOMINAR_SUBS}` : `Frases, videos y conversaciones del nivel ${escapeHTML(nivel)}`)}</span>
           </button>
+          <button id="dom-ir-nivel" class="w-full text-slate-400 font-bold text-sm py-2">🎯 Cambiar de nivel</button>
         </div>
       </div>`;
     document.getElementById('dom-ir-vocab').onclick = async () => {
       const g = group && flujo.niveles[nivel]?.grupos?.[group];
       if (g) { if (!g.pract2) g.pract2 = { done: false }; g.pract2.done = true; await updateUserFlow(); }
-      runFlow();
+      if (hayMasVocab) return runFlow();
+      // Sin grupos nuevos: se va directo a los repasos pendientes en vez
+      // de rebotar contra la pantalla de "nivel completado".
+      const due = await getDueReviews(nivel);
+      if (due.length) return startSrsReview(due);
+      renderMessage('😴', 'Todo al día',
+        `No tienes repasos pendientes de <b>${escapeHTML(nivel)}</b> por ahora. Vuelve más tarde o sigue con las otras secciones. 🧠`,
+        'Volver', volverAlHub, salidaDominar(nivel));
     };
     document.getElementById('dom-ir-dominar').onclick = () => iniciarDominar(nivel);
+    document.getElementById('dom-ir-nivel').onclick = openNivelSelector;
   }
 
   async function iniciarDominar(nivel) {
@@ -5498,10 +5595,37 @@ function openAbuChat() {
       return nextMazoStep();
     }
 
-    mazoSession = { words: [...words].sort(() => Math.random() - 0.5), phase: 'review', index: 0, queue: [], correct: 0, wrong: 0 };
+    /* MISMAS REGLAS QUE EL VOCABULARIO.
+       El Mazo repetía TODAS las palabras guardadas, incluidas las que ya
+       estaban dominadas, mientras que el flujo de vocabulario las salta
+       (ver buildPracticeQueue). Por eso parecían dos sistemas distintos.
+       Ahora el Mazo trabaja sobre las PENDIENTES —exactamente el mismo
+       criterio, flujo.srs[id].learned— y lo que se practica aquí cuenta
+       en el mismo SRS que las lecciones. */
+    const pendientes = words.filter(w => !flujo.srs[String(w.id)]?.learned);
+    const dominadas = words.length - pendientes.length;
+
+    if (!pendientes.length) {
+      const lbl2 = document.getElementById('nivel-label');
+      if (lbl2) lbl2.textContent = flujo.currentNivel;
+      return renderMessage('🏅', '¡Tu mazo está dominado!',
+        `Ya dominaste las <b>${words.length}</b> palabras de tu mazo: no hace falta volver a estudiarlas, el repaso espaciado te las recordará cuando toque. 🧠`,
+        'Repasarlas igual 🔁', () => {
+          const lbl3 = document.getElementById('nivel-label');
+          if (lbl3) lbl3.textContent = 'M';
+          mazoSession = { words: [...words].sort(() => Math.random() - 0.5), phase: 'review', index: 0, queue: [], correct: 0, wrong: 0 };
+          guardarMazoFlujo();
+          nextMazoStep();
+        },
+        { label: 'Volver a mis lecciones', onClick: () => runFlow() });
+    }
+
+    mazoSession = { words: [...pendientes].sort(() => Math.random() - 0.5), phase: 'review', index: 0, queue: [], correct: 0, wrong: 0 };
     guardarMazoFlujo();
     renderMessage('🃏', '¡Tu mazo personalizado!',
-      `Vamos con <b>${words.length}</b> palabra(s) de tu mazo: primero tarjetas ✨ y luego ejercicios 👁️👂.<br>Su progreso también entra a tu memoria espaciada. 🧠<br><span class="text-xs text-slate-400">Si sales, retomas donde ibas.</span>`,
+      `Vamos con <b>${pendientes.length}</b> palabra(s) de tu mazo: primero tarjetas ✨ y luego ejercicios 👁️👂 — igual que en tus lecciones.` +
+      (dominadas ? `<br><span class="text-green-600 font-bold text-sm">🏅 ${dominadas} ya la${dominadas === 1 ? '' : 's'} tienes dominada${dominadas === 1 ? '' : 's'}: se salta${dominadas === 1 ? '' : 'n'}.</span>` : '') +
+      `<br>Su progreso entra en la MISMA memoria espaciada que el vocabulario. 🧠<br><span class="text-xs text-slate-400">Si sales, retomas donde ibas.</span>`,
       '¡Empezar! 🚀', () => nextMazoStep());
   }
 
@@ -5515,9 +5639,13 @@ function openAbuChat() {
         ms.phase = 'practice'; ms.index = 0;
         const pool = ms.words.map(w => w.ingles);
         const opciones = (w) => buildOptions(w.ingles, pool.length >= 4 ? pool : [w.ingles, 'yes', 'no', 'time']);
-        // También aquí: los dos ejercicios por palabra, para que puedan dominarse.
-        const r1 = ms.words.filter(w => w.imagen).map(w => ({ word: w, type: 'select_by_image', options: opciones(w) }));
-        const r2 = ms.words.map(w => ({ word: w, type: 'write_by_audio', options: null }));
+        // Mismo criterio que buildPracticeQueue: dos ejercicios por palabra
+        // (👁️ solo si tiene imagen) y fuera las que se dominaron durante
+        // esta misma sesión de tarjetas.
+        const porPracticar = ms.words.filter(w => !flujo.srs[String(w.id)]?.learned);
+        const base = porPracticar.length ? porPracticar : ms.words;
+        const r1 = base.filter(w => w.imagen).map(w => ({ word: w, type: 'select_by_image', options: opciones(w) }));
+        const r2 = base.map(w => ({ word: w, type: 'write_by_audio', options: null }));
         // Intercalado aleatorio 👁️/👂 (los dos ejercicios de una palabra no van pegados)
         ms.queue = mezclarEjercicios([...r1, ...r2]);
         guardarMazoFlujo();
@@ -5572,15 +5700,38 @@ function openAbuChat() {
   /* ============================================================
      14. PANTALLAS AUXILIARES
   ============================================================ */
-  function renderMessage(icon, title, html, actionLabel, onAction) {
+  /* `extra` = { label, onClick } pinta un SEGUNDO botón debajo del
+     principal. Se agregó porque varias de estas pantallas eran
+     callejones sin salida: "Seguiremos más tarde" (tope de palabras
+     nuevas), "Todo al día" o "Ya usaste tus palabras gratis" dejaban al
+     estudiante sin ninguna forma de entrar a Dominar, que sí tenía
+     secciones pendientes. Ahora siempre hay puerta de salida. */
+  function renderMessage(icon, title, html, actionLabel, onAction, extra) {
     appContainer.innerHTML = `
       <div class="card-3d p-10 text-center animate-pop mt-6">
         <div class="text-6xl mb-4">${icon}</div>
         <h1 class="text-2xl font-heading font-bold text-slate-800 mb-2">${title}</h1>
         <p class="text-slate-500 mb-6">${html}</p>
         ${actionLabel ? `<button id="msg-action" class="btn-juice bg-[#FF7A00] text-white font-bold py-3 px-8 rounded-xl text-lg">${actionLabel}</button>` : ''}
+        ${extra?.label ? `<button id="msg-action-2" class="block mx-auto mt-3 btn-juice bg-slate-100 text-slate-600 font-bold py-2.5 px-6 rounded-xl">${extra.label}</button>` : ''}
       </div>`;
     if (actionLabel && onAction) document.getElementById('msg-action').onclick = onAction;
+    if (extra?.label && extra.onClick) document.getElementById('msg-action-2').onclick = extra.onClick;
+  }
+
+  /* Botón "sigue con el resto del nivel" para las pantallas de arriba.
+     Devuelve undefined cuando Dominar ya está terminado, así el botón
+     simplemente no se pinta. */
+  function salidaDominar(nivel) {
+    const n = nivel || flujo?.currentNivel;
+    if (!n) return undefined;
+    const d = flujo?.dominar?.[n];
+    if (d?.completado) return undefined;
+    const sub = d?.subseccionActual || 1;
+    return {
+      label: sub > 1 ? `🏆 Seguir en Dominar (${sub}/${DOMINAR_SUBS})` : '🏆 Ir a Dominar',
+      onClick: () => iniciarDominar(n)
+    };
   }
 
   /* ============================================================

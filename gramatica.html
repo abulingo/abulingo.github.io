@@ -675,6 +675,7 @@
   // El mensaje de error se guarda aparte para NO reenviarlo a DeepSeek
   // como si fuera algo que dijo Abu: ensucia el historial.
   const TUTOR_ABU_FALLBACK = 'Uy, se me trabó la lengua 😅 ¿me lo puedes preguntar de nuevo en un momento?';
+  const TUTOR_ABU_SIN_RED  = 'No pude conectarme 📶 Revisa tu internet y vuelve a enviarme la pregunta.';
   let tutorAbuUsadosHoy = 0;
 
   /* ---------- Llamadas a Edge Functions con IA ----------
@@ -715,15 +716,19 @@
         return false;
     }
   }
-  // La conversación vive en el mismo JSON "flujo" que usa abulingo.html,
-  // así que la sigues viendo aunque cambies de página o vuelvas mañana.
-  function tutorAbuCargar() {
-    if (!flujo) flujo = {};
-    if (!flujo.tutorAbu) flujo.tutorAbu = { messages: [] };
-    if (!Array.isArray(flujo.tutorAbu.messages)) flujo.tutorAbu.messages = [];
-    return flujo.tutorAbu.messages;
+  /* El chat del Tutor YA NO SE GUARDA (mismo cambio que en
+     [[abulingo.html]]). Antes vivía en el JSON "flujo" y se subía a
+     Supabase en cada mensaje: al reabrir la ventana volvía a aparecer —
+     y a reenviarse a Gemini — un hilo de hace días, así que la respuesta
+     seguía esa conversación vieja en vez de la pregunta nueva. Ahora
+     vive solo en memoria mientras la ventana está abierta. */
+  let tutorAbuMem = [];
+  function tutorAbuCargar() { return tutorAbuMem; }
+  function reiniciarTutorAbu() { tutorAbuMem = []; }
+  async function tutorAbuGuardar() { /* a propósito: no se persiste nada */ }
+  function borrarTutorAbuGuardado() {
+    if (flujo && flujo.tutorAbu) { delete flujo.tutorAbu; updateUserFlow(); }
   }
-  async function tutorAbuGuardar() { await updateUserFlow(); }
 
   // Cuántos mensajes van hoy. La cuenta buena la lleva el servidor en la
   // tabla "uso_ia"; aquí solo se LEE para pintar el "12/50 hoy".
@@ -748,6 +753,8 @@
   }
 
   function abrirTutorAbu() {
+    reiniciarTutorAbu();           // cada apertura es una charla nueva
+    borrarTutorAbuGuardado();      // limpia lo que dejó la versión vieja
     const msgs = tutorAbuCargar();
     if (typeof sfx === 'function') sfx('pop');
     modalRoot.innerHTML = `
@@ -771,7 +778,7 @@
                 <button id="abu-tutor-mic" title="Hablar por voz" class="shrink-0 w-11 rounded-xl bg-slate-100 text-slate-500 hover:bg-slate-200 transition"><i class="fas fa-microphone"></i></button>
                 <button id="abu-tutor-send" class="btn-juice bg-[#FF7A00] text-white font-bold px-4 py-2 rounded-xl shrink-0"><i class="fas fa-paper-plane"></i></button>
               </div>
-              <p class="text-[10px] text-slate-300 text-center mt-2">Cierra cuando quieras: tu conversación queda guardada y vuelves justo donde estabas.</p>
+              <p class="text-[10px] text-slate-300 text-center mt-2">Esta charla no se guarda: al cerrar la ventana empieza una nueva 🧹</p>
             </div>
           </div>
         </div>
@@ -782,10 +789,8 @@
     });
 
     const box = document.getElementById('abu-tutor-messages');
-    if (!msgs.length) {
-      msgs.push({ role: 'assistant', content: saludoTutorAbu() });
-      tutorAbuGuardar();
-    }
+    // El saludo se pinta pero no entra al historial que ve el modelo.
+    tutorAbuBubble('assistant', saludoTutorAbu());
     msgs.forEach(m => tutorAbuBubble(m.role, m.content));
     box.scrollTop = box.scrollHeight;
 
@@ -844,7 +849,6 @@
     const msgs = tutorAbuCargar();
     msgs.push({ role: 'user', content: texto });
     tutorAbuBubble('user', texto);
-    await tutorAbuGuardar();
 
     tutorAbuUsadosHoy++;          // provisional: el número real llega del servidor
     actualizarLimiteTutorAbu();
@@ -857,20 +861,33 @@
 
     let respuesta = null;
     let rechazado = false;
+    let fallaDeRed = false;
     try {
       const headers = await cabecerasIA();
       if (!headers) throw new Error('sin sesión');
-      const resp = await fetch(`${SUPABASE_URL}/functions/v1/tutor-abu`, {
-        method: 'POST',
-        headers,
-        // Solo conversación real: fuera el saludo y los mensajes de error.
-        body: JSON.stringify({
-          messages: msgs
-            .filter(m => m.content && m.content !== TUTOR_ABU_FALLBACK && !m.content.startsWith('¡Hola! Soy Abu'))
-            .slice(-8),
-          nivel: flujo?.currentNivel || 'A1'
-        })
-      });
+      // Se manda TODO el hilo de esta sesión: es lo que hace que un
+      // "¿y en plural?" tenga sentido. Fuera el saludo y los errores.
+      const historial = msgs
+        .filter(m => m.content && m.content !== TUTOR_ABU_FALLBACK && !m.content.startsWith('¡Hola! Soy Abu'))
+        .slice(-12);
+      const cuerpo = JSON.stringify({ messages: historial, nivel: flujo?.currentNivel || 'A1' });
+      // Gemini a veces tarda: 45 s de tope y un reintento, en vez de
+      // dejar "Abu escribe…" colgado para siempre.
+      const pedir = async () => {
+        const ctrl = new AbortController();
+        const t0 = setTimeout(() => ctrl.abort(), 45000);
+        try {
+          return await fetch(`${SUPABASE_URL}/functions/v1/tutor-abu`, {
+            method: 'POST', headers, body: cuerpo, signal: ctrl.signal
+          });
+        } finally { clearTimeout(t0); }
+      };
+      let resp;
+      try { resp = await pedir(); }
+      catch (e1) {
+        console.warn('[Tutor Abu] primer intento falló, reintento:', e1?.message || e1);
+        resp = await pedir();
+      }
       const payload = await resp.json().catch(() => null);
       const r = payload?.reply;
       if (resp.ok && r) respuesta = (r.text || [r.es, r.en].filter(Boolean).join('\n\n') || '').trim();
@@ -885,14 +902,21 @@
         if (payload?.diag) console.warn('[Tutor Abu] diag:', payload.diag);
         if (payload?.comoArreglarlo) console.warn('[Tutor Abu] ' + payload.comoArreglarlo);
       }
-    } catch (err) { console.warn('[Tutor Abu] fallo de red:', err?.message || err); }
+    } catch (err) {
+      fallaDeRed = true;
+      console.warn('[Tutor Abu] fallo de red:', err?.message || err);
+    }
     typing.remove();
 
-    if (rechazado) return;   // el modal / toast ya explicó qué pasó
-    if (!respuesta) respuesta = TUTOR_ABU_FALLBACK;
+    if (rechazado) { msgs.pop(); return; }   // el modal / toast ya explicó qué pasó
+    if (!respuesta) {
+      // Se pinta el aviso pero NO entra al historial: si se guardara, el
+      // siguiente turno se lo mandaría a Gemini como algo que dijo Abu.
+      tutorAbuBubble('assistant', fallaDeRed ? TUTOR_ABU_SIN_RED : TUTOR_ABU_FALLBACK);
+      return;
+    }
     msgs.push({ role: 'assistant', content: respuesta });
     tutorAbuBubble('assistant', respuesta);
-    await tutorAbuGuardar();
   }
 
   /* ---------- Micrófono del tutor (inicio/parada manual) ----------
@@ -949,23 +973,26 @@
 
   let tutorRecActivo = null;
 
+  /* Mismo motor que el micrófono del modal de práctica: una sola
+     sesión de reconocimiento, sin rearranques dentro de onend. El
+     bucle de arranques que había antes (`if (!detenidoManual) rec.start()`)
+     era lo que dejaba el botón atascado en rojo cuando no se oía nada. */
   function tutorIniciarVoz({ onFinal, onError }) {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) { onError && onError('no-soportado'); return null; }
     if (tutorRecActivo) { try { tutorRecActivo.abort(); } catch {} tutorRecActivo = null; }
 
     const rec = new SR();
-    rec.lang = 'es-MX';
-    rec.continuous = !esMovilVoz;   // Android lo ignora y duplica
+    rec.lang = 'es-MX';           // aquí se PREGUNTA en español
+    rec.continuous = false;
     rec.interimResults = true;
     rec.maxAlternatives = 1;
 
-    let previo = '', sesion = '', detenidoManual = false, cerrado = false;
-    const textoTotal = () => limpiarRepeticionesVoz((previo + ' ' + sesion).trim());
-    const t0 = Date.now(), MAX_MS = 120000;
+    let dicho = '', cerrado = false, errorDuro = null, tope = null;
     const cerrar = (fn, arg) => {
       if (cerrado) return;
       cerrado = true;
+      if (tope) { clearTimeout(tope); tope = null; }
       if (tutorRecActivo === rec) tutorRecActivo = null;
       fn && fn(arg);
     };
@@ -974,29 +1001,24 @@
       // Se rearma entero: acumular desde resultIndex duplica en Android.
       let texto = '';
       for (let i = 0; i < e.results.length; i++) texto += e.results[i][0].transcript + ' ';
-      sesion = texto.trim();
+      dicho = limpiarRepeticionesVoz(texto.trim());
     };
     rec.onerror = (e) => {
       const err = e.error || 'error';
       if (err === 'no-speech' || err === 'aborted') return;   // que decida onend
-      if (err === 'not-allowed' || err === 'service-not-allowed') cerrar(onError, 'sin-permiso');
-      else if (!detenidoManual) cerrar(onError, err);
+      if (err === 'not-allowed' || err === 'service-not-allowed') errorDuro = 'sin-permiso';
+      else if (err === 'audio-capture') errorDuro = 'microfono-ocupado';
+      else errorDuro = err;
     };
     rec.onend = () => {
-      if (cerrado) return;
-      if (sesion) { previo = (previo + ' ' + sesion).trim(); sesion = ''; }
-      if (detenidoManual) { cerrar(onFinal, textoTotal()); return; }
-      // Chrome corta solo tras un silencio aunque continuous sea true: se
-      // reanuda para que el botón no quede trabado ni se corte la frase.
-      if (Date.now() - t0 < MAX_MS) { try { rec.start(); return; } catch {} }
-      cerrar(onFinal, textoTotal());
+      if (errorDuro) return cerrar(onError, errorDuro);
+      cerrar(onFinal, dicho.trim());
     };
-    rec.detener = () => {
-      detenidoManual = true;
-      try { rec.stop(); } catch { cerrar(onFinal, textoTotal()); }
-    };
+    rec.detener = () => { try { rec.stop(); } catch { cerrar(onFinal, dicho.trim()); } };
+
     try { rec.start(); } catch { cerrar(onError, 'no-inicio'); return null; }
     tutorRecActivo = rec;
+    tope = setTimeout(() => { try { rec.stop(); } catch {} }, 20000);
     return rec;
   }
 
@@ -1011,6 +1033,7 @@
       if (err === 'no-soportado') decir('Tu navegador no reconoce voz — escribe tu duda 😉');
       else if (err === 'sin-permiso') decir('Bloqueaste el micrófono 🔒 — actívalo en el candado de la barra de direcciones');
       else if (err === 'no-inicio') decir('El micrófono está ocupado — intenta otra vez');
+      else if (err === 'microfono-ocupado') decir('Otra app está usando el micrófono. Ciérrala e intenta de nuevo.');
       else decir('No te escuché, intenta de nuevo');
     };
     btn.onclick = () => {
