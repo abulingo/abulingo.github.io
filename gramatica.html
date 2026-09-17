@@ -682,15 +682,76 @@
      El servidor exige sesión real + plan pro/super_pro y lleva el cupo
      diario. Ya no se manda la anon key como respaldo: es un JWT válido
      del proyecto y con eso cualquiera podía gastar la API sin cuenta. */
-  async function cabecerasIA() {
-    const { data: { session } } = await dbClient.auth.getSession();
+  /* ⚠️ EL FALLO DE "SE ME TRABÓ LA LENGUA" ERA ESTO ⚠️
+     El access_token de Supabase dura 1 hora. Si abres el tutor, preguntas,
+     y sigues un rato después, el token ya venció: entonces la petición NO
+     llega siquiera a la función — la corta el gateway de Supabase con un
+     401 cuyo cuerpo es `{"code":401,"message":"Invalid JWT"}`. Como ese
+     cuerpo NO trae el campo `codigo` que el cliente sabe interpretar,
+     caía en el error genérico y se pintaba "se me trabó la lengua".
+     (Confirmado en los logs del proyecto: 401 en tutor-abu.)
+
+     Ahora se renueva la sesión ANTES de llamar si al token le queda menos
+     de dos minutos, y `fetchIA` reintenta una vez tras refrescar si aun
+     así llega un 401. */
+  const IA_MARGEN_TOKEN_S = 120;
+
+  async function cabecerasIA({ forzarRefresco = false } = {}) {
+    let { data: { session } } = await dbClient.auth.getSession();
+    const quedan = session?.expires_at ? session.expires_at - Math.floor(Date.now() / 1000) : 0;
+    if (session && (forzarRefresco || quedan < IA_MARGEN_TOKEN_S)) {
+      const { data, error } = await dbClient.auth.refreshSession();
+      if (!error && data?.session) session = data.session;
+      else console.warn('[IA] no se pudo renovar la sesión:', error?.message);
+    }
     const token = session?.access_token;
-    if (!token) return null;
+    if (!token) return null;                       // sin sesión no se llama
     return {
       'Content-Type': 'application/json',
       'apikey': SUPABASE_ANON_KEY,
       'Authorization': `Bearer ${token}`
     };
+  }
+
+  /* Llamada a una función de IA con todo lo que hacía falta y no estaba:
+     tope de tiempo, un reintento, y renovación de sesión ante un 401.
+     Devuelve { resp, payload, error } — `error` es 'sin-sesion',
+     'red' o null. */
+  async function fetchIA(funcion, cuerpo, { timeoutMs = 45000, reintentos = 1 } = {}) {
+    let headers = await cabecerasIA();
+    if (!headers) return { resp: null, payload: null, error: 'sin-sesion' };
+    const body = typeof cuerpo === 'string' ? cuerpo : JSON.stringify(cuerpo);
+
+    const unaVez = async () => {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), timeoutMs);
+      try {
+        return await fetch(`${SUPABASE_URL}/functions/v1/${funcion}`, {
+          method: 'POST', headers, body, signal: ctrl.signal
+        });
+      } finally { clearTimeout(t); }
+    };
+
+    let resp = null, ultimoFallo = null;
+    for (let intento = 0; intento <= reintentos; intento++) {
+      try {
+        resp = await unaVez();
+      } catch (err) {
+        ultimoFallo = err;
+        console.warn(`[IA:${funcion}] intento ${intento + 1} falló:`, err?.message || err);
+        continue;
+      }
+      // 401 del GATEWAY (token vencido): se renueva la sesión y se repite.
+      if (resp.status === 401 && intento < reintentos) {
+        console.warn(`[IA:${funcion}] 401 — renuevo la sesión y reintento`);
+        const nuevas = await cabecerasIA({ forzarRefresco: true });
+        if (nuevas) { headers = nuevas; resp = null; continue; }
+      }
+      break;
+    }
+    if (!resp) return { resp: null, payload: null, error: ultimoFallo ? 'red' : 'sin-sesion' };
+    const payload = await resp.json().catch(() => null);
+    return { resp, payload, error: null };
   }
 
   // Traduce el rechazo del servidor. Devuelve true si ya se avisó.
@@ -862,49 +923,50 @@
     let respuesta = null;
     let rechazado = false;
     let fallaDeRed = false;
-    try {
-      const headers = await cabecerasIA();
-      if (!headers) throw new Error('sin sesión');
+    {
       // Se manda TODO el hilo de esta sesión: es lo que hace que un
-      // "¿y en plural?" tenga sentido. Fuera el saludo y los errores.
+      // "¿y en plural?" tenga sentido. Fuera el saludo y los avisos de
+      // error, que solo confunden al modelo.
       const historial = msgs
-        .filter(m => m.content && m.content !== TUTOR_ABU_FALLBACK && !m.content.startsWith('¡Hola! Soy Abu'))
+        .filter(m => m.content && m.content !== TUTOR_ABU_FALLBACK && m.content !== TUTOR_ABU_SIN_RED && !m.content.startsWith('¡Hola! Soy Abu'))
         .slice(-12);
-      const cuerpo = JSON.stringify({ messages: historial, nivel: flujo?.currentNivel || 'A1' });
-      // Gemini a veces tarda: 45 s de tope y un reintento, en vez de
-      // dejar "Abu escribe…" colgado para siempre.
-      const pedir = async () => {
-        const ctrl = new AbortController();
-        const t0 = setTimeout(() => ctrl.abort(), 45000);
-        try {
-          return await fetch(`${SUPABASE_URL}/functions/v1/tutor-abu`, {
-            method: 'POST', headers, body: cuerpo, signal: ctrl.signal
-          });
-        } finally { clearTimeout(t0); }
-      };
-      let resp;
-      try { resp = await pedir(); }
-      catch (e1) {
-        console.warn('[Tutor Abu] primer intento falló, reintento:', e1?.message || e1);
-        resp = await pedir();
+      // fetchIA pone el tope de tiempo, el reintento y —lo importante— la
+      // renovación del token cuando el gateway contesta 401.
+      const { resp, payload, error } = await fetchIA('tutor-abu', { messages: historial, nivel: flujo?.currentNivel || 'A1' });
+      if (error === 'sin-sesion') {
+        msgs.pop();
+        showToast('Tu sesión expiró — vuelve a iniciar sesión 🔑', 3600);
+        typing.remove();
+        return;
       }
-      const payload = await resp.json().catch(() => null);
-      const r = payload?.reply;
-      if (resp.ok && r) respuesta = (r.text || [r.es, r.en].filter(Boolean).join('\n\n') || '').trim();
+      if (error === 'red') { fallaDeRed = true; }
+      else {
+        // La función devuelve { reply: { es, en, text } }.
+        const r = payload?.reply;
+        if (resp.ok && r) respuesta = (r.text || [r.es, r.en].filter(Boolean).join('\n\n') || '').trim();
 
-      if (typeof payload?.uso?.usados === 'number') tutorAbuUsadosHoy = payload.uso.usados;
-      if (payload?.codigo === 'limite_diario') tutorAbuUsadosHoy = payload.limite || TUTOR_MSG_DAILY_MAX;
-      actualizarLimiteTutorAbu();
+        // El cupo real lo manda el servidor.
+        if (typeof payload?.uso?.usados === 'number') tutorAbuUsadosHoy = payload.uso.usados;
+        if (payload?.codigo === 'limite_diario') tutorAbuUsadosHoy = payload.limite || TUTOR_MSG_DAILY_MAX;
+        actualizarLimiteTutorAbu();
 
-      if (!respuesta) {
-        rechazado = manejarRechazoIA(payload);
-        console.warn('[Tutor Abu] HTTP', resp.status, payload);
-        if (payload?.diag) console.warn('[Tutor Abu] diag:', payload.diag);
-        if (payload?.comoArreglarlo) console.warn('[Tutor Abu] ' + payload.comoArreglarlo);
+        if (!respuesta) {
+          // Plan insuficiente o cupo agotado: se avisa bonito y no se
+          // pinta el "se me trabó la lengua".
+          rechazado = manejarRechazoIA(payload);
+          // Un 401 que llega hasta aquí viene del GATEWAY de Supabase (su
+          // cuerpo no trae `codigo`), no de la función: es el token
+          // vencido. fetchIA ya lo reintentó una vez tras renovar la
+          // sesión, así que si sigue fallando toca volver a entrar.
+          if (!rechazado && resp.status === 401) {
+            showToast('Tu sesión expiró — vuelve a iniciar sesión 🔑', 3600);
+            rechazado = true;
+          }
+          console.warn('[Tutor Abu] HTTP', resp.status, payload);
+          if (payload?.diag) console.warn('[Tutor Abu] diag:', payload.diag);
+          if (payload?.comoArreglarlo) console.warn('[Tutor Abu] ' + payload.comoArreglarlo);
+        }
       }
-    } catch (err) {
-      fallaDeRed = true;
-      console.warn('[Tutor Abu] fallo de red:', err?.message || err);
     }
     typing.remove();
 
@@ -973,25 +1035,41 @@
 
   let tutorRecActivo = null;
 
-  /* Mismo motor que el micrófono del modal de práctica: una sola
-     sesión de reconocimiento, sin rearranques dentro de onend. El
-     bucle de arranques que había antes (`if (!detenidoManual) rec.start()`)
-     era lo que dejaba el botón atascado en rojo cuando no se oía nada. */
-  function tutorIniciarVoz({ onFinal, onError }) {
+  /* Motor de voz v3 (el mismo de [[abulingo.html]]): temporizador propio
+     de silencio que solo cuenta después de la primera palabra, y
+     rearranque ACOTADO a dos si el navegador cortó antes de que dijeras
+     nada. La versión anterior rearrancaba sin límite (bucle con
+     'no-speech'); la siguiente no rearrancaba nunca (te cortaba si
+     tardabas dos segundos en empezar). */
+  const TUTOR_VOZ_SILENCIO_MS = 2500;
+  const TUTOR_VOZ_TOPE_MS     = 25000;
+  const TUTOR_VOZ_REINICIOS   = 2;
+
+  function tutorIniciarVoz({ onFinal, onError, onParcial }) {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) { onError && onError('no-soportado'); return null; }
     if (tutorRecActivo) { try { tutorRecActivo.abort(); } catch {} tutorRecActivo = null; }
 
     const rec = new SR();
     rec.lang = 'es-MX';           // aquí se PREGUNTA en español
-    rec.continuous = false;
+    rec.continuous = !esMovilVoz;
     rec.interimResults = true;
     rec.maxAlternatives = 1;
 
-    let dicho = '', cerrado = false, errorDuro = null, tope = null;
+    let dicho = '', cerrado = false, errorDuro = null;
+    let paradoManual = false, reinicios = 0, silencio = null, tope = null;
+    const t0 = Date.now();
+
+    const limpiarSilencio = () => { if (silencio) { clearTimeout(silencio); silencio = null; } };
+    const rearmarSilencio = () => {
+      limpiarSilencio();
+      if (!dicho.trim()) return;
+      silencio = setTimeout(() => { paradoManual = true; try { rec.stop(); } catch {} }, TUTOR_VOZ_SILENCIO_MS);
+    };
     const cerrar = (fn, arg) => {
       if (cerrado) return;
       cerrado = true;
+      limpiarSilencio();
       if (tope) { clearTimeout(tope); tope = null; }
       if (tutorRecActivo === rec) tutorRecActivo = null;
       fn && fn(arg);
@@ -1002,6 +1080,8 @@
       let texto = '';
       for (let i = 0; i < e.results.length; i++) texto += e.results[i][0].transcript + ' ';
       dicho = limpiarRepeticionesVoz(texto.trim());
+      if (onParcial) { try { onParcial(dicho); } catch {} }
+      rearmarSilencio();
     };
     rec.onerror = (e) => {
       const err = e.error || 'error';
@@ -1011,14 +1091,25 @@
       else errorDuro = err;
     };
     rec.onend = () => {
+      if (cerrado) return;
+      limpiarSilencio();
       if (errorDuro) return cerrar(onError, errorDuro);
-      cerrar(onFinal, dicho.trim());
+      if (dicho.trim() || paradoManual) return cerrar(onFinal, dicho.trim());
+      if (reinicios < TUTOR_VOZ_REINICIOS && Date.now() - t0 < TUTOR_VOZ_TOPE_MS) {
+        reinicios++;
+        try { rec.start(); return; } catch {}
+      }
+      cerrar(onFinal, '');
     };
-    rec.detener = () => { try { rec.stop(); } catch { cerrar(onFinal, dicho.trim()); } };
+    rec.detener = () => {
+      paradoManual = true;
+      limpiarSilencio();
+      try { rec.stop(); } catch { cerrar(onFinal, dicho.trim()); }
+    };
 
     try { rec.start(); } catch { cerrar(onError, 'no-inicio'); return null; }
     tutorRecActivo = rec;
-    tope = setTimeout(() => { try { rec.stop(); } catch {} }, 20000);
+    tope = setTimeout(() => { paradoManual = true; try { rec.stop(); } catch {} }, TUTOR_VOZ_TOPE_MS);
     return rec;
   }
 
@@ -1054,6 +1145,7 @@
         return;
       }
       grabacion = tutorIniciarVoz({
+        onParcial: (parcial) => { if (parcial) decir(`"${parcial}"`); },
         onFinal: (texto) => {
           limpiar(); grabacion = null; reset();
           if (texto) { decir(''); tutorAbuEnviar(texto); }

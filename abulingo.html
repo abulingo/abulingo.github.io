@@ -1351,8 +1351,28 @@ function openAbuChat() {
      un JWT válido del proyecto: con eso cualquiera podía gastar la API
      de DeepSeek sin siquiera tener cuenta.
   ------------------------------------------------------------ */
-  async function cabecerasIA() {
-    const { data: { session } } = await dbClient.auth.getSession();
+  /* ⚠️ EL FALLO DE "SE ME TRABÓ LA LENGUA" ERA ESTO ⚠️
+     El access_token de Supabase dura 1 hora. Si abres el tutor, preguntas,
+     y sigues un rato después, el token ya venció: entonces la petición NO
+     llega siquiera a la función — la corta el gateway de Supabase con un
+     401 cuyo cuerpo es `{"code":401,"message":"Invalid JWT"}`. Como ese
+     cuerpo NO trae el campo `codigo` que el cliente sabe interpretar,
+     caía en el error genérico y se pintaba "se me trabó la lengua".
+     (Confirmado en los logs del proyecto: 401 en tutor-abu.)
+
+     Ahora se renueva la sesión ANTES de llamar si al token le queda menos
+     de dos minutos, y `fetchIA` reintenta una vez tras refrescar si aun
+     así llega un 401. */
+  const IA_MARGEN_TOKEN_S = 120;
+
+  async function cabecerasIA({ forzarRefresco = false } = {}) {
+    let { data: { session } } = await dbClient.auth.getSession();
+    const quedan = session?.expires_at ? session.expires_at - Math.floor(Date.now() / 1000) : 0;
+    if (session && (forzarRefresco || quedan < IA_MARGEN_TOKEN_S)) {
+      const { data, error } = await dbClient.auth.refreshSession();
+      if (!error && data?.session) session = data.session;
+      else console.warn('[IA] no se pudo renovar la sesión:', error?.message);
+    }
     const token = session?.access_token;
     if (!token) return null;                       // sin sesión no se llama
     return {
@@ -1360,6 +1380,47 @@ function openAbuChat() {
       'apikey': SUPABASE_ANON_KEY,
       'Authorization': `Bearer ${token}`
     };
+  }
+
+  /* Llamada a una función de IA con todo lo que hacía falta y no estaba:
+     tope de tiempo, un reintento, y renovación de sesión ante un 401.
+     Devuelve { resp, payload, error } — `error` es 'sin-sesion',
+     'red' o null. */
+  async function fetchIA(funcion, cuerpo, { timeoutMs = 45000, reintentos = 1 } = {}) {
+    let headers = await cabecerasIA();
+    if (!headers) return { resp: null, payload: null, error: 'sin-sesion' };
+    const body = typeof cuerpo === 'string' ? cuerpo : JSON.stringify(cuerpo);
+
+    const unaVez = async () => {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), timeoutMs);
+      try {
+        return await fetch(`${SUPABASE_URL}/functions/v1/${funcion}`, {
+          method: 'POST', headers, body, signal: ctrl.signal
+        });
+      } finally { clearTimeout(t); }
+    };
+
+    let resp = null, ultimoFallo = null;
+    for (let intento = 0; intento <= reintentos; intento++) {
+      try {
+        resp = await unaVez();
+      } catch (err) {
+        ultimoFallo = err;
+        console.warn(`[IA:${funcion}] intento ${intento + 1} falló:`, err?.message || err);
+        continue;
+      }
+      // 401 del GATEWAY (token vencido): se renueva la sesión y se repite.
+      if (resp.status === 401 && intento < reintentos) {
+        console.warn(`[IA:${funcion}] 401 — renuevo la sesión y reintento`);
+        const nuevas = await cabecerasIA({ forzarRefresco: true });
+        if (nuevas) { headers = nuevas; resp = null; continue; }
+      }
+      break;
+    }
+    if (!resp) return { resp: null, payload: null, error: ultimoFallo ? 'red' : 'sin-sesion' };
+    const payload = await resp.json().catch(() => null);
+    return { resp, payload, error: null };
   }
 
   // Traduce el rechazo del servidor a algo que el usuario entienda.
@@ -1556,60 +1617,50 @@ function openAbuChat() {
     let respuesta = null;
     let rechazado = false;
     let fallaDeRed = false;
-    try {
-      const headers = await cabecerasIA();
-      if (!headers) throw new Error('sin sesión');
-      // Se manda TODO el hilo de esta sesión (hasta 12 turnos): es lo que
-      // hace que "¿y en plural?" o "dame otro ejemplo" tengan sentido.
-      // Fuera queda el saludo de bienvenida y cualquier mensaje de error
-      // de un intento anterior, que solo confunden al modelo.
+    {
+      // Se manda TODO el hilo de esta sesión: es lo que hace que un
+      // "¿y en plural?" tenga sentido. Fuera el saludo y los avisos de
+      // error, que solo confunden al modelo.
       const historial = t.messages
-        .filter(m => m.content && m.content !== TUTOR_ABU_FALLBACK && !m.content.startsWith('¡Hola! Soy Abu'))
+        .filter(m => m.content && m.content !== TUTOR_ABU_FALLBACK && m.content !== TUTOR_ABU_SIN_RED && !m.content.startsWith('¡Hola! Soy Abu'))
         .slice(-12);
-      const cuerpo = JSON.stringify({ messages: historial, nivel: flujo?.currentNivel || 'A1' });
+      // fetchIA pone el tope de tiempo, el reintento y —lo importante— la
+      // renovación del token cuando el gateway contesta 401.
+      const { resp, payload, error } = await fetchIA('tutor-abu', { messages: historial, nivel: flujo?.currentNivel || 'A1' });
+      if (error === 'sin-sesion') {
+        t.messages.pop();
+        showToast('Tu sesión expiró — vuelve a iniciar sesión 🔑', 3600);
+        typing.remove();
+        return;
+      }
+      if (error === 'red') { fallaDeRed = true; }
+      else {
+        // La función devuelve { reply: { es, en, text } }.
+        const r = payload?.reply;
+        if (resp.ok && r) respuesta = (r.text || [r.es, r.en].filter(Boolean).join('\n\n') || '').trim();
 
-      // Gemini a veces tarda. Sin tope, la petición se quedaba colgada y
-      // el usuario veía "Abu escribe…" para siempre; con un tope corto se
-      // cortaba una respuesta que iba a llegar. 45 s + un reintento.
-      const pedir = async () => {
-        const ctrl = new AbortController();
-        const t0 = setTimeout(() => ctrl.abort(), 45000);
-        try {
-          return await fetch(`${SUPABASE_URL}/functions/v1/tutor-abu`, {
-            method: 'POST', headers, body: cuerpo, signal: ctrl.signal
-          });
-        } finally { clearTimeout(t0); }
-      };
-      let resp;
-      try {
-        resp = await pedir();
-      } catch (e1) {
-        console.warn('[Tutor Abu] primer intento falló, reintento:', e1?.message || e1);
-        resp = await pedir();        // un solo reintento
-      }
-      const payload = await resp.json().catch(() => null);
-      // La función devuelve { reply: { es, en, text } }. Antes solo se leía
-      // .text, así que cualquier respuesta buena se descartaba en silencio.
-      const r = payload?.reply;
-      if (resp.ok && r) {
-        respuesta = (r.text || [r.es, r.en].filter(Boolean).join('\n\n') || '').trim();
-      }
-      // El cupo real lo manda el servidor.
-      if (typeof payload?.uso?.usados === 'number') tutorAbuUsadosHoy = payload.uso.usados;
-      if (payload?.codigo === 'limite_diario') tutorAbuUsadosHoy = payload.limite || TUTOR_MSG_DAILY_MAX;
-      actualizarLimiteTutorAbu();
+        // El cupo real lo manda el servidor.
+        if (typeof payload?.uso?.usados === 'number') tutorAbuUsadosHoy = payload.uso.usados;
+        if (payload?.codigo === 'limite_diario') tutorAbuUsadosHoy = payload.limite || TUTOR_MSG_DAILY_MAX;
+        actualizarLimiteTutorAbu();
 
-      if (!respuesta) {
-        // Plan insuficiente, cupo agotado o sesión vencida: se avisa bonito
-        // y no se pinta el mensaje de "se me trabó la lengua".
-        rechazado = manejarRechazoIA(payload);
-        console.warn('[Tutor Abu] HTTP', resp.status, payload);
-        if (payload?.diag) console.warn('[Tutor Abu] diag:', payload.diag);
-        if (payload?.comoArreglarlo) console.warn('[Tutor Abu] ' + payload.comoArreglarlo);
+        if (!respuesta) {
+          // Plan insuficiente o cupo agotado: se avisa bonito y no se
+          // pinta el "se me trabó la lengua".
+          rechazado = manejarRechazoIA(payload);
+          // Un 401 que llega hasta aquí viene del GATEWAY de Supabase (su
+          // cuerpo no trae `codigo`), no de la función: es el token
+          // vencido. fetchIA ya lo reintentó una vez tras renovar la
+          // sesión, así que si sigue fallando toca volver a entrar.
+          if (!rechazado && resp.status === 401) {
+            showToast('Tu sesión expiró — vuelve a iniciar sesión 🔑', 3600);
+            rechazado = true;
+          }
+          console.warn('[Tutor Abu] HTTP', resp.status, payload);
+          if (payload?.diag) console.warn('[Tutor Abu] diag:', payload.diag);
+          if (payload?.comoArreglarlo) console.warn('[Tutor Abu] ' + payload.comoArreglarlo);
+        }
       }
-    } catch (err) {
-      fallaDeRed = true;
-      console.warn('[Tutor Abu] fallo de red:', err?.message || err);
     }
     typing.remove();
 
@@ -1981,9 +2032,14 @@ function openAbuChat() {
   async function getGroupWords(nivel, group) {
     const key = `${nivel}|${group}`;
     if (groupCache.key === key && groupCache.list.length) return groupCache.list;
-    let { data, error } = await dbClient.from('palabras').select('*').eq('nivel', nivel).eq('grupo', group).range(0, 9999);
+    // ⚠️ El .order('id') NO es cosmético: sin él PostgREST devuelve las
+    //    filas en un orden arbitrario que cambia entre llamadas, y como el
+    //    repaso avanza con un índice sobre esta lista, al recargar la
+    //    página ese índice apuntaba a otra palabra. Resultado: algunas
+    //    tarjetas salían dos veces y otras no salían nunca.
+    let { data, error } = await dbClient.from('palabras').select('*').eq('nivel', nivel).eq('grupo', group).order('id', { ascending: true }).range(0, 9999);
     if (!error && !(data || []).length) {
-      ({ data, error } = await dbClient.from('palabras').select('*').ilike('nivel', nivel).ilike('grupo', group).range(0, 9999));
+      ({ data, error } = await dbClient.from('palabras').select('*').ilike('nivel', nivel).ilike('grupo', group).order('id', { ascending: true }).range(0, 9999));
     }
     if (error) { console.error(`[getGroupWords ${key}] ❌`, error.message, error); return []; }
     let list = data || [];
@@ -2061,7 +2117,7 @@ function openAbuChat() {
   ============================================================ */
   function defaultGroupState() {
     return {
-      review: { done: false, index: 0 },
+      review: { done: false, index: 0, ids: null },   // ids = la tanda congelada (ver renderReview)
       practice: { done: false, queue: [], index: 0 },
       dialogo: { done: false },          // 🎭 diálogo generado con las palabras del grupo (generar-dialogo)
       pract2: { done: false },           // 🚀 se marca al elegir "Vocabulario" en el centro de decisión (sección 14)
@@ -2298,18 +2354,42 @@ function openAbuChat() {
   ============================================================ */
   async function renderReview(nivel, group, words) {
     const g = flujo.niveles[nivel].grupos[group];
-    /* Las palabras YA DOMINADAS no vuelven a la tanda de tarjetas.
-       La práctica (buildPracticeQueue) ya las saltaba, pero el repaso no:
-       por eso lo que dominabas en el Mazo —o en un repaso SRS— reaparecía
-       igual aquí y daba la sensación de que ese avance no contaba para
-       nada. Ahora el Mazo y el flujo de vocabulario comparten de verdad
-       el mismo estado: flujo.srs[id].learned. */
-    const pendientes = words.filter(w => !flujo.srs[String(w.id)]?.learned);
-    reviewList = pendientes.length ? pendientes : words;
+
+    /* LA TANDA SE CONGELA POR IDs, no se recalcula en cada tarjeta.
+       Dos motivos:
+
+       1. Esta función se vuelve a llamar después de CADA tarjeta. Si la
+          lista se recalculara cada vez y una palabra se graduara a mitad
+          de la tanda, la lista encogería y el índice saltaría por encima
+          de la siguiente: te saltabas tarjetas sin verlas.
+       2. Guardando los ids (y no solo un número) el avance sobrevive a
+          recargas aunque la consulta devuelva las filas en otro orden.
+
+       Las palabras YA DOMINADAS quedan fuera al ARMAR la tanda — la
+       práctica (buildPracticeQueue) siempre lo hizo, el repaso no, y por
+       eso lo dominado en el Mazo reaparecía aquí como si nada. */
+    const porId = new Map(words.map(w => [String(w.id), w]));
+    let ids = Array.isArray(g.review.ids) ? g.review.ids.filter(id => porId.has(String(id))) : null;
+    if (!ids || !ids.length) {
+      // Si ya iba por la mitad con el sistema viejo (solo índice), se
+      // respeta su posición armando la tanda con TODAS las palabras; si
+      // empieza de cero, se saltan las dominadas.
+      const base = (g.review.index || 0) > 0
+        ? words
+        : (words.filter(w => !flujo.srs[String(w.id)]?.learned).length
+            ? words.filter(w => !flujo.srs[String(w.id)]?.learned)
+            : words);
+      ids = base.map(w => w.id);
+      g.review.ids = ids;
+      await updateUserFlow();
+    }
+    reviewList = ids.map(id => porId.get(String(id))).filter(Boolean);
     const i = g.review.index || 0;
+    console.log(`[repaso] ${nivel}/${group}: tarjeta ${i + 1} de ${reviewList.length}`);
 
     if (i >= reviewList.length) {
       g.review.done = true;
+      g.review.ids = null;          // la tanda ya se consumió
       await updateUserFlow();
       await addPoints(5);
       showEncouragement(() => runFlow());
@@ -4131,45 +4211,53 @@ function openAbuChat() {
   let recActivoGlobal = null;
 
   /* ════════════════════════════════════════════════════════════════
-     MOTOR DE VOZ — el MISMO que usa el modal de Pronunciación
+     MOTOR DE VOZ — tercera versión, y esta sí cubre los tres casos
      ────────────────────────────────────────────────────────────────
-     El micrófono de las conversaciones (Abu, diálogo del grupo,
-     "Ahora, a conversar") fallaba y el del modal de Pronunciación no.
-     La diferencia estaba aquí: esta versión usaba `continuous = true`
-     y, sobre todo, REARRANCABA el reconocedor dentro de onend cada vez
-     que el navegador cortaba por silencio. Eso provocaba tres cosas:
+     Historia de los dos intentos anteriores, porque explica el diseño:
 
-       · un bucle de arranques cuando el error era 'no-speech'
-         (no se cerraba nada y onend volvía a llamar a start());
-       · el auto-envío por silencio dejaba de armarse tras cada
-         rearranque (la variable `sesion` volvía a quedar vacía), así
-         que el botón se quedaba en "stop" esperando para siempre;
-       · el texto de sesiones distintas se pegaba y el limpiador de
-         repeticiones se comía palabras buenas.
+     · v1 rearrancaba el reconocedor dentro de onend SIEMPRE que el
+       navegador cortaba. Con 'no-speech' eso era un bucle infinito de
+       arranques: el botón se quedaba en rojo y no devolvía nunca nada.
+       Además pegaba el texto de varias sesiones y el limpiador de
+       repeticiones se comía palabras buenas.
 
-     El modal de Pronunciación hace lo simple y por eso funciona: una
-     sola sesión, se deja que el navegador corte por silencio, y en
-     onend se entrega lo que se haya oído. Eso es lo que hay ahora
-     aquí — con la misma parada manual, el mismo texto en vivo y los
-     mismos mensajes de error accionables.
+     · v2 quitó los rearranques del todo (como el modal de práctica).
+       Eso arregló el bucle, pero rompió el caso más común en una
+       conversación: si tardas dos segundos en arrancar a hablar,
+       Chrome dispara 'no-speech', cierra, y te dice "no te escuché"
+       aunque no hayas llegado a decir nada todavía.
+
+     · v3 (esta) distingue los dos finales, que es lo que ninguna de
+       las dos hacía:
+         — Si el navegador cortó y YA HAY TEXTO  → se entrega. Punto.
+           Nunca se rearranca con texto en la mano, así que es
+           imposible duplicar palabras entre sesiones.
+         — Si cortó y NO hay nada dicho          → todavía no habías
+           empezado: se rearranca, pero COMO MUCHO dos veces y dentro
+           de una ventana de 25 s. Acotado, así que no hay bucle.
+
+     Y para que una pausa a media frase no la corte, `continuous` va en
+     true donde el navegador lo respeta, con un temporizador propio de
+     silencio (VOZ_SILENCIO_MS) que solo empieza a contar DESPUÉS de la
+     primera palabra.
      ════════════════════════════════════════════════════════════════ */
   function crearReconocedorVoz(lang) {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) return null;
     const rec = new SR();
     rec.lang = lang || 'en-US';
-    // `continuous` queda en false SIEMPRE (igual que en Pronunciación):
-    // deja que el navegador cierre solo cuando dejas de hablar, que es
-    // justo lo que se quiere para una línea de conversación.
-    rec.continuous = false;
-    rec.interimResults = true;  // para pintar en vivo lo que se va oyendo
+    // En Android Chrome ignora `continuous` (y activarlo empeoraba los
+    // duplicados), así que allí se deja en false y manda el rearranque
+    // acotado de onend.
+    rec.continuous = !esMovilVoz;
+    rec.interimResults = true;
     rec.maxAlternatives = 1;
     return rec;
   }
 
-  // Tope duro por si el navegador no cierra nunca (pasa en algunos
-  // Android): 20 s son de sobra para una línea de conversación.
-  const VOZ_TOPE_MS = 20000;
+  const VOZ_SILENCIO_MS = 2500;   // silencio tras hablar → se envía solo
+  const VOZ_TOPE_MS     = 25000;  // tope duro de una grabación
+  const VOZ_REINICIOS   = 2;      // rearranques permitidos SIN haber dicho nada
 
   function iniciarGrabacionVoz({ onFinal, onError, onParcial, lang }) {
     // Mata cualquier grabación anterior que haya quedado viva.
@@ -4179,50 +4267,80 @@ function openAbuChat() {
     if (!rec) { onError && onError('no-soportado'); return null; }
 
     let dicho = '';
-    let cerrado = false;        // onFinal/onError se disparan UNA sola vez
-    let errorDuro = null;       // 'sin-permiso' | 'microfono-ocupado' | …
+    let cerrado = false;
+    let errorDuro = null;
+    let paradoManual = false;
+    let reinicios = 0;
+    let silencio = null;
     let tope = null;
+    const t0 = Date.now();
+
+    const limpiarSilencio = () => { if (silencio) { clearTimeout(silencio); silencio = null; } };
+
+    // Solo cuenta silencio DESPUÉS de la primera palabra: antes de eso se
+    // espera lo que haga falta (era justo lo que rompía la v1).
+    const rearmarSilencio = () => {
+      limpiarSilencio();
+      if (!dicho.trim()) return;
+      silencio = setTimeout(() => { paradoManual = true; try { rec.stop(); } catch {} }, VOZ_SILENCIO_MS);
+    };
 
     const cerrar = (fn, arg) => {
       if (cerrado) return;
       cerrado = true;
+      limpiarSilencio();
       if (tope) { clearTimeout(tope); tope = null; }
       if (recActivoGlobal === rec) recActivoGlobal = null;
       fn && fn(arg);
     };
 
     rec.onresult = (e) => {
-      // Se REARMA desde cero con todos los resultados. Ir sumando desde
-      // e.resultIndex duplicaba palabras en Chrome de Android.
+      // Se REARMA desde cero con todos los resultados de la sesión. Ir
+      // sumando desde e.resultIndex duplicaba palabras en Android.
       let texto = '';
       for (let i = 0; i < e.results.length; i++) texto += e.results[i][0].transcript + ' ';
       dicho = limpiarRepeticionesVoz(texto.trim());
       if (onParcial) { try { onParcial(dicho); } catch {} }
+      rearmarSilencio();
     };
 
     rec.onerror = (e) => {
       const err = e.error || 'error';
-      // 'no-speech' y 'aborted' NO son fallas: significan "no dijiste
-      // nada" o "lo detuviste tú". Los resuelve onend, que siempre llega.
+      // 'no-speech' y 'aborted' NO son fallas: significan "todavía no has
+      // dicho nada" o "lo cortaste tú". Los resuelve onend.
       if (err === 'no-speech' || err === 'aborted') return;
       if (err === 'not-allowed' || err === 'service-not-allowed') errorDuro = 'sin-permiso';
       else if (err === 'audio-capture') errorDuro = 'microfono-ocupado';
       else errorDuro = err;
     };
 
-    // Una sola vez, sin rearranques: lo que se oyó es lo que se entrega.
     rec.onend = () => {
+      if (cerrado) return;
+      limpiarSilencio();
       if (errorDuro) return cerrar(onError, errorDuro);
-      cerrar(onFinal, dicho.trim());
+      // Con texto en la mano se entrega SIEMPRE, sin rearrancar.
+      if (dicho.trim() || paradoManual) return cerrar(onFinal, dicho.trim());
+      // Sin nada dicho: aún no habías empezado a hablar. Se reintenta,
+      // pero acotado — nunca un bucle.
+      if (reinicios < VOZ_REINICIOS && Date.now() - t0 < VOZ_TOPE_MS) {
+        reinicios++;
+        try { rec.start(); return; } catch {}
+      }
+      cerrar(onFinal, '');
     };
 
-    rec.detener = () => { try { rec.stop(); } catch { cerrar(onFinal, dicho.trim()); } };
+    rec.detener = () => {
+      paradoManual = true;
+      limpiarSilencio();
+      try { rec.stop(); } catch { cerrar(onFinal, dicho.trim()); }
+    };
 
     try { rec.start(); } catch { cerrar(onError, 'no-inicio'); return null; }
     recActivoGlobal = rec;
-    tope = setTimeout(() => { try { rec.stop(); } catch {} }, VOZ_TOPE_MS);
+    tope = setTimeout(() => { paradoManual = true; try { rec.stop(); } catch {} }, VOZ_TOPE_MS);
     return rec;
   }
+
   // Coincidencia flexible: cuánto de lo esperado apareció en lo que dijiste.
   function coincideVoz(dicho, esperado) {
     const b = norm(esperado).split(' ').filter(Boolean);

@@ -617,48 +617,50 @@
     let respuesta = null;
     let rechazado = false;
     let fallaDeRed = false;
-    try {
-      const headers = await cabecerasIA();
-      if (!headers) throw new Error('sin sesión');
-      // Todo el hilo de esta sesión, para que las repreguntas tengan sentido.
+    {
+      // Se manda TODO el hilo de esta sesión: es lo que hace que un
+      // "¿y en plural?" tenga sentido. Fuera el saludo y los avisos de
+      // error, que solo confunden al modelo.
       const historial = msgs
-        .filter(m => m.content && m.content !== TUTOR_ABU_FALLBACK && !m.content.startsWith('¡Hola! Soy Abu'))
+        .filter(m => m.content && m.content !== TUTOR_ABU_FALLBACK && m.content !== TUTOR_ABU_SIN_RED && !m.content.startsWith('¡Hola! Soy Abu'))
         .slice(-12);
-      const cuerpo = JSON.stringify({ messages: historial, nivel: userProfile?.nivel || 'A1' });
-      // 45 s de tope y un reintento: sin esto la petición podía quedarse
-      // colgada y el "Abu escribe…" no se iba nunca.
-      const pedir = async () => {
-        const ctrl = new AbortController();
-        const t0 = setTimeout(() => ctrl.abort(), 45000);
-        try {
-          return await fetch(`${SUPABASE_URL}/functions/v1/tutor-abu`, {
-            method: 'POST', headers, body: cuerpo, signal: ctrl.signal
-          });
-        } finally { clearTimeout(t0); }
-      };
-      let resp;
-      try { resp = await pedir(); }
-      catch (e1) {
-        console.warn('[Tutor Abu] primer intento falló, reintento:', e1?.message || e1);
-        resp = await pedir();
+      // fetchIA pone el tope de tiempo, el reintento y —lo importante— la
+      // renovación del token cuando el gateway contesta 401.
+      const { resp, payload, error } = await fetchIA('tutor-abu', { messages: historial, nivel: userProfile?.nivel || 'A1' });
+      if (error === 'sin-sesion') {
+        msgs.pop();
+        showToast('Tu sesión expiró — vuelve a iniciar sesión 🔑', 3600);
+        typing.remove();
+        return;
       }
-      const payload = await resp.json().catch(() => null);
-      const r = payload?.reply;
-      if (resp.ok && r) respuesta = (r.text || [r.es, r.en].filter(Boolean).join('\n\n') || '').trim();
+      if (error === 'red') { fallaDeRed = true; }
+      else {
+        // La función devuelve { reply: { es, en, text } }.
+        const r = payload?.reply;
+        if (resp.ok && r) respuesta = (r.text || [r.es, r.en].filter(Boolean).join('\n\n') || '').trim();
 
-      if (typeof payload?.uso?.usados === 'number') tutorAbuUsadosHoy = payload.uso.usados;
-      if (payload?.codigo === 'limite_diario') tutorAbuUsadosHoy = payload.limite || TUTOR_MSG_DAILY_MAX;
-      actualizarLimiteTutorAbu();
+        // El cupo real lo manda el servidor.
+        if (typeof payload?.uso?.usados === 'number') tutorAbuUsadosHoy = payload.uso.usados;
+        if (payload?.codigo === 'limite_diario') tutorAbuUsadosHoy = payload.limite || TUTOR_MSG_DAILY_MAX;
+        actualizarLimiteTutorAbu();
 
-      if (!respuesta) {
-        rechazado = pzManejarRechazoIA(payload);
-        console.warn('[Tutor Abu] HTTP', resp.status, payload);
-        if (payload?.diag) console.warn('[Tutor Abu] diag:', payload.diag);
-        if (payload?.comoArreglarlo) console.warn('[Tutor Abu] ' + payload.comoArreglarlo);
+        if (!respuesta) {
+          // Plan insuficiente o cupo agotado: se avisa bonito y no se
+          // pinta el "se me trabó la lengua".
+          rechazado = pzManejarRechazoIA(payload);
+          // Un 401 que llega hasta aquí viene del GATEWAY de Supabase (su
+          // cuerpo no trae `codigo`), no de la función: es el token
+          // vencido. fetchIA ya lo reintentó una vez tras renovar la
+          // sesión, así que si sigue fallando toca volver a entrar.
+          if (!rechazado && resp.status === 401) {
+            showToast('Tu sesión expiró — vuelve a iniciar sesión 🔑', 3600);
+            rechazado = true;
+          }
+          console.warn('[Tutor Abu] HTTP', resp.status, payload);
+          if (payload?.diag) console.warn('[Tutor Abu] diag:', payload.diag);
+          if (payload?.comoArreglarlo) console.warn('[Tutor Abu] ' + payload.comoArreglarlo);
+        }
       }
-    } catch (err) {
-      fallaDeRed = true;
-      console.warn('[Tutor Abu] fallo de red:', err?.message || err);
     }
     typing.remove();
 
@@ -726,25 +728,41 @@
 
   let tutorRecActivo = null;
 
-  /* Mismo motor que el micrófono del modal de práctica: una sola
-     sesión de reconocimiento, sin rearranques dentro de onend. El
-     bucle de arranques que había antes (`if (!detenidoManual) rec.start()`)
-     era lo que dejaba el botón atascado en rojo cuando no se oía nada. */
-  function tutorIniciarVoz({ onFinal, onError }) {
+  /* Motor de voz v3 (el mismo de [[abulingo.html]]): temporizador propio
+     de silencio que solo cuenta después de la primera palabra, y
+     rearranque ACOTADO a dos si el navegador cortó antes de que dijeras
+     nada. La versión anterior rearrancaba sin límite (bucle con
+     'no-speech'); la siguiente no rearrancaba nunca (te cortaba si
+     tardabas dos segundos en empezar). */
+  const TUTOR_VOZ_SILENCIO_MS = 2500;
+  const TUTOR_VOZ_TOPE_MS     = 25000;
+  const TUTOR_VOZ_REINICIOS   = 2;
+
+  function tutorIniciarVoz({ onFinal, onError, onParcial }) {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) { onError && onError('no-soportado'); return null; }
     if (tutorRecActivo) { try { tutorRecActivo.abort(); } catch {} tutorRecActivo = null; }
 
     const rec = new SR();
     rec.lang = 'es-MX';           // aquí se PREGUNTA en español
-    rec.continuous = false;
+    rec.continuous = !esMovilVoz;
     rec.interimResults = true;
     rec.maxAlternatives = 1;
 
-    let dicho = '', cerrado = false, errorDuro = null, tope = null;
+    let dicho = '', cerrado = false, errorDuro = null;
+    let paradoManual = false, reinicios = 0, silencio = null, tope = null;
+    const t0 = Date.now();
+
+    const limpiarSilencio = () => { if (silencio) { clearTimeout(silencio); silencio = null; } };
+    const rearmarSilencio = () => {
+      limpiarSilencio();
+      if (!dicho.trim()) return;
+      silencio = setTimeout(() => { paradoManual = true; try { rec.stop(); } catch {} }, TUTOR_VOZ_SILENCIO_MS);
+    };
     const cerrar = (fn, arg) => {
       if (cerrado) return;
       cerrado = true;
+      limpiarSilencio();
       if (tope) { clearTimeout(tope); tope = null; }
       if (tutorRecActivo === rec) tutorRecActivo = null;
       fn && fn(arg);
@@ -755,6 +773,8 @@
       let texto = '';
       for (let i = 0; i < e.results.length; i++) texto += e.results[i][0].transcript + ' ';
       dicho = limpiarRepeticionesVoz(texto.trim());
+      if (onParcial) { try { onParcial(dicho); } catch {} }
+      rearmarSilencio();
     };
     rec.onerror = (e) => {
       const err = e.error || 'error';
@@ -764,14 +784,25 @@
       else errorDuro = err;
     };
     rec.onend = () => {
+      if (cerrado) return;
+      limpiarSilencio();
       if (errorDuro) return cerrar(onError, errorDuro);
-      cerrar(onFinal, dicho.trim());
+      if (dicho.trim() || paradoManual) return cerrar(onFinal, dicho.trim());
+      if (reinicios < TUTOR_VOZ_REINICIOS && Date.now() - t0 < TUTOR_VOZ_TOPE_MS) {
+        reinicios++;
+        try { rec.start(); return; } catch {}
+      }
+      cerrar(onFinal, '');
     };
-    rec.detener = () => { try { rec.stop(); } catch { cerrar(onFinal, dicho.trim()); } };
+    rec.detener = () => {
+      paradoManual = true;
+      limpiarSilencio();
+      try { rec.stop(); } catch { cerrar(onFinal, dicho.trim()); }
+    };
 
     try { rec.start(); } catch { cerrar(onError, 'no-inicio'); return null; }
     tutorRecActivo = rec;
-    tope = setTimeout(() => { try { rec.stop(); } catch {} }, 20000);
+    tope = setTimeout(() => { paradoManual = true; try { rec.stop(); } catch {} }, TUTOR_VOZ_TOPE_MS);
     return rec;
   }
 
@@ -807,6 +838,7 @@
         return;
       }
       grabacion = tutorIniciarVoz({
+        onParcial: (parcial) => { if (parcial) decir(`"${parcial}"`); },
         onFinal: (texto) => {
           limpiar(); grabacion = null; reset();
           if (texto) { decir(''); tutorAbuEnviar(texto); }
@@ -1706,7 +1738,19 @@
      mismo, reutilizable. `pzEscuchar` devuelve el reconocedor (o null)
      y siempre termina llamando a onFin, con texto o con cadena vacía.
      ════════════════════════════════════════════════════════════════ */
-  const PZ_VOZ_TOPE_MS = 20000;   // red de seguridad si el navegador no cierra
+  /* Mismo motor de voz v3 que [[abulingo.html]]: `continuous` donde el
+     navegador lo respeta, temporizador propio de silencio que solo cuenta
+     DESPUÉS de la primera palabra, y rearranque ACOTADO (máximo dos) si el
+     navegador cortó antes de que dijeras nada.
+
+     La versión anterior no rearrancaba nunca, y por eso en una
+     conversación —donde tardas un par de segundos en pensar la
+     respuesta— Chrome disparaba 'no-speech', cerraba, y salía "no te
+     escuché" sin haberte dado tiempo a hablar. */
+  const pzVivoEsMovil = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const PZ_VOZ_SILENCIO_MS = 2500;
+  const PZ_VOZ_TOPE_MS     = 25000;
+  const PZ_VOZ_REINICIOS   = 2;
 
   function pzEscuchar(btn, msg, { lang = 'en-US', onFin, textoEscuchando = 'Escuchando... habla y se enviará solo 🎙️' }) {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -1716,15 +1760,25 @@
     rec.lang = lang;
     rec.interimResults = true;
     rec.maxAlternatives = 1;
-    rec.continuous = false;        // que corte solo, como en el modal
+    rec.continuous = !pzVivoEsMovil;   // Android lo ignora y duplica
 
-    let dicho = '', cerrado = false, errorDuro = null, tope = null;
+    let dicho = '', cerrado = false, errorDuro = null;
+    let paradoManual = false, reinicios = 0, silencio = null, tope = null;
+    const t0 = Date.now();
+
     if (btn) btn.classList.add('recording');
     if (msg) msg.textContent = textoEscuchando;
 
+    const limpiarSilencio = () => { if (silencio) { clearTimeout(silencio); silencio = null; } };
+    const rearmarSilencio = () => {
+      limpiarSilencio();
+      if (!dicho.trim()) return;
+      silencio = setTimeout(() => { paradoManual = true; try { rec.stop(); } catch {} }, PZ_VOZ_SILENCIO_MS);
+    };
     const cerrar = (texto) => {
       if (cerrado) return;
       cerrado = true;
+      limpiarSilencio();
       if (tope) { clearTimeout(tope); tope = null; }
       if (btn) btn.classList.remove('recording');
       onFin && onFin(texto, errorDuro);
@@ -1735,6 +1789,7 @@
       for (let i = 0; i < e.results.length; i++) texto += e.results[i][0].transcript + ' ';
       dicho = limpiarRepeticionesVoz(texto.trim());
       if (msg) msg.textContent = dicho ? `"${dicho}"` : 'Escuchando...';
+      rearmarSilencio();
     };
     rec.onerror = (e) => {
       const err = e.error || 'error';
@@ -1743,8 +1798,24 @@
       else if (err === 'audio-capture') errorDuro = 'microfono-ocupado';
       else errorDuro = err;
     };
-    rec.onend = () => cerrar(dicho.trim());
-    rec.detenerYa = () => { try { rec.stop(); } catch { cerrar(dicho.trim()); } };
+    rec.onend = () => {
+      if (cerrado) return;
+      limpiarSilencio();
+      if (errorDuro) return cerrar('');
+      // Con texto en la mano se entrega SIEMPRE: nunca se rearranca
+      // teniendo algo, así que no puede duplicar palabras.
+      if (dicho.trim() || paradoManual) return cerrar(dicho.trim());
+      if (reinicios < PZ_VOZ_REINICIOS && Date.now() - t0 < PZ_VOZ_TOPE_MS) {
+        reinicios++;
+        try { rec.start(); return; } catch {}
+      }
+      cerrar('');
+    };
+    rec.detenerYa = () => {
+      paradoManual = true;
+      limpiarSilencio();
+      try { rec.stop(); } catch { cerrar(dicho.trim()); }
+    };
 
     try { rec.start(); } catch (err) {
       console.warn('[voz] no se pudo iniciar:', err);
@@ -1752,7 +1823,7 @@
       cerrar('');
       return null;
     }
-    tope = setTimeout(() => { try { rec.stop(); } catch {} }, PZ_VOZ_TOPE_MS);
+    tope = setTimeout(() => { paradoManual = true; try { rec.stop(); } catch {} }, PZ_VOZ_TOPE_MS);
     return rec;
   }
 
@@ -1763,8 +1834,6 @@
     if (err === 'no-inicio') return 'El micrófono está ocupado — espera un segundo e inténtalo otra vez';
     return 'No te escuché, inténtalo otra vez 🎙️';
   }
-
-  const pzVivoEsMovil = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
   function pzVivoGrabar(btn, msg, m) {
     // Segundo toque = cortar antes de que actúe el silencio automático.
@@ -2447,7 +2516,8 @@
   let lsVelocidad = 1;          // velocidad global elegida por la persona
   let lsAudio = null;           // <audio> en curso (uno a la vez)
   let lsFraseSonando = null;    // índice de la frase que está sonando
-  let lsVerTraduccion = false;
+  let lsTextoAbierto = false;   // ¿está desplegado el transcript completo?
+  let lsOrden = {};             // { [frase]: { puestas: [], banco: [] } } del ejercicio de ordenar
   let lsRec = null;             // reconocimiento de voz del shadowing
 
   const lsUrl = (ruta) => (ruta ? LISTENING_BUCKET + ruta : null);
@@ -2599,17 +2669,30 @@
     });
   }
 
-  /* ---------- Pantalla 2: practicar un texto ---------- */
+  /* ---------- Pantalla 2: practicar un texto ----------
+     Al tocar un texto se entra DIRECTO al shadowing frase por frase: esa
+     es la práctica, no un paso posterior. El texto completo y su
+     traducción quedan plegados arriba, a un toque, para quien quiera
+     leerlos; pero lo primero que ves es la lista de frases.
+
+     La práctica de cada frase es ORDENAR SUS PALABRAS:
+       1. suena el audio de la frase (a la velocidad que tengas puesta),
+       2. las palabras aparecen desordenadas abajo,
+       3. las vas tocando en el orden que creas y se van colocando arriba,
+       4. al completarlas se corrige sola y se guarda la nota.
+     Tocar una palabra ya colocada la devuelve al montón, así se puede
+     rectificar sin empezar de cero. */
   function lsAbrirTexto(t) {
     lsDetenerAudio();
     lsTextoActual = t;
     lsVelocidad = 1;
-    lsVerTraduccion = false;
+    lsOrden = {};              // { [indiceFrase]: [palabras colocadas] }
+    lsTextoAbierto = false;
     lsPintarPractica();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
-  function lsChipsVelocidadHTML() {
+  function lsChipsVelocidadHTML(tam = '') {
     return LS_VELOCIDADES.map(v => `
       <button class="ls-vel btn-juice px-2.5 py-1.5 rounded-lg text-[11px] font-black ${v === lsVelocidad ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-500'}" data-v="${v}">${v}×</button>
     `).join('');
@@ -2622,40 +2705,41 @@
     const ok = lsFrasesOk(t.id);
 
     document.getElementById('mode-panel').innerHTML = `
-      <!-- ── Cabecera + texto completo ─────────────────────────── -->
+      <!-- ── Cabecera compacta: título, velocidad y el texto plegado ──── -->
       <div class="card-3d p-4 sm:p-5 mb-3">
         <button id="ls-volver" class="text-[11px] font-black text-slate-400 hover:text-[#FF7A00] mb-3"><i class="fas fa-arrow-left mr-1"></i>Volver a los textos</button>
 
         <p class="text-[10px] font-black uppercase tracking-widest text-slate-400">Nivel ${escapeHTML(t.nivel)} · ${t.palabras || 0} palabras</p>
         <h2 class="font-heading font-black text-2xl text-[#FF7A00] leading-tight mb-1">${escapeHTML(t.titulo)}</h2>
-        <p class="text-slate-400 text-xs mb-4">${escapeHTML(t.tema || '')} · ${ok}/${frases.length} frases dominadas</p>
+        <p class="text-slate-400 text-xs mb-3">${escapeHTML(t.tema || '')} · <span id="ls-contador">${ok}/${frases.length}</span> frases dominadas</p>
 
-        <!-- Paso 1 y 2 del método: escuchar entero y leer el transcript -->
-        <div class="bg-slate-50 border border-slate-100 rounded-xl p-3 mb-3">
-          <p id="ls-transcript" class="text-slate-700 text-[15px] leading-relaxed font-medium">${escapeHTML(t.texto)}</p>
-          <p id="ls-transcript-es" class="text-slate-400 text-[13px] leading-relaxed mt-2 ${lsVerTraduccion ? '' : 'hidden'}">${escapeHTML(t.traduccion || '')}</p>
-        </div>
-
-        <div class="flex flex-wrap items-center gap-2 mb-2">
+        <div class="flex flex-wrap items-center gap-2 mb-3">
           <button id="ls-play-full" class="btn-juice bg-slate-800 text-white font-bold py-2.5 px-4 rounded-xl text-sm">
             <i class="fas fa-play mr-2"></i>Escuchar el texto
           </button>
-          <button id="ls-ver-trad" class="btn-juice bg-slate-100 text-slate-600 font-bold py-2.5 px-3 rounded-xl text-xs">
-            <i class="fas fa-language mr-1"></i>${lsVerTraduccion ? 'Ocultar' : 'Ver'} traducción
+          <button id="ls-ver-texto" class="btn-juice bg-slate-100 text-slate-600 font-bold py-2.5 px-3 rounded-xl text-xs">
+            <i class="fas fa-file-lines mr-1"></i>${lsTextoAbierto ? 'Ocultar' : 'Ver'} transcript
           </button>
+        </div>
+
+        <!-- El transcript arranca PLEGADO: si se ve el texto entero, ordenar
+             las palabras deja de tener gracia. Quien lo necesite lo abre. -->
+        <div id="ls-caja-texto" class="${lsTextoAbierto ? '' : 'hidden'} bg-slate-50 border border-slate-100 rounded-xl p-3 mb-3">
+          <p class="text-slate-700 text-[15px] leading-relaxed font-medium">${escapeHTML(t.texto)}</p>
+          <p class="text-slate-400 text-[13px] leading-relaxed mt-2">${escapeHTML(t.traduccion || '')}</p>
         </div>
 
         <div class="flex items-center gap-2 flex-wrap">
           <span class="text-[10px] font-black uppercase tracking-wide text-slate-400">Velocidad</span>
           <div id="ls-velocidades" class="flex gap-1.5">${lsChipsVelocidadHTML()}</div>
         </div>
-        <p class="text-[10px] text-slate-300 mt-2">La velocidad vale para el texto completo y para cada frase. Baja a 0.5× al empezar y sube cuando te salga natural. 🐢→🐇</p>
+        <p class="text-[10px] text-slate-300 mt-2">Vale para el texto completo y para cada frase. Empieza en 0.5× y sube cuando te salga natural. 🐢→🐇</p>
       </div>
 
-      <!-- ── Paso 3: shadowing frase por frase ──────────────────── -->
+      <!-- ── La práctica: escuchar y ordenar, frase por frase ─────────── -->
       <div class="card-3d p-4 sm:p-5">
         <p class="text-xs font-black uppercase tracking-wide text-slate-400 mb-1">Shadowing · frase por frase</p>
-        <p class="text-[11px] text-slate-400 mb-3">Reproduce la frase, mira sus palabras y repítela en voz alta encima del audio. Toca el micrófono para que te califique.</p>
+        <p class="text-[11px] text-slate-400 mb-3">Escucha la frase y ordena sus palabras tocándolas. Luego repítela en voz alta con el micrófono 🎙️</p>
         <div id="ls-frases" class="space-y-2">${frases.map((f, i) => lsFraseHTML(f, i)).join('')}</div>
 
         <button id="ls-play-todo" class="w-full btn-juice bg-[#FF7A00] text-white font-bold py-3 rounded-xl mt-4 text-sm">
@@ -2666,46 +2750,161 @@
     document.getElementById('ls-volver').onclick = () => { lsDetenerAudio(); renderListening(); };
     document.getElementById('ls-play-full').onclick = () => lsPlayFull();
     document.getElementById('ls-play-todo').onclick = () => lsPlaySecuencia(0);
-    document.getElementById('ls-ver-trad').onclick = () => {
-      lsVerTraduccion = !lsVerTraduccion;
-      lsPintarPractica();
+    document.getElementById('ls-ver-texto').onclick = () => {
+      lsTextoAbierto = !lsTextoAbierto;
+      document.getElementById('ls-caja-texto').classList.toggle('hidden', !lsTextoAbierto);
+      document.getElementById('ls-ver-texto').innerHTML =
+        `<i class="fas fa-file-lines mr-1"></i>${lsTextoAbierto ? 'Ocultar' : 'Ver'} transcript`;
     };
     lsBindVelocidades();
     lsBindFrases();
   }
 
-  /* Cada frase se pinta con SUS palabras sueltas (chips): así se ve de un
-     vistazo qué contiene la frase y es más fácil cazar la que se escapa
-     al escuchar. */
+  /* Baraja las palabras de la frase. Se evita que salgan ya en su sitio
+     (sería un ejercicio regalado) reintentando unas cuantas veces; en
+     frases de una o dos palabras eso es imposible y da igual. */
+  function lsBarajar(palabras) {
+    const original = palabras.join(' ');
+    for (let intento = 0; intento < 8; intento++) {
+      const a = [...palabras];
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      if (a.join(' ') !== original || palabras.length < 3) return a;
+    }
+    return [...palabras].reverse();
+  }
+
+  const lsPalabrasDe = (f) => String(f.en || '').split(/\s+/).filter(Boolean);
+
   function lsFraseHTML(f, i) {
     const puntaje = Number((lsProgreso[lsTextoActual?.id] || {})[String(i)] || 0);
-    const palabras = String(f.en || '').split(/\s+/).filter(Boolean);
     const estrellas = puntaje
       ? Array.from({ length: 5 }, (_, k) => `<i class="fas fa-star text-[9px] ${k < puntaje ? 'text-yellow-400' : 'text-slate-200'}"></i>`).join('')
       : '';
     return `
       <div class="ls-frase rounded-xl border-2 ${puntaje >= 4 ? 'border-green-200 bg-green-50/40' : 'border-slate-100 bg-slate-50'} p-3" data-i="${i}">
-        <div class="flex items-start gap-2.5">
+        <div class="flex items-center gap-2 mb-2">
           <button class="ls-play-frase shrink-0 w-9 h-9 rounded-full bg-white border-2 border-slate-200 text-[#FF7A00] hover:border-[#FF7A00] flex items-center justify-center" data-i="${i}" title="Escuchar esta frase">
             <i class="fas fa-play text-xs"></i>
           </button>
-          <div class="flex-1 min-w-0">
-            <div class="flex items-center gap-2 mb-1">
-              <span class="text-[10px] font-black text-slate-300">FRASE ${i + 1}</span>
-              <span class="ls-estrellas">${estrellas}</span>
-            </div>
-            <!-- las PALABRAS de esta frase, una a una -->
-            <div class="flex flex-wrap gap-1 mb-1">
-              ${palabras.map(w => `<span class="ls-palabra bg-white border border-slate-200 rounded-md px-1.5 py-0.5 text-[13px] font-semibold text-slate-700">${escapeHTML(w)}</span>`).join('')}
-            </div>
-            ${f.es ? `<p class="ls-frase-es text-[11px] text-slate-400 ${lsVerTraduccion ? '' : 'hidden'}">${escapeHTML(f.es)}</p>` : ''}
-          </div>
-          <button class="ls-mic shrink-0 w-9 h-9 rounded-full bg-[#FF7A00] text-white flex items-center justify-center" data-i="${i}" title="Repetir esta frase">
+          <span class="text-[10px] font-black text-slate-300">FRASE ${i + 1}</span>
+          <span class="ls-estrellas">${estrellas}</span>
+          <span class="flex-1"></span>
+          <button class="ls-mic shrink-0 w-9 h-9 rounded-full bg-[#FF7A00] text-white flex items-center justify-center" data-i="${i}" title="Repetir esta frase en voz alta">
             <i class="fas fa-microphone text-xs"></i>
           </button>
         </div>
+
+        <!-- Renglón donde se van colocando las palabras elegidas -->
+        <div class="ls-linea min-h-[38px] rounded-lg border-2 border-dashed border-slate-200 bg-white p-1.5 flex flex-wrap gap-1 items-start mb-1.5" data-i="${i}"></div>
+        <!-- Montón de palabras desordenadas -->
+        <div class="ls-banco flex flex-wrap gap-1" data-i="${i}"></div>
+
+        <p class="ls-frase-es text-[11px] text-slate-400 mt-1.5 hidden"></p>
         <p class="ls-msg text-[11px] font-bold text-slate-400 mt-1.5 hidden"></p>
       </div>`;
+  }
+
+  /* Pinta el estado del ejercicio de una frase: lo colocado arriba y lo
+     que queda en el banco abajo. Se repinta solo esta frase (no el panel
+     entero) para no cortar el audio ni hacer saltar el scroll. */
+  function lsPintarOrden(i, { corregido = null } = {}) {
+    const fila = document.querySelector(`.ls-frase[data-i="${i}"]`);
+    if (!fila) return;
+    const f = (lsTextoActual?.frases || [])[i];
+    const palabras = lsPalabrasDe(f);
+    const puestas = lsOrden[i]?.puestas || [];
+    const banco = lsOrden[i]?.banco || [];
+
+    const linea = fila.querySelector('.ls-linea');
+    const cajaBanco = fila.querySelector('.ls-banco');
+
+    linea.innerHTML = puestas.length
+      ? puestas.map((w, k) => {
+          let color = 'bg-white border-slate-200 text-slate-700';
+          if (corregido) color = (w === palabras[k])
+            ? 'bg-green-100 border-green-300 text-green-700'
+            : 'bg-red-100 border-red-300 text-red-700';
+          return `<button class="ls-quitar border rounded-md px-1.5 py-0.5 text-[13px] font-semibold ${color}" data-i="${i}" data-k="${k}">${escapeHTML(w)}</button>`;
+        }).join('')
+      : `<span class="text-[11px] text-slate-300 px-1 py-0.5">Toca las palabras en orden…</span>`;
+
+    cajaBanco.innerHTML = banco.map((w, k) =>
+      `<button class="ls-poner bg-white border border-slate-300 hover:border-[#FF7A00] rounded-md px-1.5 py-0.5 text-[13px] font-semibold text-slate-700" data-i="${i}" data-k="${k}">${escapeHTML(w)}</button>`
+    ).join('');
+    cajaBanco.classList.toggle('hidden', banco.length === 0);
+
+    fila.querySelectorAll('.ls-poner').forEach(b => {
+      b.onclick = () => lsPonerPalabra(Number(b.dataset.i), Number(b.dataset.k));
+    });
+    fila.querySelectorAll('.ls-quitar').forEach(b => {
+      b.onclick = () => lsQuitarPalabra(Number(b.dataset.i), Number(b.dataset.k));
+    });
+  }
+
+  function lsPrepararOrden(i, { rebarajar = true } = {}) {
+    const f = (lsTextoActual?.frases || [])[i];
+    if (!f) return;
+    const palabras = lsPalabrasDe(f);
+    if (rebarajar || !lsOrden[i]) lsOrden[i] = { puestas: [], banco: lsBarajar(palabras) };
+    lsPintarOrden(i);
+  }
+
+  function lsPonerPalabra(i, k) {
+    const st = lsOrden[i];
+    if (!st) return;
+    st.puestas.push(st.banco.splice(k, 1)[0]);
+    lsPintarOrden(i);
+    if (!st.banco.length) lsCorregirOrden(i);
+  }
+
+  function lsQuitarPalabra(i, k) {
+    const st = lsOrden[i];
+    if (!st) return;
+    st.banco.push(st.puestas.splice(k, 1)[0]);
+    lsPintarOrden(i);
+    const fila = document.querySelector(`.ls-frase[data-i="${i}"]`);
+    const msg = fila?.querySelector('.ls-msg');
+    if (msg) { msg.classList.add('hidden'); msg.textContent = ''; }
+  }
+
+  /* Corrige el orden. La nota se calcula por posiciones acertadas, no es
+     todo-o-nada: así una frase larga con una palabra fuera de sitio no
+     puntúa lo mismo que una hecha al azar. */
+  async function lsCorregirOrden(i) {
+    const f = (lsTextoActual?.frases || [])[i];
+    const st = lsOrden[i];
+    if (!f || !st) return;
+    const correcto = lsPalabrasDe(f);
+    const aciertos = st.puestas.filter((w, k) => w === correcto[k]).length;
+    const perfecto = aciertos === correcto.length;
+    const ratio = correcto.length ? aciertos / correcto.length : 0;
+    const puntaje = perfecto ? 5 : (ratio >= 0.8 ? 4 : ratio >= 0.6 ? 3 : ratio >= 0.4 ? 2 : 1);
+
+    lsPintarOrden(i, { corregido: true });
+
+    const fila = document.querySelector(`.ls-frase[data-i="${i}"]`);
+    const msg = fila?.querySelector('.ls-msg');
+    const es = fila?.querySelector('.ls-frase-es');
+    if (msg) {
+      msg.classList.remove('hidden');
+      msg.innerHTML = perfecto
+        ? '<span class="text-green-600">✅ ¡Perfecto! Ahora repítela en voz alta 🎙️</span>'
+        : `<span class="text-slate-500">${aciertos} de ${correcto.length} en su sitio. Toca una palabra para moverla, o <button class="ls-reintentar underline font-black text-[#FF7A00]" data-i="${i}">empezar de nuevo</button>.</span>`;
+      const re = msg.querySelector('.ls-reintentar');
+      if (re) re.onclick = () => { lsPrepararOrden(i); msg.classList.add('hidden'); lsPlayFrase(i); };
+    }
+    // La traducción solo se revela DESPUÉS de intentarlo: antes sería un chivatazo.
+    if (es && f.es) { es.textContent = f.es; es.classList.remove('hidden'); }
+
+    await lsGuardarPuntaje(i, puntaje);
+    lsRefrescarFrase(i, puntaje);
+    if (perfecto && window.confetti) {
+      confetti({ particleCount: 55, spread: 55, origin: { y: 0.7 }, colors: ['#FF7A00', '#fbbf24'] });
+    }
+    if (!perfecto) setTimeout(() => lsPlayFrase(i), 400);   // vuelve a sonar el modelo
   }
 
   function lsBindVelocidades() {
@@ -2723,6 +2922,7 @@
   }
 
   function lsBindFrases() {
+    (lsTextoActual?.frases || []).forEach((f, i) => lsPrepararOrden(i, { rebarajar: !lsOrden[i] }));
     document.querySelectorAll('.ls-play-frase').forEach(b => {
       b.onclick = () => lsPlayFrase(Number(b.dataset.i));
     });
@@ -2850,6 +3050,9 @@
       updated_at: new Date().toISOString()
     }, { onConflict: 'user_id,texto_id' });
     if (error) console.warn('[listening] no se pudo guardar el avance:', error.message);
+
+    const cont = document.getElementById('ls-contador');
+    if (cont) cont.textContent = `${ok}/${total}`;
 
     if (total > 0 && ok >= total) {
       showToast('🎧 ¡Texto completo! Dominaste todas sus frases.', 3200);
@@ -3527,15 +3730,76 @@
      función sin siquiera tener cuenta. Ya no hay respaldo: sin sesión,
      no se llama.
   ---------------------------------------------------------- */
-  async function cabecerasIA() {
-    const { data: { session } } = await dbClient.auth.getSession();
+  /* ⚠️ EL FALLO DE "SE ME TRABÓ LA LENGUA" ERA ESTO ⚠️
+     El access_token de Supabase dura 1 hora. Si abres el tutor, preguntas,
+     y sigues un rato después, el token ya venció: entonces la petición NO
+     llega siquiera a la función — la corta el gateway de Supabase con un
+     401 cuyo cuerpo es `{"code":401,"message":"Invalid JWT"}`. Como ese
+     cuerpo NO trae el campo `codigo` que el cliente sabe interpretar,
+     caía en el error genérico y se pintaba "se me trabó la lengua".
+     (Confirmado en los logs del proyecto: 401 en tutor-abu.)
+
+     Ahora se renueva la sesión ANTES de llamar si al token le queda menos
+     de dos minutos, y `fetchIA` reintenta una vez tras refrescar si aun
+     así llega un 401. */
+  const IA_MARGEN_TOKEN_S = 120;
+
+  async function cabecerasIA({ forzarRefresco = false } = {}) {
+    let { data: { session } } = await dbClient.auth.getSession();
+    const quedan = session?.expires_at ? session.expires_at - Math.floor(Date.now() / 1000) : 0;
+    if (session && (forzarRefresco || quedan < IA_MARGEN_TOKEN_S)) {
+      const { data, error } = await dbClient.auth.refreshSession();
+      if (!error && data?.session) session = data.session;
+      else console.warn('[IA] no se pudo renovar la sesión:', error?.message);
+    }
     const token = session?.access_token;
-    if (!token) return null;
+    if (!token) return null;                       // sin sesión no se llama
     return {
       'Content-Type': 'application/json',
       'apikey': SUPABASE_ANON_KEY,
       'Authorization': `Bearer ${token}`
     };
+  }
+
+  /* Llamada a una función de IA con todo lo que hacía falta y no estaba:
+     tope de tiempo, un reintento, y renovación de sesión ante un 401.
+     Devuelve { resp, payload, error } — `error` es 'sin-sesion',
+     'red' o null. */
+  async function fetchIA(funcion, cuerpo, { timeoutMs = 45000, reintentos = 1 } = {}) {
+    let headers = await cabecerasIA();
+    if (!headers) return { resp: null, payload: null, error: 'sin-sesion' };
+    const body = typeof cuerpo === 'string' ? cuerpo : JSON.stringify(cuerpo);
+
+    const unaVez = async () => {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), timeoutMs);
+      try {
+        return await fetch(`${SUPABASE_URL}/functions/v1/${funcion}`, {
+          method: 'POST', headers, body, signal: ctrl.signal
+        });
+      } finally { clearTimeout(t); }
+    };
+
+    let resp = null, ultimoFallo = null;
+    for (let intento = 0; intento <= reintentos; intento++) {
+      try {
+        resp = await unaVez();
+      } catch (err) {
+        ultimoFallo = err;
+        console.warn(`[IA:${funcion}] intento ${intento + 1} falló:`, err?.message || err);
+        continue;
+      }
+      // 401 del GATEWAY (token vencido): se renueva la sesión y se repite.
+      if (resp.status === 401 && intento < reintentos) {
+        console.warn(`[IA:${funcion}] 401 — renuevo la sesión y reintento`);
+        const nuevas = await cabecerasIA({ forzarRefresco: true });
+        if (nuevas) { headers = nuevas; resp = null; continue; }
+      }
+      break;
+    }
+    if (!resp) return { resp: null, payload: null, error: ultimoFallo ? 'red' : 'sin-sesion' };
+    const payload = await resp.json().catch(() => null);
+    return { resp, payload, error: null };
   }
 
   // Traduce el rechazo del portero a algo que el usuario entienda.
