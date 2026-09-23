@@ -15,13 +15,11 @@
   <link rel="preconnect" href="https://eylwewhqeaaqkgcxhgyv.supabase.co" crossorigin>
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="dns-prefetch" href="https://cdn.tailwindcss.com">
   <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com">
 
   <!-- defer: se descarga en paralelo y se ejecuta antes del módulo de la
        página, sin bloquear el parseo del HTML. El orden se respeta. -->
-  <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.1/dist/umd/supabase.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -125,6 +123,8 @@
       }
     }
   </style>
+  <!-- Tailwind precompilado (npm run build:css). Al final del head, como el CDN, para que las utilidades ganen. -->
+  <link rel="stylesheet" href="app.css">
 </head>
 <body class="min-h-screen flex flex-col">
 
@@ -832,7 +832,7 @@
                 </div>
                 <span id="abu-tutor-limite" class="shrink-0 text-[10px] font-black text-slate-400 bg-slate-100 px-2 py-1 rounded-lg" title="Mensajes de hoy"></span>
               </div>
-              <div id="abu-tutor-messages" class="h-[46vh] min-h-[220px] overflow-y-auto p-2 space-y-2 mb-2 bg-slate-50 rounded-xl border border-slate-100"></div>
+              <div id="abu-tutor-messages" class="chat-fondo h-[46vh] min-h-[220px] overflow-y-auto p-3 space-y-3 mb-2"></div>
               <p id="abu-tutor-mic-msg" class="text-[11px] font-bold text-slate-400 min-h-[1.1em] text-center mb-1"></p>
               <div class="flex gap-2">
                 <input id="abu-tutor-input" type="text" placeholder="Escribe tu duda… en español o inglés" autocomplete="off" autocapitalize="sentences" spellcheck="true" enterkeyhint="send" class="flex-1 min-w-0 bg-white border-2 border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-[#FF7A00] text-slate-700 font-medium">
@@ -890,13 +890,12 @@
     if (!box) return;
     const div = document.createElement('div');
     if (role === 'user') {
-      div.className = 'flex justify-end';
-      div.innerHTML = `<div class="bg-[#FF7A00] text-white rounded-2xl rounded-br-sm px-3.5 py-2 max-w-[85%] font-medium whitespace-pre-wrap">${escapeHTML(texto)}</div>`;
+      div.className = 'chat-fila tuya';
+      div.innerHTML = `<div class="burbuja burbuja-tuya whitespace-pre-wrap" style="max-width:85%">${escapeHTML(texto)}</div>`;
     } else {
-      div.className = 'flex justify-start items-start gap-1.5';
-      div.innerHTML = `
-        <img src="icono.png" alt="Abu" class="w-6 h-6 rounded-full object-cover shrink-0 mt-0.5">
-        <div class="bg-white border border-slate-200 text-slate-800 rounded-2xl rounded-bl-sm px-3.5 py-2 max-w-[80%] shadow-sm whitespace-pre-wrap font-medium leading-snug">${escapeHTML(texto)}</div>`;
+      div.className = 'chat-fila';
+      div.innerHTML = `<img src="icono.png" alt="Abu" class="chat-avatar abu">
+        <div class="burbuja burbuja-otro whitespace-pre-wrap" style="max-width:82%">${escapeHTML(texto)}</div>`;
     }
     box.appendChild(div); box.scrollTop = box.scrollHeight;
   }
@@ -1035,15 +1034,27 @@
 
   let tutorRecActivo = null;
 
-  /* Motor de voz v3 (el mismo de [[abulingo.html]]): temporizador propio
-     de silencio que solo cuenta después de la primera palabra, y
-     rearranque ACOTADO a dos si el navegador cortó antes de que dijeras
-     nada. La versión anterior rearrancaba sin límite (bucle con
-     'no-speech'); la siguiente no rearrancaba nunca (te cortaba si
-     tardabas dos segundos en empezar). */
-  const TUTOR_VOZ_SILENCIO_MS = 2500;
-  const TUTOR_VOZ_TOPE_MS     = 25000;
-  const TUTOR_VOZ_REINICIOS   = 2;
+  /* Motor de voz v4 (el mismo de [[abulingo.html]]): el corte del navegador
+     por una pausa no envía; se sigue escuchando y se envía con el silencio
+     real, el botón o el tope. Sin nada dicho, los rearranques son acotados. */
+  // Une lo dicho en sesiones sucesivas quitando el solape si el navegador repite el final.
+  function unirSesionesVoz(previo, nuevo) {
+    const a = (previo || '').trim().split(/\s+/).filter(Boolean);
+    const b = (nuevo || '').trim().split(/\s+/).filter(Boolean);
+    if (!a.length) return b.join(' ');
+    if (!b.length) return a.join(' ');
+    const lim = (w) => w.toLowerCase().replace(/[.,!?;:"]/g, '');
+    for (let n = Math.min(a.length, b.length); n >= 1; n--) {
+      if (n < 2 && n < a.length) break;
+      if (a.slice(-n).map(lim).join(' ') === b.slice(0, n).map(lim).join(' ')) return [...a, ...b.slice(n)].join(' ');
+    }
+    return [...a, ...b].join(' ');
+  }
+
+  // El corte del navegador por una pausa no envía nada: solo el silencio real, el botón o el tope.
+  const TUTOR_VOZ_SILENCIO_MS = 4000;
+  const TUTOR_VOZ_TOPE_MS     = 60000;
+  const TUTOR_VOZ_REINICIOS   = 3;
 
   function tutorIniciarVoz({ onFinal, onError, onParcial }) {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -1056,15 +1067,19 @@
     rec.interimResults = true;
     rec.maxAlternatives = 1;
 
-    let dicho = '', cerrado = false, errorDuro = null;
+    let dicho = '', previo = '', cerrado = false, errorDuro = null;
     let paradoManual = false, reinicios = 0, silencio = null, tope = null;
     const t0 = Date.now();
 
     const limpiarSilencio = () => { if (silencio) { clearTimeout(silencio); silencio = null; } };
+    const terminar = () => {
+      paradoManual = true;
+      try { rec.stop(); } catch { cerrar(onFinal, dicho.trim()); }
+    };
     const rearmarSilencio = () => {
       limpiarSilencio();
       if (!dicho.trim()) return;
-      silencio = setTimeout(() => { paradoManual = true; try { rec.stop(); } catch {} }, TUTOR_VOZ_SILENCIO_MS);
+      silencio = setTimeout(terminar, TUTOR_VOZ_SILENCIO_MS);
     };
     const cerrar = (fn, arg) => {
       if (cerrado) return;
@@ -1079,7 +1094,7 @@
       // Se rearma entero: acumular desde resultIndex duplica en Android.
       let texto = '';
       for (let i = 0; i < e.results.length; i++) texto += e.results[i][0].transcript + ' ';
-      dicho = limpiarRepeticionesVoz(texto.trim());
+      dicho = limpiarRepeticionesVoz(unirSesionesVoz(previo, texto.trim()));
       if (onParcial) { try { onParcial(dicho); } catch {} }
       rearmarSilencio();
     };
@@ -1092,24 +1107,25 @@
     };
     rec.onend = () => {
       if (cerrado) return;
-      limpiarSilencio();
-      if (errorDuro) return cerrar(onError, errorDuro);
-      if (dicho.trim() || paradoManual) return cerrar(onFinal, dicho.trim());
-      if (reinicios < TUTOR_VOZ_REINICIOS && Date.now() - t0 < TUTOR_VOZ_TOPE_MS) {
-        reinicios++;
+      if (errorDuro) return dicho.trim() ? cerrar(onFinal, dicho.trim()) : cerrar(onError, errorDuro);
+      if (paradoManual) return cerrar(onFinal, dicho.trim());
+      // Corte del navegador por una pausa: se sigue escuchando.
+      previo = dicho;
+      const conTexto = !!dicho.trim();
+      if (Date.now() - t0 < TUTOR_VOZ_TOPE_MS && (conTexto || reinicios < TUTOR_VOZ_REINICIOS)) {
+        if (!conTexto) reinicios++;
         try { rec.start(); return; } catch {}
       }
-      cerrar(onFinal, '');
+      cerrar(onFinal, dicho.trim());
     };
     rec.detener = () => {
-      paradoManual = true;
       limpiarSilencio();
-      try { rec.stop(); } catch { cerrar(onFinal, dicho.trim()); }
+      terminar();
     };
 
     try { rec.start(); } catch { cerrar(onError, 'no-inicio'); return null; }
     tutorRecActivo = rec;
-    tope = setTimeout(() => { paradoManual = true; try { rec.stop(); } catch {} }, TUTOR_VOZ_TOPE_MS);
+    tope = setTimeout(terminar, TUTOR_VOZ_TOPE_MS);
     return rec;
   }
 
@@ -2995,13 +3011,11 @@
 
     const fila = (t) => {
       const st = N.topics[t.id] || {};
-      // Un tema fusionado avisa de que dentro trae lo de los niveles siguientes.
-      const chips = [...new Set((t.amp || []).map(a => a.n))].join(' ');
       return `<button data-gt="${t.id}" class="gt-row w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-orange-50 text-left transition">
         <span class="text-2xl w-8 text-center shrink-0">${t.icon}</span>
         <span class="flex-1 min-w-0">
           <span class="block font-bold text-slate-700 truncate">${t.en}</span>
-          <span class="block text-[11px] text-slate-400 truncate">${t.es}${chips ? ` <span class="text-indigo-400 font-bold">· +${chips}</span>` : ''}</span>
+          <span class="block text-[11px] text-slate-400 truncate">${t.es}</span>
         </span>
         ${st.fav ? '<i class="fas fa-heart text-pink-400 text-xs shrink-0"></i>' : ''}
         <span class="text-sm ${st.stars ? 'text-yellow-400' : 'text-slate-200'} shrink-0">${'★'.repeat(st.stars || 0)}${'☆'.repeat(3 - (st.stars || 0))}</span>
@@ -3146,13 +3160,12 @@
 
   /* ── Ejemplos con audio y traducción que se descubre ──
      `nivel` marca de qué nivel viene la frase en un tema fusionado.  */
-  function gramExRow(e, nivel) {
+  function gramExRow(e) {
     const auto = flujo.gram.cfg.autoEs;
     return `<div class="gx-item bg-slate-50 rounded-xl px-3 py-2.5 mb-2 tip-in" data-en="${escapeHTML(e.en)}">
       <div class="flex items-center gap-2">
         <button class="gx-audio text-[#FF7A00] w-8 h-8 rounded-full bg-orange-100 shrink-0" title="Escuchar"><i class="fas fa-volume-up text-sm"></i></button>
         <p class="flex-1 font-bold text-slate-700">${e.en}</p>
-        ${nivel ? `<span class="text-[9px] font-black text-indigo-500 bg-indigo-100 rounded-md px-1.5 py-0.5 shrink-0">+${nivel}</span>` : ''}
       </div>
       <p class="gx-es ${auto ? '' : 'hidden'} text-[12px] text-slate-400 mt-1 pl-10">${e.es}</p>
       ${auto ? '' : '<button class="gx-toggle text-[10px] font-bold text-slate-300 hover:text-slate-500 pl-10 mt-0.5">ver traducción</button>'}
@@ -3220,19 +3233,9 @@
     b.onclick = () => { gramQuiz = null; gramLesson(p.id, 'learn'); };
   }
 
-  /* ── Ampliaciones: lo que los niveles superiores añaden a este mismo tema ──
-     Antes cada una era un tema aparte que repetía la lección entera. Ahora su
-     contenido se integra dentro de las secciones del tema base: la estructura
-     con la estructura, la clave con la clave y los errores con los errores,
-     cada trozo etiquetado con el nivel del que viene.                      */
-
-  /* Separador que abre el trozo de un nivel dentro de una sección.
-     Solo el de la sección de estructura lleva id: es el ancla del salto. */
-  function gramAmpSep(a, extraClase = '', conId = false) {
-    return `<div ${conId ? `id="gl-amp-${a.id}"` : ''} class="gl-amp-sep flex items-start gap-2 mt-4 mb-2 pt-3 border-t-2 border-dashed border-indigo-200 ${extraClase}">
-      <span class="text-[10px] font-black text-white bg-indigo-500 rounded-lg px-2 py-0.5 shrink-0 mt-0.5">+${a.n}</span>
-      <span class="text-[11px] font-bold text-indigo-500 leading-snug">${a.nuevo || a.tag}</span>
-    </div>`;
+  // Las ampliaciones de niveles superiores se integran sin separador; el ancla solo sirve para saltar desde el índice.
+  function gramAmpAncla(a) {
+    return `<div id="gl-amp-${a.id}" class="mt-4 pt-4 border-t border-slate-100"></div>`;
   }
 
   const gramErrFila = (e) => `
@@ -3246,21 +3249,20 @@
     const body = document.getElementById('gl-body');
     if (!gramExSession[t.id]) gramExSession[t.id] = gramNewExamples(t, 3);
     const amps = t.amp || [];
-    const niveles = [...new Set(amps.map(a => a.n))];
-    // Los errores del tema base van primero; los de cada nivel, tras su separador.
-    const errsBase = t.marks?.errs?.length ? (t.errs || []).slice(0, t.marks.errs[0].i) : (t.errs || []);
+    // El tema base y sus ampliaciones repiten ejemplos, errores y claves: se muestran una vez.
+    const clave = (x) => String(x || '').replace(/<[^>]+>/g, '').toLowerCase().replace(/[^a-z0-9áéíóúñü ]/g, '').replace(/\s+/g, ' ').trim();
+    const unicos = (lista, fn) => { const v = new Set(); return lista.filter(x => { const k = clave(fn(x)); if (!k || v.has(k)) return false; v.add(k); return true; }); };
+    const ejemplos = unicos([...(t.ex || []), ...amps.flatMap(a => a.ex || []), ...gramExSession[t.id]], e => e?.en);
+    const errores = unicos(t.errs || [], e => e?.b);
+    const claves = unicos([t.tip, ...amps.map(a => a.tip)], x => x);
 
     body.innerHTML = `
       ${t.prev ? gramPrevBanner(t.prev) : ''}
-      ${amps.length ? `<div class="rounded-2xl border-2 border-indigo-200 bg-indigo-50 p-4 mb-4">
-        <p class="text-[11px] font-black text-indigo-500 uppercase mb-1">🧩 Tema completo</p>
-        <p class="text-sm text-indigo-900 leading-relaxed">Aquí tienes <b>todo</b> lo de este punto: lo de ${t.lvl || gramNivelDeTema(t.id)} y lo que ${niveles.join(' y ')} le ${niveles.length > 1 ? 'añaden' : 'añade'}, integrado en cada sección y marcado con su etiqueta. Ya no se vuelve a estudiar en ningún otro nivel.</p>
-      </div>` : ''}
       ${t.widget ? `<div class="card-3d p-4 mb-4" id="gl-widget"></div>` : ''}
       <div class="card-3d p-4 mb-4">
         <p class="text-[11px] font-black text-slate-400 uppercase mb-2">📐 Estructura · FORM</p>
         <div class="text-sm text-slate-700 leading-relaxed">${t.form}</div>
-        ${amps.map(a => gramAmpSep(a, '', true) + `<div class="text-sm text-slate-700 leading-relaxed">${a.form}</div>`).join('')}
+        ${amps.filter(a => a.form).map(a => gramAmpAncla(a) + `<div class="text-sm text-slate-700 leading-relaxed">${a.form}</div>`).join('')}
       </div>
       <div class="card-3d p-4 mb-4">
         <div class="flex items-center justify-between mb-1">
@@ -3268,27 +3270,18 @@
           <button id="gx-listen" class="text-[10px] font-bold text-[#FF7A00]"><i class="fas fa-volume-up"></i> escuchar todo</button>
         </div>
         <p class="text-[11px] text-slate-400 mb-3">Intenta traducir <b>antes</b> de mirar la traducción: así se fija mejor. 🧠</p>
-        <div id="gx-list">${
-          t.ex.map(e => gramExRow(e)).join('') +
-          amps.map(a => (a.ex || []).map(e => gramExRow(e, a.n)).join('')).join('') +
-          gramExSession[t.id].map(e => gramExRow(e)).join('')
-        }</div>
+        <div id="gx-list">${ejemplos.map(e => gramExRow(e)).join('')}</div>
         <button id="gx-more" class="w-full btn-juice bg-indigo-500 text-white font-bold py-3 rounded-xl mt-2">✨ Generar más ejemplos</button>
       </div>
       <div class="rounded-2xl border-2 border-amber-200 bg-amber-50 p-4 mb-4">
         <p class="text-[11px] font-black text-amber-500 uppercase mb-1">🔑 La clave (en español)</p>
-        <p class="text-sm text-amber-900 leading-relaxed">${t.tip}</p>
-        ${amps.map(a => `<p class="mt-3 pt-3 border-t border-amber-200 text-sm text-amber-900 leading-relaxed">
-          <span class="text-[10px] font-black text-white bg-amber-500 rounded-lg px-2 py-0.5 mr-1 align-middle">+${a.n}</span> ${a.tip}
-        </p>`).join('')}
+        ${claves.length > 1
+          ? `<ul class="space-y-2">${claves.map(c => `<li class="flex gap-2 text-sm text-amber-900 leading-relaxed"><span class="text-amber-400 shrink-0">●</span><span>${c}</span></li>`).join('')}</ul>`
+          : `<p class="text-sm text-amber-900 leading-relaxed">${t.tip}</p>`}
       </div>
-      ${(t.errs?.length) ? `<div class="card-3d p-4 mb-4">
+      ${errores.length ? `<div class="card-3d p-4 mb-4">
         <p class="text-[11px] font-black text-slate-400 uppercase mb-2">⚠️ Errores típicos del hispanohablante</p>
-        ${errsBase.map(gramErrFila).join('')}
-        ${amps.map(a => {
-          const errs = (t.errs || []).slice(a.errRange[0], a.errRange[1]);
-          return errs.length ? gramAmpSep(a, 'border-slate-200') + errs.map(gramErrFila).join('') : '';
-        }).join('')}
+        ${errores.map(gramErrFila).join('')}
       </div>` : ''}
       <button id="gl-cta" class="w-full btn-juice bg-[#FF7A00] text-white font-black py-4 rounded-2xl text-lg mb-6">🎯 ¡Practicar este tema!</button>`;
 

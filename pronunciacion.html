@@ -15,13 +15,11 @@
   <link rel="preconnect" href="https://eylwewhqeaaqkgcxhgyv.supabase.co" crossorigin>
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="dns-prefetch" href="https://cdn.tailwindcss.com">
   <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com">
 
   <!-- defer: se descarga en paralelo y se ejecuta antes del módulo de la
        página, sin bloquear el parseo del HTML. El orden se respeta. -->
-  <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.1/dist/umd/supabase.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -124,6 +122,8 @@
       }
     }
   </style>
+  <!-- Tailwind precompilado (npm run build:css). Al final del head, como el CDN, para que las utilidades ganen. -->
+  <link rel="stylesheet" href="app.css">
 </head>
 <body class="min-h-screen flex flex-col">
 
@@ -523,7 +523,7 @@
                 </div>
                 <span id="abu-tutor-limite" class="shrink-0 text-[10px] font-black text-slate-400 bg-slate-100 px-2 py-1 rounded-lg" title="Mensajes de hoy"></span>
               </div>
-              <div id="abu-tutor-messages" class="h-[46vh] min-h-[220px] overflow-y-auto p-2 space-y-2 mb-2 bg-slate-50 rounded-xl border border-slate-100"></div>
+              <div id="abu-tutor-messages" class="chat-fondo h-[46vh] min-h-[220px] overflow-y-auto p-3 space-y-3 mb-2"></div>
               <p id="abu-tutor-mic-msg" class="text-[11px] font-bold text-slate-400 min-h-[1.1em] text-center mb-1"></p>
               <div class="flex gap-2">
                 <input id="abu-tutor-input" type="text" placeholder="Escribe tu duda… en español o inglés" autocomplete="off" autocapitalize="sentences" spellcheck="true" enterkeyhint="send" class="flex-1 min-w-0 bg-white border-2 border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-[#FF7A00] text-slate-700 font-medium">
@@ -583,13 +583,12 @@
     if (!box) return;
     const div = document.createElement('div');
     if (role === 'user') {
-      div.className = 'flex justify-end';
-      div.innerHTML = `<div class="bg-[#FF7A00] text-white rounded-2xl rounded-br-sm px-3.5 py-2 max-w-[85%] font-medium whitespace-pre-wrap">${escapeHTML(texto)}</div>`;
+      div.className = 'chat-fila tuya';
+      div.innerHTML = `<div class="burbuja burbuja-tuya whitespace-pre-wrap" style="max-width:85%">${escapeHTML(texto)}</div>`;
     } else {
-      div.className = 'flex justify-start items-start gap-1.5';
-      div.innerHTML = `
-        <img src="icono.png" alt="Abu" class="w-6 h-6 rounded-full object-cover shrink-0 mt-0.5">
-        <div class="bg-white border border-slate-200 text-slate-800 rounded-2xl rounded-bl-sm px-3.5 py-2 max-w-[80%] shadow-sm whitespace-pre-wrap font-medium leading-snug">${escapeHTML(texto)}</div>`;
+      div.className = 'chat-fila';
+      div.innerHTML = `<img src="icono.png" alt="Abu" class="chat-avatar abu">
+        <div class="burbuja burbuja-otro whitespace-pre-wrap" style="max-width:82%">${escapeHTML(texto)}</div>`;
     }
     box.appendChild(div); box.scrollTop = box.scrollHeight;
   }
@@ -728,15 +727,27 @@
 
   let tutorRecActivo = null;
 
-  /* Motor de voz v3 (el mismo de [[abulingo.html]]): temporizador propio
-     de silencio que solo cuenta después de la primera palabra, y
-     rearranque ACOTADO a dos si el navegador cortó antes de que dijeras
-     nada. La versión anterior rearrancaba sin límite (bucle con
-     'no-speech'); la siguiente no rearrancaba nunca (te cortaba si
-     tardabas dos segundos en empezar). */
-  const TUTOR_VOZ_SILENCIO_MS = 2500;
-  const TUTOR_VOZ_TOPE_MS     = 25000;
-  const TUTOR_VOZ_REINICIOS   = 2;
+  /* Motor de voz v4 (el mismo de [[abulingo.html]]): el corte del navegador
+     por una pausa no envía; se sigue escuchando y se envía con el silencio
+     real, el botón o el tope. Sin nada dicho, los rearranques son acotados. */
+  // Une lo dicho en sesiones sucesivas quitando el solape si el navegador repite el final.
+  function unirSesionesVoz(previo, nuevo) {
+    const a = (previo || '').trim().split(/\s+/).filter(Boolean);
+    const b = (nuevo || '').trim().split(/\s+/).filter(Boolean);
+    if (!a.length) return b.join(' ');
+    if (!b.length) return a.join(' ');
+    const lim = (w) => w.toLowerCase().replace(/[.,!?;:"]/g, '');
+    for (let n = Math.min(a.length, b.length); n >= 1; n--) {
+      if (n < 2 && n < a.length) break;
+      if (a.slice(-n).map(lim).join(' ') === b.slice(0, n).map(lim).join(' ')) return [...a, ...b.slice(n)].join(' ');
+    }
+    return [...a, ...b].join(' ');
+  }
+
+  // El corte del navegador por una pausa no envía nada: solo el silencio real, el botón o el tope.
+  const TUTOR_VOZ_SILENCIO_MS = 4000;
+  const TUTOR_VOZ_TOPE_MS     = 60000;
+  const TUTOR_VOZ_REINICIOS   = 3;
 
   function tutorIniciarVoz({ onFinal, onError, onParcial }) {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -749,15 +760,19 @@
     rec.interimResults = true;
     rec.maxAlternatives = 1;
 
-    let dicho = '', cerrado = false, errorDuro = null;
+    let dicho = '', previo = '', cerrado = false, errorDuro = null;
     let paradoManual = false, reinicios = 0, silencio = null, tope = null;
     const t0 = Date.now();
 
     const limpiarSilencio = () => { if (silencio) { clearTimeout(silencio); silencio = null; } };
+    const terminar = () => {
+      paradoManual = true;
+      try { rec.stop(); } catch { cerrar(onFinal, dicho.trim()); }
+    };
     const rearmarSilencio = () => {
       limpiarSilencio();
       if (!dicho.trim()) return;
-      silencio = setTimeout(() => { paradoManual = true; try { rec.stop(); } catch {} }, TUTOR_VOZ_SILENCIO_MS);
+      silencio = setTimeout(terminar, TUTOR_VOZ_SILENCIO_MS);
     };
     const cerrar = (fn, arg) => {
       if (cerrado) return;
@@ -772,7 +787,7 @@
       // Se rearma entero: acumular desde resultIndex duplica en Android.
       let texto = '';
       for (let i = 0; i < e.results.length; i++) texto += e.results[i][0].transcript + ' ';
-      dicho = limpiarRepeticionesVoz(texto.trim());
+      dicho = limpiarRepeticionesVoz(unirSesionesVoz(previo, texto.trim()));
       if (onParcial) { try { onParcial(dicho); } catch {} }
       rearmarSilencio();
     };
@@ -785,24 +800,25 @@
     };
     rec.onend = () => {
       if (cerrado) return;
-      limpiarSilencio();
-      if (errorDuro) return cerrar(onError, errorDuro);
-      if (dicho.trim() || paradoManual) return cerrar(onFinal, dicho.trim());
-      if (reinicios < TUTOR_VOZ_REINICIOS && Date.now() - t0 < TUTOR_VOZ_TOPE_MS) {
-        reinicios++;
+      if (errorDuro) return dicho.trim() ? cerrar(onFinal, dicho.trim()) : cerrar(onError, errorDuro);
+      if (paradoManual) return cerrar(onFinal, dicho.trim());
+      // Corte del navegador por una pausa: se sigue escuchando.
+      previo = dicho;
+      const conTexto = !!dicho.trim();
+      if (Date.now() - t0 < TUTOR_VOZ_TOPE_MS && (conTexto || reinicios < TUTOR_VOZ_REINICIOS)) {
+        if (!conTexto) reinicios++;
         try { rec.start(); return; } catch {}
       }
-      cerrar(onFinal, '');
+      cerrar(onFinal, dicho.trim());
     };
     rec.detener = () => {
-      paradoManual = true;
       limpiarSilencio();
-      try { rec.stop(); } catch { cerrar(onFinal, dicho.trim()); }
+      terminar();
     };
 
     try { rec.start(); } catch { cerrar(onError, 'no-inicio'); return null; }
     tutorRecActivo = rec;
-    tope = setTimeout(() => { paradoManual = true; try { rec.stop(); } catch {} }, TUTOR_VOZ_TOPE_MS);
+    tope = setTimeout(terminar, TUTOR_VOZ_TOPE_MS);
     return rec;
   }
 
@@ -1738,19 +1754,13 @@
      mismo, reutilizable. `pzEscuchar` devuelve el reconocedor (o null)
      y siempre termina llamando a onFin, con texto o con cadena vacía.
      ════════════════════════════════════════════════════════════════ */
-  /* Mismo motor de voz v3 que [[abulingo.html]]: `continuous` donde el
-     navegador lo respeta, temporizador propio de silencio que solo cuenta
-     DESPUÉS de la primera palabra, y rearranque ACOTADO (máximo dos) si el
-     navegador cortó antes de que dijeras nada.
-
-     La versión anterior no rearrancaba nunca, y por eso en una
-     conversación —donde tardas un par de segundos en pensar la
-     respuesta— Chrome disparaba 'no-speech', cerraba, y salía "no te
-     escuché" sin haberte dado tiempo a hablar. */
+  /* Mismo motor de voz v4 que [[abulingo.html]]: el corte del navegador por
+     una pausa no envía; se sigue escuchando y se envía con el silencio real,
+     el segundo toque o el tope. */
   const pzVivoEsMovil = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-  const PZ_VOZ_SILENCIO_MS = 2500;
-  const PZ_VOZ_TOPE_MS     = 25000;
-  const PZ_VOZ_REINICIOS   = 2;
+  const PZ_VOZ_SILENCIO_MS = 4000;
+  const PZ_VOZ_TOPE_MS     = 60000;
+  const PZ_VOZ_REINICIOS   = 3;
 
   function pzEscuchar(btn, msg, { lang = 'en-US', onFin, textoEscuchando = 'Escuchando... habla y se enviará solo 🎙️' }) {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -1762,7 +1772,7 @@
     rec.maxAlternatives = 1;
     rec.continuous = !pzVivoEsMovil;   // Android lo ignora y duplica
 
-    let dicho = '', cerrado = false, errorDuro = null;
+    let dicho = '', previo = '', cerrado = false, errorDuro = null;
     let paradoManual = false, reinicios = 0, silencio = null, tope = null;
     const t0 = Date.now();
 
@@ -1770,10 +1780,14 @@
     if (msg) msg.textContent = textoEscuchando;
 
     const limpiarSilencio = () => { if (silencio) { clearTimeout(silencio); silencio = null; } };
+    const terminar = () => {
+      paradoManual = true;
+      try { rec.stop(); } catch { cerrar(dicho.trim()); }
+    };
     const rearmarSilencio = () => {
       limpiarSilencio();
       if (!dicho.trim()) return;
-      silencio = setTimeout(() => { paradoManual = true; try { rec.stop(); } catch {} }, PZ_VOZ_SILENCIO_MS);
+      silencio = setTimeout(terminar, PZ_VOZ_SILENCIO_MS);
     };
     const cerrar = (texto) => {
       if (cerrado) return;
@@ -1787,7 +1801,7 @@
     rec.onresult = (e) => {
       let texto = '';
       for (let i = 0; i < e.results.length; i++) texto += e.results[i][0].transcript + ' ';
-      dicho = limpiarRepeticionesVoz(texto.trim());
+      dicho = limpiarRepeticionesVoz(unirSesionesVoz(previo, texto.trim()));
       if (msg) msg.textContent = dicho ? `"${dicho}"` : 'Escuchando...';
       rearmarSilencio();
     };
@@ -1800,21 +1814,20 @@
     };
     rec.onend = () => {
       if (cerrado) return;
-      limpiarSilencio();
-      if (errorDuro) return cerrar('');
-      // Con texto en la mano se entrega SIEMPRE: nunca se rearranca
-      // teniendo algo, así que no puede duplicar palabras.
-      if (dicho.trim() || paradoManual) return cerrar(dicho.trim());
-      if (reinicios < PZ_VOZ_REINICIOS && Date.now() - t0 < PZ_VOZ_TOPE_MS) {
-        reinicios++;
+      if (errorDuro) return cerrar(dicho.trim());
+      if (paradoManual) return cerrar(dicho.trim());
+      // Corte del navegador por una pausa a mitad de frase: se sigue escuchando.
+      previo = dicho;
+      const conTexto = !!dicho.trim();
+      if (Date.now() - t0 < PZ_VOZ_TOPE_MS && (conTexto || reinicios < PZ_VOZ_REINICIOS)) {
+        if (!conTexto) reinicios++;
         try { rec.start(); return; } catch {}
       }
-      cerrar('');
+      cerrar(dicho.trim());
     };
     rec.detenerYa = () => {
-      paradoManual = true;
       limpiarSilencio();
-      try { rec.stop(); } catch { cerrar(dicho.trim()); }
+      terminar();
     };
 
     try { rec.start(); } catch (err) {
@@ -1823,7 +1836,7 @@
       cerrar('');
       return null;
     }
-    tope = setTimeout(() => { paradoManual = true; try { rec.stop(); } catch {} }, PZ_VOZ_TOPE_MS);
+    tope = setTimeout(terminar, PZ_VOZ_TOPE_MS);
     return rec;
   }
 
@@ -3306,25 +3319,26 @@
     const oculto = !pzLibreRevelados.has(i);
     if (m.rol === 'tu') {
       return `
-        <div class="flex justify-end items-end gap-1.5">
-          <div class="bg-[#FF7A00] text-white rounded-2xl rounded-br-sm px-3.5 py-2 max-w-[80%] font-medium">
+        <div class="chat-fila tuya">
+          <div class="burbuja burbuja-tuya">
             ${escapeHTML(m.en)}
-            ${m.fix ? `<div class="mt-1.5 text-[11px] font-bold text-amber-50 bg-black/20 rounded-lg px-2 py-1 leading-snug">✏️ ${escapeHTML(m.fix)}</div>` : ''}
+            ${m.fix ? `<div class="burbuja-fix">✏️ ${escapeHTML(m.fix)}</div>` : ''}
           </div>
         </div>`;
     }
     return `
-      <div class="flex justify-start items-end gap-1.5">
-        <div class="bg-white border border-slate-200 text-slate-800 rounded-2xl rounded-bl-sm px-3.5 py-2 max-w-[78%] shadow-sm">
-          <div class="text-[10px] font-black text-pink-500 uppercase mb-0.5">Emma</div>
-          <div id="${idMsg}" class="${oculto ? 'hidden ' : ''}font-medium leading-snug">${escapeHTML(m.en)}</div>
-          ${oculto ? `<button data-libre-ver-mensaje="${i}" class="block text-[11px] font-bold text-slate-500 underline">Ver mensaje</button>` : ''}
-          ${m.es ? `<button data-toggle-tr="${idTr}" class="text-[10px] font-bold text-slate-400 underline mt-1">Ver traducción</button>
-          <div id="${idTr}" class="hidden text-xs text-slate-400 mt-0.5 leading-snug">${escapeHTML(m.es)}</div>` : ''}
+      <div class="chat-fila">
+        <span class="chat-avatar" style="background:linear-gradient(135deg,#f472b6,#db2777)">E</span>
+        <div class="burbuja burbuja-otro">
+          <div class="burbuja-nombre" style="color:#db2777">Emma</div>
+          <div id="${idMsg}" class="${oculto ? 'hidden' : ''}">${escapeHTML(m.en)}</div>
+          ${oculto ? `<button data-libre-ver-mensaje="${i}" class="burbuja-link"><i class="fas fa-eye"></i> Ver mensaje</button>` : ''}
+          ${m.es ? `<button data-toggle-tr="${idTr}" class="burbuja-link"><i class="fas fa-language"></i> Traducción</button>
+          <div id="${idTr}" class="hidden burbuja-trad">${escapeHTML(m.es)}</div>` : ''}
         </div>
         <div class="flex flex-col gap-1 shrink-0">
-          <button data-libre-say="${i}" title="Escuchar" class="w-8 h-8 rounded-full bg-white border border-slate-200 text-slate-400 hover:text-[#FF7A00] hover:border-[#FF7A00] active:scale-90 transition flex items-center justify-center"><i class="fas fa-volume-up text-[11px]"></i></button>
-          <button data-libre-practicar="${i}" title="Practicar esta frase" class="w-8 h-8 rounded-full bg-white border border-slate-200 text-slate-400 hover:text-[#FF7A00] hover:border-[#FF7A00] active:scale-90 transition flex items-center justify-center"><i class="fas fa-microphone text-[11px]"></i></button>
+          <button data-libre-say="${i}" title="Escuchar" class="btn-oir"><i class="fas fa-volume-up"></i></button>
+          <button data-libre-practicar="${i}" title="Practicar esta frase" class="btn-oir"><i class="fas fa-microphone"></i></button>
         </div>
       </div>`;
   }
@@ -3347,7 +3361,7 @@
           <button id="libre-cerrar" title="Terminar" class="shrink-0 w-8 h-8 rounded-full bg-slate-100 text-slate-400 hover:bg-slate-200 flex items-center justify-center"><i class="fas fa-times"></i></button>
         </div>
 
-        <div id="libre-mensajes" class="chat-scroll h-[44vh] min-h-[220px] overflow-y-auto p-2 space-y-2 mb-2 bg-slate-50 rounded-xl border border-slate-100">
+        <div id="libre-mensajes" class="chat-scroll chat-fondo h-[44vh] min-h-[220px] overflow-y-auto p-3 space-y-3 mb-2">
           ${pzLibre.mensajes.map((m, i) => pzLibreBurbujaHTML(m, i)).join('')}
           <div id="libre-pensando" class="hidden flex justify-start"><div class="bg-white border border-slate-200 text-slate-400 rounded-2xl rounded-bl-sm px-3.5 py-2 text-sm"><i class="fas fa-circle-notch fa-spin mr-1"></i> Emma está escribiendo...</div></div>
         </div>

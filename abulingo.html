@@ -15,13 +15,11 @@
   <link rel="preconnect" href="https://eylwewhqeaaqkgcxhgyv.supabase.co" crossorigin>
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="dns-prefetch" href="https://cdn.tailwindcss.com">
   <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com">
 
   <!-- defer: se descarga en paralelo y se ejecuta antes del módulo de la
        página, sin bloquear el parseo del HTML. El orden se respeta. -->
-  <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.1/dist/umd/supabase.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
   <!-- xlsx solo se usa al cargar un Excel en el Mazo: se pide bajo demanda
        (ver cargarXLSX más abajo) en vez de descargar 900 KB a todo el mundo. -->
@@ -36,7 +34,6 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
         media="print" onload="this.media='all'; this.onload=null;">
   <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"></noscript>
-  <link rel="stylesheet" href="style.css">
   <link rel="icon" href="icono.png" type="image/x-icon">
 
   <!-- Modal de anuncio diario y menú de perfil, compartidos con
@@ -230,6 +227,8 @@
       }
     }
   </style>
+  <!-- Tailwind precompilado (npm run build:css). Al final del head, como el CDN, para que las utilidades ganen. -->
+  <link rel="stylesheet" href="app.css">
 </head>
 <body class="min-h-screen flex flex-col">
 
@@ -1509,11 +1508,11 @@ function openAbuChat() {
                 </div>
                 <span id="abu-tutor-limite" class="shrink-0 text-[10px] font-black text-slate-400 bg-slate-100 px-2 py-1 rounded-lg" title="Mensajes de hoy"></span>
               </div>
-              <div id="abu-tutor-messages" class="chat-scroll h-[48vh] min-h-[240px] overflow-y-auto p-2 space-y-2 mb-2 bg-slate-50 rounded-xl border border-slate-100"></div>
+              <div id="abu-tutor-messages" class="chat-scroll chat-fondo h-[48vh] min-h-[240px] overflow-y-auto p-3 space-y-3 mb-2"></div>
               <p id="abu-tutor-mic-msg" class="text-[11px] font-bold text-slate-400 min-h-[1.1em] text-center mb-1"></p>
               <div class="flex gap-2">
                 <input id="abu-tutor-input" type="text" placeholder="Escribe tu duda… en español o inglés" autocomplete="off" autocapitalize="sentences" spellcheck="true" enterkeyhint="send" class="flex-1 min-w-0 bg-white border-2 border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-[#FF7A00] text-slate-700 font-medium">
-                <button id="abu-tutor-mic" title="Hablar por voz" class="mic-btn shrink-0"><i class="fas fa-microphone"></i></button>
+                <button id="abu-tutor-mic" title="Hablar por voz" class="mic-btn shrink-0" style="width:52px;height:52px;font-size:1.2rem"><i class="fas fa-microphone"></i></button>
                 <button id="abu-tutor-send" class="btn-juice bg-[#FF7A00] text-white font-bold px-4 py-2 rounded-xl shrink-0"><i class="fas fa-paper-plane"></i></button>
               </div>
               <p class="text-[10px] text-slate-300 text-center mt-2">Esta charla no se guarda: al cerrar la ventana empieza una nueva 🧹</p>
@@ -1575,13 +1574,12 @@ function openAbuChat() {
     if (!box) return;
     const div = document.createElement('div');
     if (role === 'user') {
-      div.className = 'flex justify-end';
-      div.innerHTML = `<div class="bg-[#FF7A00] text-white rounded-2xl rounded-br-sm px-3.5 py-2 max-w-[85%] font-medium whitespace-pre-wrap">${escapeHTML(texto)}</div>`;
+      div.className = 'chat-fila tuya';
+      div.innerHTML = `<div class="burbuja burbuja-tuya whitespace-pre-wrap" style="max-width:85%">${escapeHTML(texto)}</div>`;
     } else {
-      div.className = 'flex justify-start items-start gap-1.5';
-      div.innerHTML = `
-        <img src="icono.png" alt="Abu" class="w-6 h-6 rounded-full object-cover shrink-0 mt-0.5">
-        <div class="bg-white border border-slate-200 text-slate-800 rounded-2xl rounded-bl-sm px-3.5 py-2 max-w-[80%] shadow-sm whitespace-pre-wrap font-medium leading-snug">${escapeHTML(texto)}</div>`;
+      div.className = 'chat-fila';
+      div.innerHTML = `${chatAvatarHTML('Abu', true)}
+        <div class="burbuja burbuja-otro whitespace-pre-wrap" style="max-width:82%">${escapeHTML(texto)}</div>`;
     }
     box.appendChild(div); box.scrollTop = box.scrollHeight;
   }
@@ -1792,17 +1790,61 @@ function openAbuChat() {
     if (document.visibilityState === 'hidden') guardarFlujoLocal();
   });
 
+  // La nube se actualiza en segundo plano y agrupada: la pantalla nunca espera a la red.
+  const GUARDADO_ESPERA_MS = 3000;
+  const GUARDADO_MAX_ESPERA_MS = 10000;   // aunque no pare de responder, se sube al menos así de seguido
+  let perfilPendiente = {};
+  let pendienteDesde = 0;
+  let guardadoTimer = null;
+  let guardadoEnCurso = null;
+
+  function programarGuardadoPerfil(campos) {
+    Object.assign(perfilPendiente, campos);
+    if (!pendienteDesde) pendienteDesde = Date.now();
+    clearTimeout(guardadoTimer);
+    const espera = Math.min(GUARDADO_ESPERA_MS, Math.max(0, pendienteDesde + GUARDADO_MAX_ESPERA_MS - Date.now()));
+    guardadoTimer = setTimeout(subirPerfilPendiente, espera);
+  }
+
+  async function subirPerfilPendiente() {
+    clearTimeout(guardadoTimer); guardadoTimer = null;
+    pendienteDesde = 0;
+    while (guardadoEnCurso) await guardadoEnCurso;
+    if (!currentUser || !Object.keys(perfilPendiente).length) return;
+    const campos = perfilPendiente;
+    perfilPendiente = {};
+    guardadoEnCurso = (async () => {
+      for (let intento = 0; intento < 2; intento++) {
+        const { error } = await dbClient.from('profiles').update(campos).eq('id', currentUser.id);
+        if (!error) return;
+        console.error(`Error guardando perfil (intento ${intento + 1}):`, error.message);
+        if (intento === 0) await new Promise(r => setTimeout(r, 600));
+        else showToast('⚠️ No se pudo guardar tu avance en la nube. Quedó respaldado en este dispositivo.', 3500);
+      }
+    })();
+    try { await guardadoEnCurso; } finally { guardadoEnCurso = null; }
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') subirPerfilPendiente();
+  });
+
+  // El flujo se sube entero en cada guardado: se poda lo que ya no se usa.
+  const SRS_SOLO_APRENDIENDO = ['first', 'easyFirst', 'okStreak', 'shownToday', 'day', 'difficult'];
+  function compactarFlujo() {
+    Object.values(flujo.srs || {}).forEach(v => {
+      if (v && v.learned) SRS_SOLO_APRENDIENDO.forEach(k => { if (k in v) delete v[k]; });
+    });
+    Object.values(flujo.niveles || {}).forEach(n => Object.values(n?.grupos || {}).forEach(g => {
+      if (g?.practice?.done && g.practice.queue?.length) g.practice.queue = [];
+    }));
+  }
+
   async function updateUserFlow() {
+    compactarFlujo();
     flujo.savedAt = new Date().toISOString();
     userProfile.flujo = flujo;
     guardarFlujoLocal();   // respaldo inmediato: pase lo que pase, el avance queda
-    for (let intento = 0; intento < 2; intento++) {
-      const { error } = await dbClient.from('profiles').update({ flujo }).eq('id', currentUser.id);
-      if (!error) return;
-      console.error(`Error guardando flujo (intento ${intento + 1}):`, error.message);
-      if (intento === 0) await new Promise(r => setTimeout(r, 600));
-      else showToast('⚠️ No se pudo guardar tu avance en la nube. Quedó respaldado en este dispositivo.', 3500);
-    }
+    programarGuardadoPerfil({ flujo });
   }
 
   async function addPoints(points) {
@@ -1826,13 +1868,12 @@ function openAbuChat() {
       showToast(`🎯 ¡Meta diaria cumplida! <span class="text-yellow-400">+1 💎 Lingot</span>`, 3500);
     }
 
-    const { error } = await dbClient.from('profiles').update({ points: newPts }).eq('id', currentUser.id);
-    if (error) console.error('Error guardando puntos:', error.message);
+    programarGuardadoPerfil({ points: newPts });
   }
 
   /*
     Núcleo del algoritmo de memorización espaciada.
-    Se guarda en flujo.srs (columna "flujo") y se replica en user_word_progress (durabilidad).
+    Se guarda en flujo.srs (columna "flujo").
     Los PUNTOS influyen en el SRS: una racha alta añade un pequeño bono de "ease",
     lo que alarga el intervalo (repasas menos lo que ya dominas).
   */
@@ -1965,24 +2006,70 @@ function openAbuChat() {
     // Guardado principal en la columna flujo
     await updateUserFlow();
     if (points) await addPoints(points);
-
-    // Réplica (no bloqueante) en la tabla dedicada. next_review_at es NOT NULL:
-    // para palabras dominadas se guarda una fecha lejana.
-    dbClient.from('user_word_progress').upsert({
-      user_id: currentUser.id,
-      word_id: wordId,
-      srs_level: s.level,
-      ease_factor: s.ease,
-      next_review_at: s.due || '2099-12-31T00:00:00.000Z'
-    }, { onConflict: 'user_id, word_id' }).then(({ error }) => {
-      if (error) console.warn('user_word_progress (opcional):', error.message);
-    });
   }
 
   /* ============================================================
      5. DATOS (palabras / niveles / grupos / repasos)
   ============================================================ */
-  async function getNiveles() {
+  // Niveles, grupos y palabras: se responde con lo guardado en el dispositivo y se refresca en segundo plano.
+  const CACHE_CONTENIDO_MS = 7 * 86400000;
+  const CACHE_CONTENIDO_VER = 'v1';
+  const memContenido = new Map();
+  function leerCacheContenido(clave) {
+    try {
+      const x = JSON.parse(localStorage.getItem(`abu_cc_${CACHE_CONTENIDO_VER}_${clave}`) || 'null');
+      return x && Date.now() - x.t < CACHE_CONTENIDO_MS ? x.v : null;
+    } catch { return null; }
+  }
+  function guardarCacheContenido(clave, v, grupoUnico) {
+    try {
+      if (grupoUnico) {
+        const pref = `abu_cc_${CACHE_CONTENIDO_VER}_${grupoUnico}`;
+        Object.keys(localStorage).filter(k => k.startsWith(pref)).forEach(k => localStorage.removeItem(k));
+      }
+      localStorage.setItem(`abu_cc_${CACHE_CONTENIDO_VER}_${clave}`, JSON.stringify({ t: Date.now(), v }));
+    } catch { /* almacenamiento lleno: se sigue sin caché */ }
+  }
+  function conCache(clave, cargar, { grupoUnico = null, persistir = true } = {}) {
+    if (memContenido.has(clave)) return memContenido.get(clave);
+    const fresco = cargar().then(v => {
+      if (Array.isArray(v) && v.length) {
+        memContenido.set(clave, Promise.resolve(v));
+        if (persistir) guardarCacheContenido(clave, v, grupoUnico);
+      }
+      return v;
+    });
+    const guardado = persistir ? leerCacheContenido(clave) : null;
+    if (Array.isArray(guardado) && guardado.length) {
+      fresco.catch(() => {});
+      const p = Promise.resolve(guardado);
+      memContenido.set(clave, p);
+      return p;
+    }
+    memContenido.set(clave, fresco);
+    fresco.then(v => { if (!(Array.isArray(v) && v.length)) memContenido.delete(clave); },
+                () => memContenido.delete(clave));
+    return fresco;
+  }
+
+  function precargarImagenes(words, max = 12) {
+    (words || []).slice(0, max).forEach(w => {
+      if (w && w.imagen) { const im = new Image(); im.decoding = 'async'; im.src = w.imagen; }
+    });
+  }
+
+  const audiosPrecargados = new Set();
+  function precargarProximas(words) {
+    precargarImagenes(words, 3);
+    (words || []).slice(0, 2).forEach(w => {
+      if (!w?.audio || audiosPrecargados.has(w.audio)) return;
+      audiosPrecargados.add(w.audio);
+      const a = new Audio(); a.preload = 'auto'; a.src = w.audio;
+    });
+  }
+
+  function getNiveles() { return conCache('niveles', cargarNiveles); }
+  async function cargarNiveles() {
     /*
       ARREGLO "Sin contenido": la consulta anterior traía TODAS las filas de "palabras"
       y PostgREST corta en 1000, así que los niveles cuyas filas quedaban fuera del corte
@@ -1991,6 +2078,8 @@ function openAbuChat() {
     */
     const candidatos = [...new Set([...NIVELES_FIJOS, ...CEFR_ORDER])];
     const conContenido = [];
+    // Complemento: detectar niveles con nombres fuera del estándar CEFR (dentro del primer bloque de filas).
+    const muestra = dbClient.from('palabras').select('nivel').range(0, 999);
     await Promise.all(candidatos.map(async (n) => {
       let { count, error } = await dbClient.from('palabras').select('id', { count: 'exact', head: true }).eq('nivel', n);
       if ((error || !count)) {
@@ -2000,8 +2089,7 @@ function openAbuChat() {
       }
       if (!error && (count || 0) > 0) conContenido.push(n);
     }));
-    // Complemento: detectar niveles con nombres fuera del estándar CEFR (dentro del primer bloque de filas).
-    const { data } = await dbClient.from('palabras').select('nivel').range(0, 999);
+    const { data } = await muestra;
     (data || []).forEach(r => {
       const v = (r.nivel || '').trim();
       if (v && !conContenido.some(c => c.toLowerCase() === v.toLowerCase())) conContenido.push(v);
@@ -2009,7 +2097,8 @@ function openAbuChat() {
     console.log('[getNiveles] niveles con contenido:', conContenido);
     return sortNiveles(conContenido);
   }
-  async function getGroups(nivel) {
+  function getGroups(nivel) { return conCache(`grupos_${nivel}`, () => cargarGroups(nivel)); }
+  async function cargarGroups(nivel) {
     let { data, error } = await dbClient.from('palabras').select('grupo').eq('nivel', nivel).range(0, 9999);
     if (!error && !(data || []).length) {
       ({ data, error } = await dbClient.from('palabras').select('grupo').ilike('nivel', nivel).range(0, 9999));
@@ -2032,6 +2121,35 @@ function openAbuChat() {
   async function getGroupWords(nivel, group) {
     const key = `${nivel}|${group}`;
     if (groupCache.key === key && groupCache.list.length) return groupCache.list;
+    let list = [...await cargarPalabrasGrupo(nivel, group)];
+    let gratisLimitReached = false;
+    if (esGratis()) {
+      const antes = list.length;
+      const ids = await palabrasPermitidasGratisIds();
+      list = list.filter(w => ids.has(String(w.id)));
+      gratisLimitReached = antes > 0 && list.length === 0;   // había contenido, pero quedó fuera del límite gratis
+    }
+    list.gratisLimitReached = gratisLimitReached;
+    groupCache = { key, list, map: Object.fromEntries(list.map(w => [String(w.id), w])) };
+    precargarImagenes(list);
+    precargarSiguienteGrupo(nivel, group);
+    return list;
+  }
+
+  function precargarSiguienteGrupo(nivel, group) {
+    getGroups(nivel).then(groups => {
+      const next = groups[groups.indexOf(group) + 1];
+      if (next) cargarPalabrasGrupo(nivel, next, false).catch(() => {});
+    }).catch(() => {});
+  }
+
+  function cargarPalabrasGrupo(nivel, group, persistir = true) {
+    const key = `${nivel}|${group}`;
+    return conCache(`palabras_${key}`, () => consultarPalabrasGrupo(nivel, group), { grupoUnico: 'palabras_', persistir });
+  }
+
+  async function consultarPalabrasGrupo(nivel, group) {
+    const key = `${nivel}|${group}`;
     // ⚠️ El .order('id') NO es cosmético: sin él PostgREST devuelve las
     //    filas en un orden arbitrario que cambia entre llamadas, y como el
     //    repaso avanza con un índice sobre esta lista, al recargar la
@@ -2042,18 +2160,7 @@ function openAbuChat() {
       ({ data, error } = await dbClient.from('palabras').select('*').ilike('nivel', nivel).ilike('grupo', group).order('id', { ascending: true }).range(0, 9999));
     }
     if (error) { console.error(`[getGroupWords ${key}] ❌`, error.message, error); return []; }
-    let list = data || [];
-    let gratisLimitReached = false;
-    if (esGratis()) {
-      const antes = list.length;
-      const ids = await palabrasPermitidasGratisIds();
-      list = list.filter(w => ids.has(String(w.id)));
-      gratisLimitReached = antes > 0 && list.length === 0;   // había contenido, pero quedó fuera del límite gratis
-    }
-    console.log(`[getGroupWords ${key}] palabras:`, list.length, list.map(w => w.ingles));
-    list.gratisLimitReached = gratisLimitReached;
-    groupCache = { key, list, map: Object.fromEntries(list.map(w => [String(w.id), w])) };
-    return list;
+    return data || [];
   }
 
   // Sonda de diagnóstico: cuántas filas de "palabras" ve realmente el cliente.
@@ -2167,6 +2274,7 @@ function openAbuChat() {
     ensureDaily();
     Object.values(flujo.srs).forEach(s => {
       if (s.learned === undefined) s.learned = false;
+      if (s.learned) return;   // dominada: no necesita los campos de refuerzo (ver compactarFlujo)
       if (!s.first) s.first = {};
       if (s.easyFirst === undefined) s.easyFirst = false;
       // Campos nuevos del refuerzo de palabras difíciles y tope diario.
@@ -2177,6 +2285,10 @@ function openAbuChat() {
       if (!s.learned && (s.level || 0) >= GRADUATED_LEVEL && !s.difficult) { s.learned = true; s.due = null; }
     });
     if (flujo.version < 3) { flujo.version = 3; await updateUserFlow(); }
+    // Poda única de lo que quedó de versiones anteriores (se sube una vez).
+    const antes = JSON.stringify(flujo).length;
+    compactarFlujo();
+    if (JSON.stringify(flujo).length < antes) await updateUserFlow();
   }
 
   async function ensureNivel(nivel) {
@@ -2216,9 +2328,9 @@ function openAbuChat() {
     console.groupCollapsed('%c[runFlow]', 'color:#FF7A00;font-weight:bold');
     console.log('flujo actual:', JSON.parse(JSON.stringify(flujo)));
 
-    // Sonda: ¿el cliente puede leer la tabla "palabras"?
-    const probe = await probeContent();
-    if (probe.count === 0) {
+    // Niveles que realmente tienen palabras cargadas (en caché tras la primera vez).
+    const niveles = await getNiveles();
+    if (!niveles.length && (await probeContent()).count === 0) {
       console.warn('La consulta a "palabras" devolvió 0 filas. Causa más probable: falta la política RLS de SELECT en la tabla "palabras".');
       console.groupEnd();
       return renderMessage('🔒', 'No se pueden leer las palabras',
@@ -2226,8 +2338,6 @@ function openAbuChat() {
         'Reintentar', () => window.location.reload());
     }
 
-    // Niveles que realmente tienen palabras cargadas.
-    const niveles = await getNiveles();
 
     // Si el nivel guardado no tiene contenido, saltamos al primero que sí lo tenga.
     if (niveles.length && !niveles.includes(flujo.currentNivel)) {
@@ -2407,6 +2517,7 @@ function openAbuChat() {
 
     updateProgressBar((i / reviewList.length) * 100);
     appContainer.innerHTML = flashcardHTML(word, i + 1, reviewList.length);
+    precargarProximas(reviewList.slice(i + 1, i + 4));
     bindFlashcard(word, async (result) => {
       await updateSRS(word.id, result, { type: 'flashcard' }); // 'easy' | 'hard' (siembra el SRS)
       g.review.index = i + 1;
@@ -2728,6 +2839,7 @@ function openAbuChat() {
 
     const ex = q[i];
     const word = groupCache.map[String(ex.word_id)];
+    precargarProximas(q.slice(i + 1, i + 3).map(e => groupCache.map[String(e.word_id)]).filter(Boolean));
     if (!word) { g.practice.index = i + 1; await updateUserFlow(); return renderPractice(nivel, group); }
 
     updateProgressBar((i / q.length) * 100);
@@ -2744,7 +2856,7 @@ function openAbuChat() {
         lastMilestone = sessionCorrect;
         setTimeout(() => showEncouragement(() => renderPractice(nivel, group)), 900);
       } else {
-        setTimeout(() => renderPractice(nivel, group), isCorrect ? 1000 : 2000);
+        setTimeout(() => renderPractice(nivel, group), isCorrect ? 700 : 1800);
       }
     };
 
@@ -2861,6 +2973,7 @@ function openAbuChat() {
     }
     const word = srsSession.queue[srsSession.index];
     updateProgressBar((srsSession.index / srsSession.queue.length) * 100);
+    precargarProximas(srsSession.queue.slice(srsSession.index + 1, srsSession.index + 4));
 
     const s = flujo.srs[String(word.id)] || {};
     const esDebil = (s.lapses || 0) >= 3 || (s.level || 0) === 0; // le cuesta: mejor volver a estudiarla
@@ -2871,7 +2984,7 @@ function openAbuChat() {
       flujo.daily.reviewed = (flujo.daily.reviewed || 0) + 1;
       if (fueBien) srsSession.aciertos++;
       srsSession.index++;
-      setTimeout(() => nextSrsReview(), fueBien ? 1000 : 2000);
+      setTimeout(() => nextSrsReview(), fueBien ? 700 : 1800);
     };
 
     /*
@@ -3113,6 +3226,13 @@ function openAbuChat() {
     } finally { clearTimeout(timer); }
   }
 
+  const HABLANDO_HTML = '<div class="hablando" aria-label="Escuchando al otro personaje"><span></span><span></span><span></span></div>';
+  function chatAvatarHTML(nombre, esAbu = false) {
+    if (esAbu || /^abu$/i.test(String(nombre || '').trim())) return '<img src="icono.png" alt="Abu" class="chat-avatar abu">';
+    const inicial = String(nombre || '?').trim().charAt(0).toUpperCase() || '?';
+    return `<span class="chat-avatar">${escapeHTML(inicial)}</span>`;
+  }
+
   const gcVoz = (m) => m.voz || (m.rol === 'tu' ? (gc?.cfg?.vozTuya || 'b') : (gc?.cfg?.vozOtro || 'a'));
 
   /* Compara lo que dijiste con la frase que tocaba y devuelve una
@@ -3153,7 +3273,7 @@ function openAbuChat() {
           <span class="text-[11px] font-black text-slate-400 shrink-0"><span id="gc-count">0</span>/${mensajes.length}</span>
           ${cfg.onSalir ? `<button id="gc-exit" title="Salir" class="shrink-0 w-6 h-6 rounded-full text-slate-300 hover:text-slate-500 hover:bg-slate-100 transition text-sm">&times;</button>` : ''}
         </div>
-        <div id="gc-messages" class="chat-scroll h-[42vh] min-h-[200px] overflow-y-auto p-2 space-y-2 mb-2 bg-slate-50 rounded-xl border border-slate-100"></div>
+        <div id="gc-messages" class="chat-scroll chat-fondo h-[42vh] min-h-[200px] overflow-y-auto p-3 space-y-3 mb-3"></div>
         <div id="gc-turno" class="flex flex-col items-center gap-1.5"></div>
       </div>`;
 
@@ -3187,15 +3307,16 @@ function openAbuChat() {
     const idTr = 'gc-tr-' + idBase;
     const idMsg = 'gc-msg-' + idBase;
     const div = document.createElement('div');
-    div.className = 'flex justify-start items-end gap-1.5';
-    div.innerHTML = `<div class="bg-white border border-slate-200 text-slate-800 rounded-2xl rounded-bl-sm px-3.5 py-2 max-w-[75%] shadow-sm">
-        ${m.nombre ? `<div class="text-[10px] font-black text-purple-500 uppercase mb-0.5">${escapeHTML(m.nombre)}</div>` : ''}
-        <div id="${idMsg}" class="hidden font-medium leading-snug">${escapeHTML(m.en)}</div>
-        <button data-toggle-msg="${idMsg}" class="block text-[11px] font-bold text-slate-500 underline">Ver mensaje</button>
-        ${m.es ? `<button data-toggle-tr="${idTr}" class="text-[10px] font-bold text-slate-400 underline mt-1">Ver traducción</button>
-        <div id="${idTr}" class="hidden text-xs text-slate-400 mt-0.5 leading-snug">${escapeHTML(m.es)}</div>` : ''}
+    div.className = 'chat-fila';
+    div.innerHTML = `${chatAvatarHTML(m.nombre, gcVoz(m) === VOZ_ABU)}
+      <div class="burbuja burbuja-otro">
+        ${m.nombre ? `<div class="burbuja-nombre">${escapeHTML(m.nombre)}</div>` : ''}
+        <div id="${idMsg}" class="hidden">${escapeHTML(m.en)}</div>
+        <button data-toggle-msg="${idMsg}" class="burbuja-link"><i class="fas fa-eye"></i> Ver mensaje</button>
+        ${m.es ? `<button data-toggle-tr="${idTr}" class="burbuja-link"><i class="fas fa-language"></i> Traducción</button>
+        <div id="${idTr}" class="hidden burbuja-trad">${escapeHTML(m.es)}</div>` : ''}
       </div>
-      <button data-say="${encodeURIComponent(m.en)}" data-voz="${gcVoz(m)}" title="Escuchar" class="shrink-0 w-8 h-8 rounded-full bg-white border border-slate-200 text-slate-400 hover:text-[#FF7A00] hover:border-[#FF7A00] active:scale-90 transition flex items-center justify-center"><i class="fas fa-volume-up text-[11px]"></i></button>`;
+      <button data-say="${encodeURIComponent(m.en)}" data-voz="${gcVoz(m)}" title="Escuchar" class="btn-oir"><i class="fas fa-volume-up"></i></button>`;
     box.appendChild(div); box.scrollTop = box.scrollHeight;
   }
 
@@ -3205,15 +3326,15 @@ function openAbuChat() {
     const box = document.getElementById('gc-messages'); if (!box) return;
     const idTr = 'gc-tr-' + Math.random().toString(36).slice(2, 9);
     const div = document.createElement('div');
-    div.className = 'flex justify-end items-end gap-1.5';
-    div.innerHTML = `<button data-say="${encodeURIComponent(m.en)}" data-voz="${gcVoz(m)}" title="Escuchar" class="shrink-0 w-8 h-8 rounded-full bg-white border border-slate-200 text-slate-400 hover:text-[#FF7A00] hover:border-[#FF7A00] active:scale-90 transition flex items-center justify-center"><i class="fas fa-volume-up text-[11px]"></i></button>
-      <div class="bg-[#FF7A00] text-white rounded-2xl rounded-br-sm px-3.5 py-2 max-w-[75%] font-medium">
-        <div class="text-[13px] font-bold leading-snug">${escapeHTML(m.en)}</div>
-        <div class="text-[10px] font-black text-orange-100 uppercase mt-1.5 pt-1.5 border-t border-white/25 mb-0.5">Dijiste</div>
-        ${escapeHTML(dicho || '—')}
-        ${m.es ? `<button data-toggle-tr="${idTr}" class="block text-[10px] font-bold text-orange-100 underline mt-1">Ver traducción</button>
-        <div id="${idTr}" class="hidden text-xs text-orange-100 mt-0.5 leading-snug">${escapeHTML(m.es)}</div>` : ''}
-        ${fix ? `<div class="mt-1.5 text-[11px] font-bold text-amber-50 bg-black/20 rounded-lg px-2 py-1 leading-snug">✏️ ${escapeHTML(fix)}</div>` : ''}
+    div.className = 'chat-fila tuya';
+    div.innerHTML = `<button data-say="${encodeURIComponent(m.en)}" data-voz="${gcVoz(m)}" title="Escuchar" class="btn-oir"><i class="fas fa-volume-up"></i></button>
+      <div class="burbuja burbuja-tuya">
+        <div class="font-bold">${escapeHTML(m.en)}</div>
+        <div class="burbuja-sep">Dijiste</div>
+        <div>${escapeHTML(dicho || '—')}</div>
+        ${m.es ? `<button data-toggle-tr="${idTr}" class="burbuja-link"><i class="fas fa-language"></i> Traducción</button>
+        <div id="${idTr}" class="hidden burbuja-trad">${escapeHTML(m.es)}</div>` : ''}
+        ${fix ? `<div class="burbuja-fix">✏️ ${escapeHTML(fix)}</div>` : ''}
       </div>`;
     box.appendChild(div); box.scrollTop = box.scrollHeight;
   }
@@ -3228,7 +3349,7 @@ function openAbuChat() {
 
     /* ---- Línea del otro: se escucha y avanza sola al terminar el audio ---- */
     if (m.rol !== 'tu') {
-      turno.innerHTML = `<div class="text-center text-slate-300"><i class="fas fa-volume-up fa-lg"></i></div>`;
+      turno.innerHTML = HABLANDO_HTML;
       gcBurbujaOtro(m);
       let hecho = false;
       const avanzar = () => {
@@ -3244,12 +3365,16 @@ function openAbuChat() {
     /* ---- Tu turno: sabes exactamente qué decir ---- */
     const idTr = 'gc-obj-' + Math.random().toString(36).slice(2, 9);
     turno.innerHTML = `
-      <p class="text-[11px] font-black text-[#FF7A00] uppercase text-center px-2">Te toca decir</p>
-      <p class="text-center text-sm font-bold text-slate-700 px-2">“${escapeHTML(m.en)}”</p>
-      ${m.es ? `<button data-toggle-tr="${idTr}" class="text-[10px] font-bold text-slate-400 underline">Ver traducción</button>
-      <p id="${idTr}" class="hidden text-center text-[11px] text-slate-400 px-2">${escapeHTML(m.es)}</p>` : ''}
-      <button id="gc-oir" class="text-[11px] font-black text-slate-400 hover:text-[#FF7A00]"><i class="fas fa-volume-up mr-1"></i>Escuchar el modelo</button>
-      <div class="flex items-center gap-2 w-full">
+      <div class="turno-card">
+        <span class="turno-etiqueta">🎙️ Te toca decir</span>
+        <p class="turno-frase">“${escapeHTML(m.en)}”</p>
+        <p id="${idTr}" class="hidden text-center text-[12px] text-slate-500 px-2">${escapeHTML(m.es || '')}</p>
+        <div class="turno-acciones">
+          <button id="gc-oir" class="turno-accion"><i class="fas fa-volume-up mr-1"></i>Escuchar</button>
+          ${m.es ? `<button data-toggle-tr="${idTr}" class="turno-accion"><i class="fas fa-language mr-1"></i>Traducción</button>` : ''}
+        </div>
+      </div>
+      <div class="flex items-center justify-center gap-2 w-full mt-1">
         <button id="gc-mic" class="mic-btn shrink-0" style="width:52px;height:52px;font-size:1.2rem"><i class="fas fa-microphone"></i></button>
         ${gc.cfg.permitirTexto ? `<input id="gc-input" type="text" placeholder="…o escribe aquí" autocomplete="off" autocapitalize="sentences" spellcheck="false" enterkeyhint="send" class="flex-1 min-w-0 bg-white border-2 border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-[#FF7A00] text-slate-700 font-medium">
         <button id="gc-enviar" class="btn-juice bg-[#FF7A00] text-white font-bold px-3.5 py-2.5 rounded-xl shrink-0"><i class="fas fa-paper-plane"></i></button>` : ''}
@@ -4208,10 +4333,24 @@ function openAbuChat() {
     return salida.join(' ');
   }
 
+  // Une lo dicho en sesiones sucesivas quitando el solape si el navegador repite el final.
+  function unirSesionesVoz(previo, nuevo) {
+    const a = (previo || '').trim().split(/\s+/).filter(Boolean);
+    const b = (nuevo || '').trim().split(/\s+/).filter(Boolean);
+    if (!a.length) return b.join(' ');
+    if (!b.length) return a.join(' ');
+    const lim = (w) => w.toLowerCase().replace(/[.,!?;:"]/g, '');
+    for (let n = Math.min(a.length, b.length); n >= 1; n--) {
+      if (n < 2 && n < a.length) break;
+      if (a.slice(-n).map(lim).join(' ') === b.slice(0, n).map(lim).join(' ')) return [...a, ...b.slice(n)].join(' ');
+    }
+    return [...a, ...b].join(' ');
+  }
+
   let recActivoGlobal = null;
 
   /* ════════════════════════════════════════════════════════════════
-     MOTOR DE VOZ — tercera versión, y esta sí cubre los tres casos
+     MOTOR DE VOZ — cuarta versión
      ────────────────────────────────────────────────────────────────
      Historia de los dos intentos anteriores, porque explica el diseño:
 
@@ -4227,14 +4366,14 @@ function openAbuChat() {
        Chrome dispara 'no-speech', cierra, y te dice "no te escuché"
        aunque no hayas llegado a decir nada todavía.
 
-     · v3 (esta) distingue los dos finales, que es lo que ninguna de
-       las dos hacía:
-         — Si el navegador cortó y YA HAY TEXTO  → se entrega. Punto.
-           Nunca se rearranca con texto en la mano, así que es
-           imposible duplicar palabras entre sesiones.
-         — Si cortó y NO hay nada dicho          → todavía no habías
-           empezado: se rearranca, pero COMO MUCHO dos veces y dentro
-           de una ventana de 25 s. Acotado, así que no hay bucle.
+     · v3 entregaba el texto en cuanto el navegador cortaba. En el
+       celular el navegador corta en cada pausa, así que se enviaba
+       media frase.
+
+     · v4 (esta): el corte del navegador nunca envía. Se guarda lo dicho
+       (unirSesionesVoz evita duplicar), se rearranca y el envío lo
+       decide el silencio real (VOZ_SILENCIO_MS), el botón o el tope.
+       Sin nada dicho, los rearranques siguen acotados (VOZ_REINICIOS).
 
      Y para que una pausa a media frase no la corte, `continuous` va en
      true donde el navegador lo respeta, con un temporizador propio de
@@ -4255,9 +4394,10 @@ function openAbuChat() {
     return rec;
   }
 
-  const VOZ_SILENCIO_MS = 2500;   // silencio tras hablar → se envía solo
-  const VOZ_TOPE_MS     = 25000;  // tope duro de una grabación
-  const VOZ_REINICIOS   = 2;      // rearranques permitidos SIN haber dicho nada
+  // El corte del navegador por una pausa no envía nada: solo el silencio real, el botón o el tope.
+  const VOZ_SILENCIO_MS = 4000;   // silencio real tras hablar → se envía solo
+  const VOZ_TOPE_MS     = 60000;  // tope duro de una grabación
+  const VOZ_REINICIOS   = 3;      // rearranques permitidos SIN haber dicho nada
 
   function iniciarGrabacionVoz({ onFinal, onError, onParcial, lang }) {
     // Mata cualquier grabación anterior que haya quedado viva.
@@ -4267,6 +4407,7 @@ function openAbuChat() {
     if (!rec) { onError && onError('no-soportado'); return null; }
 
     let dicho = '';
+    let previo = '';          // lo dicho en sesiones que el navegador ya cerró
     let cerrado = false;
     let errorDuro = null;
     let paradoManual = false;
@@ -4276,13 +4417,17 @@ function openAbuChat() {
     const t0 = Date.now();
 
     const limpiarSilencio = () => { if (silencio) { clearTimeout(silencio); silencio = null; } };
+    const terminar = () => {
+      paradoManual = true;
+      try { rec.stop(); } catch { cerrar(onFinal, dicho.trim()); }
+    };
 
     // Solo cuenta silencio DESPUÉS de la primera palabra: antes de eso se
     // espera lo que haga falta (era justo lo que rompía la v1).
     const rearmarSilencio = () => {
       limpiarSilencio();
       if (!dicho.trim()) return;
-      silencio = setTimeout(() => { paradoManual = true; try { rec.stop(); } catch {} }, VOZ_SILENCIO_MS);
+      silencio = setTimeout(terminar, VOZ_SILENCIO_MS);
     };
 
     const cerrar = (fn, arg) => {
@@ -4299,7 +4444,7 @@ function openAbuChat() {
       // sumando desde e.resultIndex duplicaba palabras en Android.
       let texto = '';
       for (let i = 0; i < e.results.length; i++) texto += e.results[i][0].transcript + ' ';
-      dicho = limpiarRepeticionesVoz(texto.trim());
+      dicho = limpiarRepeticionesVoz(unirSesionesVoz(previo, texto.trim()));
       if (onParcial) { try { onParcial(dicho); } catch {} }
       rearmarSilencio();
     };
@@ -4316,28 +4461,26 @@ function openAbuChat() {
 
     rec.onend = () => {
       if (cerrado) return;
-      limpiarSilencio();
-      if (errorDuro) return cerrar(onError, errorDuro);
-      // Con texto en la mano se entrega SIEMPRE, sin rearrancar.
-      if (dicho.trim() || paradoManual) return cerrar(onFinal, dicho.trim());
-      // Sin nada dicho: aún no habías empezado a hablar. Se reintenta,
-      // pero acotado — nunca un bucle.
-      if (reinicios < VOZ_REINICIOS && Date.now() - t0 < VOZ_TOPE_MS) {
-        reinicios++;
+      if (errorDuro) return dicho.trim() ? cerrar(onFinal, dicho.trim()) : cerrar(onError, errorDuro);
+      if (paradoManual) return cerrar(onFinal, dicho.trim());
+      // Corte del navegador por una pausa a mitad de frase: se sigue escuchando.
+      previo = dicho;
+      const conTexto = !!dicho.trim();
+      if (Date.now() - t0 < VOZ_TOPE_MS && (conTexto || reinicios < VOZ_REINICIOS)) {
+        if (!conTexto) reinicios++;
         try { rec.start(); return; } catch {}
       }
-      cerrar(onFinal, '');
+      cerrar(onFinal, dicho.trim());
     };
 
     rec.detener = () => {
-      paradoManual = true;
       limpiarSilencio();
-      try { rec.stop(); } catch { cerrar(onFinal, dicho.trim()); }
+      terminar();
     };
 
     try { rec.start(); } catch { cerrar(onError, 'no-inicio'); return null; }
     recActivoGlobal = rec;
-    tope = setTimeout(() => { paradoManual = true; try { rec.stop(); } catch {} }, VOZ_TOPE_MS);
+    tope = setTimeout(terminar, VOZ_TOPE_MS);
     return rec;
   }
 
@@ -4462,7 +4605,7 @@ function openAbuChat() {
           <div class="flex-1 progress-track" style="margin-top:0"><div id="dom-conv-bar" class="progress-fill" style="width:0%"></div></div>
           <span class="text-[11px] font-black text-slate-400 shrink-0"><span id="dom-conv-count">0</span>/${total}</span>
         </div>
-        <div id="dom-conv-messages" class="chat-scroll h-[42vh] min-h-[200px] overflow-y-auto p-2 space-y-2 mb-2 bg-slate-50 rounded-xl border border-slate-100"></div>
+        <div id="dom-conv-messages" class="chat-scroll chat-fondo h-[42vh] min-h-[200px] overflow-y-auto p-3 space-y-3 mb-3"></div>
         <div id="dom-conv-turno" class="flex flex-col items-center gap-1.5"></div>
       </div>`;
     domConversarBind();
@@ -4498,25 +4641,24 @@ function openAbuChat() {
     const idBase = Math.random().toString(36).slice(2, 9);
     const idTr = 'dom-tr-' + idBase;
     const idMsg = 'dom-msg-' + idBase;
-    const btnSay = `<button data-say="${encodeURIComponent(en)}" ${audioUrl ? `data-audio="${escapeHTML(audioUrl)}"` : ''} title="Escuchar" class="shrink-0 w-8 h-8 rounded-full bg-white border border-slate-200 text-slate-400 hover:text-[#FF7A00] hover:border-[#FF7A00] active:scale-90 transition flex items-center justify-center"><i class="fas fa-volume-up text-[11px]"></i></button>`;
+    const btnSay = `<button data-say="${encodeURIComponent(en)}" ${audioUrl ? `data-audio="${escapeHTML(audioUrl)}"` : ''} title="Escuchar" class="btn-oir"><i class="fas fa-volume-up"></i></button>`;
     const div = document.createElement('div');
     if (role === 'user') {
-      div.className = 'flex justify-end items-end gap-1.5';
-      div.innerHTML = `${btnSay}<div class="bg-[#FF7A00] text-white rounded-2xl rounded-br-sm px-3.5 py-2 max-w-[75%] font-medium">
-        ${objetivo ? `<div class="text-[13px] font-bold leading-snug">${escapeHTML(objetivo)}</div>` : ''}
-        <div class="text-[10px] font-black text-orange-100 uppercase mt-1.5 pt-1.5 ${objetivo ? 'border-t border-white/25' : ''} mb-0.5">Dijiste</div>
-        ${escapeHTML(en)}
-        ${es ? `<button data-toggle-tr="${idTr}" class="block text-[10px] font-bold text-orange-100 underline mt-1">Ver traducción</button>
-        <div id="${idTr}" class="hidden text-xs text-orange-100 mt-0.5 leading-snug">${escapeHTML(es)}</div>` : ''}
+      div.className = 'chat-fila tuya';
+      div.innerHTML = `${btnSay}<div class="burbuja burbuja-tuya">
+        ${objetivo ? `<div class="font-bold">${escapeHTML(objetivo)}</div><div class="burbuja-sep">Dijiste</div>` : ''}
+        <div>${escapeHTML(en)}</div>
+        ${es ? `<button data-toggle-tr="${idTr}" class="burbuja-link"><i class="fas fa-language"></i> Traducción</button>
+        <div id="${idTr}" class="hidden burbuja-trad">${escapeHTML(es)}</div>` : ''}
       </div>`;
     } else {
-      div.className = 'flex justify-start items-end gap-1.5';
-      div.innerHTML = `<div class="bg-white border border-slate-200 text-slate-800 rounded-2xl rounded-bl-sm px-3.5 py-2 max-w-[75%] shadow-sm">
-        <div class="text-[10px] font-black text-purple-500 uppercase mb-0.5">${escapeHTML(role)}</div>
-        <div id="${idMsg}" class="hidden font-medium leading-snug">${escapeHTML(en)}</div>
-        <button data-toggle-msg="${idMsg}" class="block text-[11px] font-bold text-slate-500 underline">Ver mensaje</button>
-        ${es ? `<button data-toggle-tr="${idTr}" class="text-[10px] font-bold text-slate-400 underline mt-1">Ver traducción</button>
-        <div id="${idTr}" class="hidden text-xs text-slate-400 mt-0.5 leading-snug">${escapeHTML(es)}</div>` : ''}
+      div.className = 'chat-fila';
+      div.innerHTML = `${chatAvatarHTML(role)}<div class="burbuja burbuja-otro">
+        <div class="burbuja-nombre">${escapeHTML(role)}</div>
+        <div id="${idMsg}" class="hidden">${escapeHTML(en)}</div>
+        <button data-toggle-msg="${idMsg}" class="burbuja-link"><i class="fas fa-eye"></i> Ver mensaje</button>
+        ${es ? `<button data-toggle-tr="${idTr}" class="burbuja-link"><i class="fas fa-language"></i> Traducción</button>
+        <div id="${idTr}" class="hidden burbuja-trad">${escapeHTML(es)}</div>` : ''}
       </div>${btnSay}`;
     }
     box.appendChild(div); box.scrollTop = box.scrollHeight;
@@ -4533,7 +4675,7 @@ function openAbuChat() {
     const turno = document.getElementById('dom-conv-turno');
 
     if (!esMio) {
-      turno.innerHTML = `<div class="text-center text-slate-300"><i class="fas fa-volume-up fa-lg"></i></div>`;
+      turno.innerHTML = HABLANDO_HTML;
       domConversarBubble(linea.speaker, linea.en, linea.es, linea.audio);
       const avanzar = () => domConversarPaso(nivel, n, conv, personaje, idx + 1);
       if (linea.audio) {
@@ -4548,8 +4690,11 @@ function openAbuChat() {
     }
 
     turno.innerHTML = `
-      <p class="text-[11px] font-black text-[#FF7A00] uppercase text-center px-4">Te toca — ${escapeHTML(personaje)}: "${escapeHTML(linea.en)}"</p>
-      <button id="dom-conv-mic" class="mic-btn"><i class="fas fa-microphone"></i></button>
+      <div class="turno-card">
+        <span class="turno-etiqueta">🎙️ Te toca · ${escapeHTML(personaje)}</span>
+        <p class="turno-frase">“${escapeHTML(linea.en)}”</p>
+      </div>
+      <button id="dom-conv-mic" class="mic-btn mt-1"><i class="fas fa-microphone"></i></button>
       <div id="dom-conv-vivo" class="voz-vivo hidden"></div>
       <p id="dom-conv-mic-msg" class="text-xs font-bold text-slate-400 min-h-[1.2em] text-center px-4">Toca el micrófono y habla: se enviará solo al terminar</p>`;
     const micBtn = document.getElementById('dom-conv-mic');
@@ -6689,11 +6834,11 @@ function openAbuChat() {
       }
       else if (tool === 'gramatica') {
         if (!puedeHerramientas()) return mostrarBloqueoPlan();
-        window.location.href = 'gramatica.html'; // 📚 lecciones interactivas (página aparte)
+        irA('gramatica.html'); // 📚 lecciones interactivas (página aparte)
       }
       else if (tool === 'pronunciacion') {
         if (!puedeHerramientas()) return mostrarBloqueoPlan();
-        window.location.href = 'pronunciacion.html';
+        irA('pronunciacion.html');
       }
       // 🚀 La práctica (Dominar) se puede abrir cuando quieras, sin terminar
       // ningún grupo: sin parámetros entra en "modo libre" y no toca el
@@ -6740,11 +6885,11 @@ function openAbuChat() {
     if (tool === 'club') return openClub();
     if (tool === 'gramatica') {
       if (!puedeHerramientas()) return mostrarBloqueoPlan();
-      return window.location.href = 'gramatica.html';
+      return irA('gramatica.html');
     }
     if (tool === 'pronunciacion') {
       if (!puedeHerramientas()) return mostrarBloqueoPlan();
-      return window.location.href = 'pronunciacion.html';
+      return irA('pronunciacion.html');
     }
     if (tool === 'practica') return abrirDominarDesdeMenu();
     if (menu === 'planes') return openPlanesPro('link_externo');
@@ -6809,7 +6954,12 @@ function openAbuChat() {
       else if (m === 'solicitar-tutor') openSolicitarTutor();
     };
   });
+  async function irA(url) {
+    await subirPerfilPendiente();
+    window.location.href = url;
+  }
   document.getElementById('logout-btn').onclick = async () => {
+    await subirPerfilPendiente();
     await dbClient.auth.signOut();
     window.location.href = 'index.html';
   };

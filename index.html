@@ -37,11 +37,12 @@
     <meta name="twitter:description" content="Vocabulario con repetición espaciada, gramática de A1 a B2, pronunciación con IA y club de conversación. Empieza gratis.">
     <meta name="twitter:image" content="https://abulingo.github.io/og-abulingo.png">
 
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+    <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.1/dist/umd/supabase.min.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Work+Sans:wght@400;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Work+Sans:wght@400;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'; this.onload=null;">
+    <noscript><link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Work+Sans:wght@400;600&display=swap" rel="stylesheet"></noscript>
     <link rel="icon" href="icono.png" type="image/x-icon">
     <style>
         body { font-family: 'Work Sans', sans-serif; background-color: #E6F0FF; color: #212121; scroll-behavior: smooth; }
@@ -157,6 +158,8 @@
       ]
     }
     </script>
+  <!-- Tailwind precompilado (npm run build:css). Al final del head, como el CDN, para que las utilidades ganen. -->
+  <link rel="stylesheet" href="app.css">
 </head>
 <body class="overflow-x-hidden">
 

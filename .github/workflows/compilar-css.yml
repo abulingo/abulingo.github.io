@@ -1,0 +1,37 @@
+name: Compilar CSS
+
+# Regenera app.css (Tailwind) cada vez que cambian las páginas, así se
+# pueden seguir subiendo archivos desde la web de GitHub sin instalar nada.
+on:
+  push:
+    branches: [main]
+    paths:
+      - '**.html'
+      - '**.js'
+      - 'src/app.css'
+      - 'tailwind.config.js'
+      - 'tailwind-safelist.txt'
+      - 'package.json'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  css:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: npm run build:css
+      - name: Subir app.css si cambió
+        run: |
+          if git diff --quiet app.css; then exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app.css
+          git commit -m "Recompilar app.css"
+          git push
