@@ -1024,127 +1024,220 @@ function openAbuChat() {
     ctx.restore();
   }
 
+  // Destello de 4 puntas (los emojis en canvas fallan en varios Android).
+  function dibujarDestello(ctx, x, y, r, color) {
+    ctx.beginPath();
+    ctx.moveTo(x, y - r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.quadraticCurveTo(x, y, x, y + r);
+    ctx.quadraticCurveTo(x, y, x - r, y);
+    ctx.quadraticCurveTo(x, y, x, y - r);
+    ctx.fillStyle = color;
+    ctx.fill();
+  }
+
+  // Escribe el texto reduciendo el tamaño hasta que quepa en `max` px.
+  function textoAjustado(ctx, texto, x, y, max, peso, tam, familia) {
+    let t = tam;
+    do { ctx.font = `${peso} ${t}px ${familia}`; t -= 2; } while (ctx.measureText(texto).width > max && t > 12);
+    ctx.fillText(texto, x, y);
+  }
+
   async function dibujarTarjetaRacha() {
     const dias   = flujo?.racha?.days || 0;
     const mejor  = Math.max(flujo?.racha?.best || 0, dias);
     const nivel  = flujo?.currentNivel || 'A1';
-    const nombre = primerNombre(userProfile?.full_name, '');
+    const nombreCrudo = primerNombre(userProfile?.full_name, '');
+    const nombre = nombreCrudo ? nombreCrudo.charAt(0).toUpperCase() + nombreCrudo.slice(1) : '';
+    const nuevoRecord = dias >= 2 && dias >= mejor;
+
+    const TITULO = '"Space Grotesk", system-ui, sans-serif';
+    const CUERPO = '"Work Sans", system-ui, sans-serif';
 
     const canvas = document.createElement('canvas');
     canvas.width = RACHA_W; canvas.height = RACHA_H;
     const ctx = canvas.getContext('2d');
     const cx = RACHA_W / 2;
+    const conEspaciado = (px, fn) => { const prev = ctx.letterSpacing; if ('letterSpacing' in ctx) ctx.letterSpacing = px; fn(); if ('letterSpacing' in ctx) ctx.letterSpacing = prev; };
 
-    // Las tipografías de la página tardan en cargar; sin esto el canvas
-    // dibuja con la fuente de reserva.
-    try { await document.fonts.ready; } catch { /* navegador sin la API */ }
+    // Pesos que la página no usa todavía no están descargados: se piden antes de dibujar.
+    try {
+      await Promise.all([
+        document.fonts.load(`700 100px ${TITULO}`), document.fonts.load(`800 40px ${CUERPO}`),
+        document.fonts.load(`600 40px ${CUERPO}`), document.fonts.load(`400 40px ${CUERPO}`)
+      ]);
+    } catch { /* navegador sin la API */ }
 
-    // Fondo
-    const fondo = ctx.createLinearGradient(0, 0, 0, RACHA_H);
-    fondo.addColorStop(0, '#0D47A1');
-    fondo.addColorStop(1, '#05224E');
+    // ---- Fondo: degradado, luces y trama de puntos ----
+    const fondo = ctx.createLinearGradient(0, 0, RACHA_W, RACHA_H);
+    fondo.addColorStop(0, '#1152B8');
+    fondo.addColorStop(0.55, '#0A3478');
+    fondo.addColorStop(1, '#04173A');
     ctx.fillStyle = fondo;
     ctx.fillRect(0, 0, RACHA_W, RACHA_H);
 
-    // Resplandor naranja detrás de la llama
-    const glow = ctx.createRadialGradient(cx, 470, 40, cx, 470, 430);
-    glow.addColorStop(0, 'rgba(255,122,0,0.45)');
-    glow.addColorStop(1, 'rgba(255,122,0,0)');
-    ctx.fillStyle = glow;
-    ctx.fillRect(0, 100, RACHA_W, 800);
+    const luz = (x, y, r, color) => {
+      const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+      g.addColorStop(0, color); g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = g; ctx.fillRect(x - r, y - r, r * 2, r * 2);
+    };
+    luz(960, 90, 380, 'rgba(96,165,250,0.30)');
+    luz(80, 1260, 420, 'rgba(255,122,0,0.18)');
+    luz(cx, 440, 460, 'rgba(255,122,0,0.40)');
 
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = 'rgba(255,255,255,0.05)';
+    for (let y = 18; y < RACHA_H; y += 36) for (let x = 18; x < RACHA_W; x += 36) { ctx.beginPath(); ctx.arc(x, y, 2, 0, Math.PI * 2); ctx.fill(); }
 
-    // ---- Cabecera: ícono + logotipo ----
+    // ---- Cabecera: pastilla con ícono + logotipo ----
     const icono = await cargarImagenSegura('icono.png');
-    ctx.font = '700 66px Nunito, Poppins, system-ui, sans-serif';
-    const anchoTexto = ctx.measureText('Abulingo.').width;
-    const total = 130 + 26 + anchoTexto;
-    const x0 = (RACHA_W - total) / 2;
-    const icoCx = x0 + 65, icoCy = 160;
+    ctx.font = `700 52px ${TITULO}`;
+    const anchoLogo = ctx.measureText('Abulingo.').width;
+    const ico = 80, pillW = 18 + ico + 20 + anchoLogo + 34, pillH = 108;
+    const pillX = cx - pillW / 2, pillY = 62;
+    rectRedondo(ctx, pillX, pillY, pillW, pillH, pillH / 2);
+    ctx.fillStyle = 'rgba(255,255,255,0.10)'; ctx.fill();
+    ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(255,255,255,0.18)'; ctx.stroke();
 
+    const icoCx = pillX + 14 + ico / 2, icoCy = pillY + pillH / 2;
     ctx.save();
-    ctx.beginPath();
-    ctx.arc(icoCx, icoCy, 65, 0, Math.PI * 2);
-    ctx.fillStyle = '#FFFFFF';
-    ctx.fill();
+    ctx.beginPath(); ctx.arc(icoCx, icoCy, ico / 2, 0, Math.PI * 2);
+    ctx.fillStyle = '#FFFFFF'; ctx.fill();
     if (icono) {
       ctx.clip();
-      // Recorte tipo "cover": si icono.png no es cuadrado, se recorta en
-      // vez de deformarse.
       const lado = Math.min(icono.width, icono.height) || 1;
-      const sx = (icono.width - lado) / 2, sy = (icono.height - lado) / 2;
-      ctx.drawImage(icono, sx, sy, lado, lado, icoCx - 65, icoCy - 65, 130, 130);
+      ctx.drawImage(icono, (icono.width - lado) / 2, (icono.height - lado) / 2, lado, lado, icoCx - ico / 2, icoCy - ico / 2, ico, ico);
     } else {
-      // Sustituto si icono.png no está: la inicial sobre el círculo.
-      ctx.fillStyle = '#0D47A1';
-      ctx.font = '800 72px Nunito, system-ui, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('A', icoCx, icoCy + 26);
+      ctx.fillStyle = '#0D47A1'; ctx.font = `700 46px ${TITULO}`; ctx.textAlign = 'center';
+      ctx.fillText('A', icoCx, icoCy + 16);
     }
     ctx.restore();
 
-    ctx.textAlign = 'left';
-    ctx.font = '700 66px Nunito, Poppins, system-ui, sans-serif';
-    ctx.fillStyle = '#FFFFFF';
-    ctx.fillText('Abulingo', x0 + 156, icoCy + 22);
-    ctx.fillStyle = '#FF7A00';
-    ctx.fillText('.', x0 + 156 + ctx.measureText('Abulingo').width, icoCy + 22);
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.font = `700 52px ${TITULO}`;
+    const logoX = icoCx + ico / 2 + 20, logoY = icoCy + 18;
+    ctx.fillStyle = '#FFFFFF'; ctx.fillText('Abulingo', logoX, logoY);
+    ctx.fillStyle = '#FF7A00'; ctx.fillText('.', logoX + ctx.measureText('Abulingo').width, logoY);
 
-    // ---- Llama con el número dentro ----
-    dibujarLlama(ctx, cx, 430, 320);
+    // ---- Anillo luminoso con la llama ----
+    const anilloY = 446, anilloR = 172;
+    ctx.beginPath(); ctx.arc(cx, anilloY, anilloR, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,255,255,0.06)'; ctx.fill();
+    const aro = ctx.createLinearGradient(cx - anilloR, anilloY - anilloR, cx + anilloR, anilloY + anilloR);
+    aro.addColorStop(0, '#FFD166'); aro.addColorStop(0.5, '#FF7A00'); aro.addColorStop(1, '#E2452B');
+    ctx.save();
+    ctx.shadowColor = 'rgba(255,122,0,0.85)'; ctx.shadowBlur = 50;
+    ctx.lineWidth = 12; ctx.strokeStyle = aro; ctx.stroke();
+    ctx.restore();
 
+    ctx.save();
+    ctx.shadowColor = 'rgba(255,90,0,0.7)'; ctx.shadowBlur = 40;
+    dibujarLlama(ctx, cx, anilloY + 12, 250);
+    ctx.restore();
+
+    [[268, 300, 22], [820, 280, 16], [846, 560, 26], [240, 590, 14], [700, 216, 10], [372, 196, 9]]
+      .forEach(([x, y, r]) => dibujarDestello(ctx, x, y, r, 'rgba(255,209,102,0.9)'));
+
+    // ---- Número y etiqueta ----
     ctx.textAlign = 'center';
-    ctx.fillStyle = '#FFFFFF';
-    ctx.shadowColor = 'rgba(0,0,0,0.35)';
-    ctx.shadowBlur = 24;
-    ctx.font = `800 ${dias > 99 ? 220 : 280}px Nunito, Poppins, system-ui, sans-serif`;
-    ctx.fillText(String(dias), cx, 800);
-    ctx.shadowBlur = 0;
+    const tamNum = dias > 999 ? 170 : dias > 99 ? 210 : 250;
+    ctx.font = `700 ${tamNum}px ${TITULO}`;
+    const num = ctx.createLinearGradient(0, 836 - tamNum * 0.75, 0, 836);
+    num.addColorStop(0, '#FFFFFF'); num.addColorStop(1, '#FFE0B8');
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.35)'; ctx.shadowBlur = 30; ctx.shadowOffsetY = 10;
+    ctx.fillStyle = num;
+    ctx.fillText(String(dias), cx, 836);
+    ctx.restore();
 
-    ctx.fillStyle = '#FFD166';
-    ctx.font = '800 58px Nunito, Poppins, system-ui, sans-serif';
-    ctx.fillText(dias === 1 ? 'DÍA DE RACHA' : 'DÍAS DE RACHA', cx, 878);
+    const etiqueta = dias === 1 ? 'DÍA DE RACHA' : 'DÍAS DE RACHA';
+    ctx.font = `800 36px ${CUERPO}`;
+    let anchoEtiqueta = 0;
+    conEspaciado('6px', () => { anchoEtiqueta = ctx.measureText(etiqueta).width; });
+    const etW = anchoEtiqueta + 76, etH = 68, etY = 868;
+    rectRedondo(ctx, cx - etW / 2, etY, etW, etH, etH / 2);
+    const pillNar = ctx.createLinearGradient(cx - etW / 2, 0, cx + etW / 2, 0);
+    pillNar.addColorStop(0, '#FF8A1F'); pillNar.addColorStop(1, '#F25C05');
+    ctx.save(); ctx.shadowColor = 'rgba(242,92,5,0.45)'; ctx.shadowBlur = 24; ctx.shadowOffsetY = 6;
+    ctx.fillStyle = pillNar; ctx.fill(); ctx.restore();
+    ctx.fillStyle = '#FFFFFF';
+    conEspaciado('6px', () => ctx.fillText(etiqueta, cx + 3, etY + 47));
 
     // ---- Frase ----
-    ctx.fillStyle = 'rgba(255,255,255,0.92)';
-    ctx.font = '700 44px Nunito, Poppins, system-ui, sans-serif';
     const frase = dias > 0
-      ? (nombre ? `${nombre} lleva ${dias} día${dias === 1 ? '' : 's'} seguidos` : `¡${dias} día${dias === 1 ? '' : 's'} seguidos aprendiendo!`)
-      : 'Hoy empieza mi racha';
-    ctx.fillText(frase, cx, 958);
-    if (dias > 0 && nombre) {
-      ctx.font = '600 40px Nunito, Poppins, system-ui, sans-serif';
-      ctx.fillStyle = 'rgba(255,255,255,0.70)';
-      ctx.fillText('aprendiendo inglés sin parar', cx, 1010);
-    }
+      ? (nombre ? `${nombre} lleva ${dias} día${dias === 1 ? '' : 's'} aprendiendo inglés sin parar` : `¡${dias} día${dias === 1 ? '' : 's'} seguidos aprendiendo inglés!`)
+      : 'Hoy empieza mi racha de inglés';
+    ctx.fillStyle = 'rgba(255,255,255,0.90)';
+    textoAjustado(ctx, frase, cx, 1006, 920, 600, 38, CUERPO);
 
-    // ---- Pastillas: récord y nivel ----
-    const pastillas = [`Récord: ${mejor} día${mejor === 1 ? '' : 's'}`, `Nivel ${nivel}`];
-    ctx.font = '700 38px Nunito, Poppins, system-ui, sans-serif';
-    const anchos = pastillas.map(t => ctx.measureText(t).width + 70);
-    const anchoFila = anchos.reduce((a, b) => a + b, 0) + 24;
-    let px = (RACHA_W - anchoFila) / 2;
-    pastillas.forEach((t, i) => {
-      rectRedondo(ctx, px, 1078, anchos[i], 84, 42);
-      ctx.fillStyle = 'rgba(255,255,255,0.12)';
-      ctx.fill();
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = 'rgba(255,255,255,0.28)';
-      ctx.stroke();
-      ctx.fillStyle = '#FFFFFF';
-      ctx.fillText(t, px + anchos[i] / 2, 1132);
-      px += anchos[i] + 24;
+    // ---- Tarjeta: semana actual + récord y nivel ----
+    const cardX = 80, cardY = 1046, cardW = RACHA_W - 160, cardH = 176;
+    rectRedondo(ctx, cardX, cardY, cardW, cardH, 34);
+    ctx.fillStyle = 'rgba(255,255,255,0.09)'; ctx.fill();
+    ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(255,255,255,0.16)'; ctx.stroke();
+
+    // Días de esta semana (lunes a domingo) que forman parte de la racha.
+    const dia0 = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
+    const hoy = dia0(new Date());
+    const lunes = new Date(hoy); lunes.setDate(hoy.getDate() - ((hoy.getDay() + 6) % 7));
+    const ultimo = flujo?.racha?.last ? dia0(`${flujo.racha.last}T12:00:00`) : null;
+    const letras = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
+    const semX0 = cardX + 44, paso = 66, circY = cardY + 68, circR = 24;
+    letras.forEach((l, i) => {
+      const d = new Date(lunes); d.setDate(lunes.getDate() + i);
+      const enRacha = !!ultimo && dias > 0 && d <= ultimo && (ultimo - d) / 86400000 < dias;
+      const esHoy = d.getTime() === hoy.getTime();
+      const x = semX0 + circR + i * paso;
+      ctx.beginPath(); ctx.arc(x, circY, circR, 0, Math.PI * 2);
+      if (enRacha) {
+        const g = ctx.createLinearGradient(x, circY - circR, x, circY + circR);
+        g.addColorStop(0, '#FFB347'); g.addColorStop(1, '#F25C05');
+        ctx.fillStyle = g; ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(x - 10, circY + 1); ctx.lineTo(x - 3, circY + 8); ctx.lineTo(x + 11, circY - 7);
+        ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#FFFFFF'; ctx.stroke();
+      } else {
+        ctx.fillStyle = 'rgba(255,255,255,0.10)'; ctx.fill();
+      }
+      if (esHoy) { ctx.beginPath(); ctx.arc(x, circY, circR + 7, 0, Math.PI * 2); ctx.lineWidth = 3; ctx.strokeStyle = '#FFD166'; ctx.stroke(); }
+      ctx.fillStyle = esHoy ? '#FFD166' : 'rgba(255,255,255,0.60)';
+      ctx.font = `${esHoy ? 800 : 600} 24px ${CUERPO}`;
+      ctx.fillText(l, x, cardY + 138);
     });
 
-    // ---- Pie ----
-    ctx.fillStyle = 'rgba(255,255,255,0.55)';
-    ctx.font = '600 36px Nunito, Poppins, system-ui, sans-serif';
-    ctx.fillText('Aprende inglés conmigo', cx, 1230);
-    ctx.fillStyle = '#FF7A00';
-    ctx.font = '800 42px Nunito, Poppins, system-ui, sans-serif';
-    ctx.fillText('abulingo.github.io', cx, 1288);
+    // Separador y datos a la derecha
+    const sepX = semX0 + 7 * paso + 4;
+    ctx.fillStyle = 'rgba(255,255,255,0.16)';
+    ctx.fillRect(sepX, cardY + 30, 2, cardH - 60);
+    const datos = [
+      [nuevoRecord ? '¡NUEVO RÉCORD!' : 'RÉCORD', `${mejor} día${mejor === 1 ? '' : 's'}`, nuevoRecord ? '#FFD166' : 'rgba(255,255,255,0.60)'],
+      ['NIVEL', nivel, 'rgba(255,255,255,0.60)']
+    ];
+    const colX = (sepX + cardX + cardW) / 2;
+    datos.forEach(([titulo, valor, color], i) => {
+      const y = cardY + 44 + i * 76;
+      ctx.fillStyle = color;
+      ctx.font = `800 18px ${CUERPO}`;
+      conEspaciado('2px', () => ctx.fillText(titulo, colX, y));
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = `700 36px ${TITULO}`;
+      ctx.fillText(valor, colX, y + 40);
+    });
+
+    // ---- Pie: llamada a la acción ----
+    ctx.font = `600 32px ${CUERPO}`;
+    const pre = 'Aprende inglés conmigo en ';
+    const anchoPre = ctx.measureText(pre).width;
+    ctx.font = `800 32px ${CUERPO}`;
+    const anchoUrl = ctx.measureText('abulingo.github.io').width;
+    const pieW = anchoPre + anchoUrl + 70, pieH = 72, pieY = 1250;
+    rectRedondo(ctx, cx - pieW / 2, pieY, pieW, pieH, pieH / 2);
+    ctx.fillStyle = '#FFFFFF'; ctx.fill();
+    ctx.textAlign = 'left';
+    const pieX = cx - (anchoPre + anchoUrl) / 2;
+    ctx.fillStyle = '#334155'; ctx.font = `600 32px ${CUERPO}`;
+    ctx.fillText(pre, pieX, pieY + 47);
+    ctx.fillStyle = '#F26A00'; ctx.font = `800 32px ${CUERPO}`;
+    ctx.fillText('abulingo.github.io', pieX + anchoPre, pieY + 47);
 
     const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
     return { blob, dias };
