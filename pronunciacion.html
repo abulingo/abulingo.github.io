@@ -421,15 +421,55 @@
     if (!ttsVoices.length) loadVoices();
     return ttsVoices.find(v => /en[-_]US/i.test(v.lang)) || ttsVoices.find(v => /^en/i.test(v.lang)) || null;
   }
-  function speak(text) {
+  function speak(text, vel = 1) {
     if (!window.speechSynthesis) return;
     window.speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
     const v = pickEnglishVoice();
     if (v) u.voice = v;
-    u.lang = 'en-US'; u.rate = VOZ_VELOCIDAD;
+    u.lang = 'en-US'; u.rate = VOZ_VELOCIDAD * vel;
     window.speechSynthesis.speak(u);
   }
+
+  // Velocidad de escucha de las conversaciones (0.5× / 0.75× / 1×). Misma
+  // clave que abulingo.html, así la elección vale en las dos páginas.
+  const VELOCIDADES_CONV = [0.5, 0.75, 1];
+  let pzVelConv = 1;
+  try {
+    const v = parseFloat(localStorage.getItem('abu-vel-conv'));
+    if (VELOCIDADES_CONV.includes(v)) pzVelConv = v;
+  } catch {}
+  let pzAudioConv = null;
+  function pzAplicarVel(audio, vel) {
+    audio.defaultPlaybackRate = vel;
+    audio.playbackRate = vel;
+    audio.preservesPitch = true;
+    pzAudioConv = audio;
+    return audio;
+  }
+  function velSelectorHTML() {
+    return `<div class="vel-selector" role="group" aria-label="Velocidad de reproducción">
+      <span class="vel-label"><i class="fas fa-gauge-high"></i> Velocidad</span>
+      ${VELOCIDADES_CONV.map(v => `<button type="button" data-vel="${v}" class="vel-btn${v === pzVelConv ? ' activa' : ''}" aria-pressed="${v === pzVelConv}">${v}×</button>`).join('')}
+    </div>`;
+  }
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-vel]');
+    if (!btn) return;
+    const v = parseFloat(btn.dataset.vel);
+    if (!VELOCIDADES_CONV.includes(v)) return;
+    pzVelConv = v;
+    try { localStorage.setItem('abu-vel-conv', String(v)); } catch {}
+    document.querySelectorAll('[data-vel]').forEach(b => {
+      const activa = parseFloat(b.dataset.vel) === v;
+      b.classList.toggle('activa', activa);
+      b.setAttribute('aria-pressed', String(activa));
+    });
+    if (pzAudioConv && !pzAudioConv.paused) {
+      pzAudioConv.defaultPlaybackRate = v;
+      pzAudioConv.playbackRate = v;
+    }
+  });
   // Audio real (mp3 de Google Cloud) que esté sonando ahora mismo, para
   // poder cortarlo: antes stopSpeaking() solo callaba la voz del
   // navegador y el mp3 seguía sonando encima de la línea siguiente.
@@ -437,9 +477,10 @@
   function pzDetenerAudio() {
     if (pzAudioActual) { try { pzAudioActual.pause(); } catch {} pzAudioActual = null; }
   }
-  function pzTocarUrl(url, onend) {
+  function pzTocarUrl(url, onend, vel) {
     pzDetenerAudio();
     const a = new Audio(url);
+    if (vel) pzAplicarVel(a, vel);
     pzAudioActual = a;
     const fin = () => { if (pzAudioActual === a) pzAudioActual = null; if (onend) onend(); };
     a.onended = fin;
@@ -1490,8 +1531,8 @@
 
     const mensajes = crudas.map((m, i) => ({
       rol: rolDe(m, i),
-      en: (m.en || m.ingles || m.text || '').toString().trim(),
-      es: (m.es || m.espanol || m['español'] || '').toString().trim(),
+      en: (m.en || m.ingles || m.text || '').toString().replace(/<\/?[a-z][^>]*>/gi, '').trim(),
+      es: (m.es || m.espanol || m['español'] || '').toString().replace(/<\/?[a-z][^>]*>/gi, '').trim(),
       audio_url: null
     })).filter(m => m.en).slice(0, CREAR_MAX_MENSAJES);   // ⛔ tope duro de 20
 
@@ -1593,6 +1634,7 @@
             <button id="vivo-ver-trad" class="shrink-0 text-[10px] font-black px-2 py-1.5 rounded-lg bg-slate-100 text-slate-500"><i class="fas fa-language mr-1"></i>Traducción</button>
             <button id="vivo-cerrar" class="w-8 h-8 rounded-full bg-slate-100 text-slate-400 hover:bg-slate-200 flex items-center justify-center shrink-0"><i class="fas fa-times"></i></button>
           </div>
+          ${velSelectorHTML()}
           <div class="flex items-center gap-2 mb-2 shrink-0">
             <div class="flex-1 h-2 rounded-full bg-slate-100 overflow-hidden"><div id="vivo-bar" class="h-full bg-[#FF7A00] rounded-full transition-all" style="width:0%"></div></div>
             <span class="text-[11px] font-black text-slate-400 shrink-0"><span id="vivo-count">0</span>/${total}</span>
@@ -1696,13 +1738,13 @@
       if (!pzVivo) return;
       const seguir = () => { if (pzVivo) { pzVivo.idx++; pzVivoPaso(); } };
       if (url) {
-        pzVivoAudio = new Audio(url);
+        pzVivoAudio = pzAplicarVel(new Audio(url), pzVelConv);
         pzVivoAudio.onended = () => setTimeout(seguir, 350);
         pzVivoAudio.onerror = () => setTimeout(seguir, 1200);
         pzVivoAudio.play().catch(() => setTimeout(seguir, 1200));
       } else {
-        speak(m.en);
-        setTimeout(seguir, Math.max(1500, m.en.length * 60));
+        speak(m.en, pzVelConv);
+        setTimeout(seguir, Math.max(1500, m.en.length * 60) / pzVelConv);
       }
       return;
     }
@@ -1996,7 +2038,7 @@
      tienen mp3 en Supabase y frases sueltas sin audio grabado.
      (Las conversaciones guardadas SIGUEN usando primero su audio real de
      Supabase; esto es únicamente para cuando no existe). */
-  async function pzDecir(texto, rol, btn) {
+  async function pzDecir(texto, rol, btn, vel) {
     const t = String(texto || '').trim();
     if (!t) return;
     stopSpeaking();
@@ -2004,22 +2046,22 @@
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-circle-notch fa-spin text-[10px]"></i>'; }
     const b64 = await pzAudioAbu(t, rol);
     if (btn) { btn.disabled = false; btn.innerHTML = previo; }
-    if (b64) pzTocarUrl(`data:audio/mp3;base64,${b64}`);
-    else speak(t);
+    if (b64) pzTocarUrl(`data:audio/mp3;base64,${b64}`, null, vel);
+    else speak(t, vel || 1);
   }
 
   async function pzReproducirLinea(conv, m, btn) {
     stopSpeaking();
-    if (m.audio_url) { pzTocarUrl(m.audio_url); return; }
-    if (!conv?.creada) { pzDecir(m.en, m.rol, btn); return; }
+    if (m.audio_url) { pzTocarUrl(m.audio_url, null, pzVelConv); return; }
+    if (!conv?.creada) { pzDecir(m.en, m.rol, btn, pzVelConv); return; }
     const previo = btn ? btn.innerHTML : null;
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-circle-notch fa-spin text-[10px]"></i>'; }
     const b64 = await pzAudioAbu(m.en, m.rol);
     if (btn) { btn.disabled = false; btn.innerHTML = previo; }
     if (b64) {
       m.audio_url = `data:audio/mp3;base64,${b64}`;
-      pzTocarUrl(m.audio_url);
-    } else speak(m.en);
+      pzTocarUrl(m.audio_url, null, pzVelConv);
+    } else speak(m.en, pzVelConv);
   }
 
   // Genera de una vez el audio de TODAS las líneas de la conversación creada.
@@ -2052,12 +2094,12 @@
           if (b64) { m.audio_url = `data:audio/mp3;base64,${b64}`; url = m.audio_url; }
         }
         if (url) {
-          const a = new Audio(url);
+          const a = pzAplicarVel(new Audio(url), pzVelConv);
           a.onended = resolve; a.onerror = () => setTimeout(resolve, 1200);
           a.play().catch(() => setTimeout(resolve, 1200));
         } else {
-          speak(m.en);
-          setTimeout(resolve, Math.max(1400, m.en.length * 55));
+          speak(m.en, pzVelConv);
+          setTimeout(resolve, Math.max(1400, m.en.length * 55) / pzVelConv);
         }
       });
       await new Promise(r => setTimeout(r, 250));
@@ -2394,6 +2436,7 @@
             </button>
             <button id="conv-cerrar" class="w-8 h-8 rounded-full bg-slate-100 text-slate-400 hover:bg-slate-200 flex items-center justify-center shrink-0"><i class="fas fa-times"></i></button>
           </div>
+          ${velSelectorHTML()}
           <div id="pz-conv-mensajes" class="flex-1 min-h-0 overflow-y-auto space-y-2.5 pr-1">
             ${conv.mensajes.map((m, i) => pzBurbujaHTML(m, i)).join('')}
           </div>
@@ -3074,7 +3117,7 @@
   }
 
   /* ============================================================
-     Modo 6: CONVERSACIÓN LIBRE CON EMMA
+     Modo 6: CONVERSACIÓN LIBRE (Abu, Emma y personajes famosos)
      ------------------------------------------------------------
      La diferencia con "Crear conversación": allá la IA escribe un
      GUION cerrado y tú repites las líneas. Aquí NO hay guion — hablas
@@ -3084,8 +3127,12 @@
 
      · Texto: Edge Function "conversacion-libre" (una llamada por
        turno; es lo que hace falta para que sea libre de verdad).
-     · Voz: "generar-audio-abu" con la etiqueta "mujer" (voz femenina
-       Chirp 3: HD) y la misma velocidad lenta del resto de la app.
+     · Personaje: el usuario elige con quién hablar (LIBRE_PERSONAJES);
+       su personalidad viaja en el tema que se manda a la función.
+     · Voz: "generar-audio-abu" con la etiqueta de voz del personaje y
+       la velocidad elegida en el selector 0.5× / 0.75× / 1×.
+     · Micrófono: lo dicho se escribe en el campo de texto para poder
+       corregirlo antes de enviarlo.
      · Nivel: el que tenga el usuario en ese momento en su perfil
        (userProfile.nivel). Emma no habla por encima de ese nivel.
      · Cada mensaje de Emma trae "Ver traducción", 🔊 para escucharlo
@@ -3106,10 +3153,107 @@
     'Una entrevista de trabajo', 'Comprar en una tienda', 'El clima y las estaciones'
   ];
 
-  let pzLibre = null;            // charla abierta: { id, tema, nivel, mensajes:[], ... }
+  /* Personajes de la charla libre. Son PARODIAS amables hechas con IA:
+     `perfil` es lo que se le manda al modelo (en inglés) para que hable
+     con la personalidad y el contexto real de cada uno. Las reglas de
+     LIBRE_REGLAS_PERSONAJE mantienen el humor sano: nada de política
+     real, chismes ni ataques. `voz` es la etiqueta de generar-audio-abu. */
+  const LIBRE_PERSONAJES = [
+    { id: 'abu', nombre: 'Abu', emoji: '🦜', color: '#FF7A00', voz: 'mujer', img: 'icono.png',
+      rol: 'Tu tutora, formal y elegante',
+      temas: ['Buenos modales en inglés', 'Cómo presentarme formalmente', 'Mi rutina de estudio'],
+      perfil: 'Abu, the Abulingo English tutor. She is a woman: polite, warm and very FORMAL. She uses a refined, courteous register ("Good afternoon", "Certainly", "Indeed", "It would be my pleasure"), never uses slang, and gently praises good manners. Her humor is subtle and elegant.' },
+    { id: 'emma', nombre: 'Emma', emoji: '👩', color: '#db2777', voz: 'mujer',
+      rol: 'Una amiga para charlar', temas: [], perfil: '' },
+    { id: 'messi', nombre: 'Lionel Messi', emoji: '⚽', color: '#0ea5e9', voz: 'a',
+      rol: 'Tímido, humilde y crack',
+      temas: ['El Mundial de 2022', 'Asado y mate', 'Consejos para ser el mejor'],
+      perfil: 'Lionel Messi: shy, humble and a man of few words, from Rosario, Argentina. Loves football, his family, mate and a good asado. Plays for Inter Miami. When praised he changes the subject modestly, but jokes softly about his World Cup 2022 and his eight Ballon d\'Or trophies "collecting dust". Sometimes says "che".' },
+    { id: 'cristiano', nombre: 'Cristiano Ronaldo', emoji: '🏆', color: '#dc2626', voz: 'a',
+      rol: 'Confiado y competitivo: ¡Siuuu!',
+      temas: ['Rutina de gimnasio', 'Récords y goles', 'Disciplina y sueño'],
+      perfil: 'Cristiano Ronaldo: extremely confident and competitive Portuguese footballer (Al Nassr, Portugal). Obsessed with training, healthy food, sleep and discipline. Shouts "Siuuu!" when happy and playfully reminds everyone he is the best and the all-time top scorer. Motivates the learner like a coach.' },
+    { id: 'shakira', nombre: 'Shakira', emoji: '💃', color: '#f59e0b', voz: 'mujer',
+      rol: 'Pura energía barranquillera',
+      temas: ['Bailar y la música', 'Barranquilla y el Carnaval', 'Cómo escribir una canción'],
+      perfil: 'Shakira: energetic, playful Colombian superstar from Barranquilla. Loves dancing, music, the Carnival and her Lebanese-Colombian roots. Jokes that her hips don\'t lie, references Waka Waka and says she can turn any feeling into a hit song. Never gossips about her private life.' },
+    { id: 'rm', nombre: 'RM (BTS)', emoji: '💜', color: '#7c3aed', voz: 'a',
+      rol: 'El líder filósofo de BTS',
+      temas: ['Museos y arte', 'Cómo aprendí inglés', 'ARMY y la música'],
+      perfil: 'RM (Kim Namjoon), leader of BTS: thoughtful, kind and a bit philosophical. Loves art museums, nature, books and bikes. Proudly learned English by watching the sitcom Friends. Jokes about being the clumsy "God of Destruction" who breaks everything. Says "Borahae" (I purple you).' },
+    { id: 'zayn', nombre: 'Zayn Malik', emoji: '🎤', color: '#475569', voz: 'a',
+      rol: 'Tranquilo y misterioso',
+      temas: ['Dibujar y el arte', 'La vida en la granja', 'Cantar R&B'],
+      perfil: 'Zayn Malik: calm, mysterious and a little shy British singer, former member of One Direction. Loves drawing, comics, R&B and a quiet life on his farm. Answers in a cool, relaxed way and jokes about "good vibes only".' },
+    { id: 'taylor', nombre: 'Taylor Swift', emoji: '🎸', color: '#e11d48', voz: 'mujer',
+      rol: 'Cuenta todo como una canción',
+      temas: ['Gatos', 'Hornear galletas', 'Las eras de la vida'],
+      perfil: 'Taylor Swift: warm, enthusiastic storyteller. Loves her cats (Meredith, Olivia and Benjamin), baking, the number 13, friendship bracelets and hiding little "Easter eggs" in what she says. Jokes that everything could become a song and that every stage of life is a new "era".' },
+    { id: 'einstein', nombre: 'Albert Einstein', emoji: '🧠', color: '#64748b', voz: 'a',
+      rol: 'Genio curioso y despeinado',
+      temas: ['El tiempo y el espacio', 'Tocar el violín', 'La imaginación'],
+      perfil: 'Albert Einstein: playful, curious genius with famously messy hair. Explains ideas with simple thought experiments, loves his violin and sailing, and believes imagination is more important than knowledge. Jokes about relativity ("time flies when you practice English") and forgetting to wear socks.' },
+    { id: 'musk', nombre: 'Elon Musk', emoji: '🚀', color: '#1e293b', voz: 'a',
+      rol: 'Cohetes, Marte y memes',
+      temas: ['Viajar a Marte', 'Carros eléctricos', 'Inventos del futuro'],
+      perfil: 'Elon Musk: nerdy engineer-entrepreneur (Tesla, SpaceX). Talks about rockets, Mars, electric cars, robots and memes. Often says "Interesting" or "Concerning", and jokes about moving to Mars and naming things strangely. Stays away from politics.' },
+    { id: 'trump', nombre: 'Donald Trump', emoji: '🏌️', color: '#b91c1c', voz: 'a',
+      rol: 'Todo es tremendo, créeme',
+      temas: ['Golf', 'Hamburguesas y comida rápida', 'Edificios enormes'],
+      perfil: 'Donald Trump in a light, APOLITICAL parody of his showman style: talks big with superlatives ("tremendous", "huge", "the best, believe me", "nobody does it better"), loves golf, fast food and big buildings with his name on them. Rates the learner\'s English as "the best English, many people are saying it".' },
+    { id: 'petro', nombre: 'Gustavo Petro', emoji: '🦋', color: '#ca8a04', voz: 'a',
+      rol: 'Expresidente de discursos largos',
+      temas: ['Macondo y García Márquez', 'Cuidar el planeta', 'Llegar puntual'],
+      perfil: 'Gustavo Petro, former President of Colombia (2022-2026), in a friendly parody: gives long, poetic and philosophical answers about life and the planet, loves Macondo, Gabriel García Márquez and yellow butterflies, and jokes about writing many posts late at night and arriving a little late to meetings.' },
+    { id: 'fajardo', nombre: 'Sergio Fajardo', emoji: '📐', color: '#16a34a', voz: 'a',
+      rol: 'El profe matemático y sereno',
+      temas: ['Matemáticas divertidas', 'Educación', 'Medellín'],
+      perfil: 'Sergio Fajardo, mathematician, professor and former mayor of Medellín, in a friendly parody: calm, patient and extremely reasonable. Explains everything with math and education examples and jokes about always looking for "the perfect middle point" of every conversation.' },
+    { id: 'espriella', nombre: 'Abelardo de la Espriella', emoji: '👔', color: '#0f172a', voz: 'a',
+      rol: 'Abogado elegante y teatral',
+      temas: ['Moda y trajes', 'Buena comida', 'Hablar con seguridad'],
+      perfil: 'Abelardo de la Espriella, Colombian lawyer, in a friendly parody: very elegant and theatrical, always in a perfect suit, loves fine food and good style, and speaks with bold confidence and dramatic pauses as if he were in a courtroom ("Your honor, this sentence is excellent!").' },
+    { id: 'mj', nombre: 'Michael Jackson', emoji: '🕺', color: '#a21caf', voz: 'a',
+      rol: 'El Rey del Pop: ¡Hee-hee!',
+      temas: ['Bailar el moonwalk', 'Thriller', 'La música que cambia el mundo'],
+      perfil: 'Michael Jackson: gentle, soft-spoken King of Pop. Loves dancing, the moonwalk, music and kindness. Adds a playful "Hee-hee!" or "Shamone!" and references Thriller and Billie Jean.' },
+    { id: 'zendaya', nombre: 'Zendaya', emoji: '🎬', color: '#9333ea', voz: 'mujer',
+      rol: 'Actriz y reina de la moda',
+      temas: ['Películas y series', 'Moda en la alfombra roja', 'Crecer en Oakland'],
+      perfil: 'Zendaya: cool, down-to-earth actress from Oakland, California (Euphoria, Spider-Man, Dune, Challengers) and fashion icon. Loves red carpets, films and being with her family. Jokes about being tall and about sand everywhere after filming Dune. Never talks about her private relationships.' },
+    { id: 'dicaprio', nombre: 'Leonardo DiCaprio', emoji: '🌊', color: '#0369a1', voz: 'a',
+      rol: 'Actor que ama el planeta',
+      temas: ['Titanic', 'Cuidar la naturaleza', 'Mis películas favoritas'],
+      perfil: 'Leonardo DiCaprio: charming actor (Titanic, Inception, The Revenant) and passionate environmentalist. Jokes about waiting many years for his Oscar, about the famous Titanic door "that had space for two", and about the "Leo pointing" meme.' },
+    { id: 'maluma', nombre: 'Maluma', emoji: '😎', color: '#db2777', voz: 'a',
+      rol: '¡Maluma baby!',
+      temas: ['Medellín', 'Moda y estilo', 'Reguetón'],
+      perfil: 'Maluma: charming, stylish reggaeton star from Medellín, Colombia. Loves fashion, fitness, Medellín and music. Says "Maluma baby!" and gives confident but always respectful compliments.' },
+    { id: 'badbunny', nombre: 'Bad Bunny', emoji: '🐰', color: '#65a30d', voz: 'a',
+      rol: 'Relajado y orgulloso de Puerto Rico',
+      temas: ['Puerto Rico', 'Moda atrevida', 'Lucha libre'],
+      perfil: 'Bad Bunny: relaxed, funny Puerto Rican superstar. Proud of Puerto Rico, loves bold fashion, sunglasses and wrestling (WWE). Can drop one Spanish word now and then, but speaks English here.' },
+    { id: 'westcol', nombre: 'Westcol', emoji: '🎮', color: '#16a34a', voz: 'a',
+      rol: 'Streamer a todo volumen',
+      temas: ['Streams y videojuegos', 'Retos locos', 'Medellín'],
+      perfil: 'Westcol: hyper-energetic Colombian streamer from Medellín. Talks about streams, video games, crazy challenges and his community, gets very excited and says "parce". Family friendly: never talks about gambling or betting.' }
+  ];
+  const LIBRE_REGLAS_PERSONAJE = 'Rules: this is a light-hearted AI parody for an English class, not the real person. Stay in character with friendly humor. Never insult anyone, never give real political opinions, endorsements or attacks, never invent news or scandals and do not gossip about private lives. Never say your name is Emma. When the learner makes an English mistake, correct it kindly in "fix" (in Spanish), in your character\'s style.';
+  const libreSinEtiquetas = (t) => String(t || '').replace(/<\/?[a-z][^>]*>/gi, '').replace(/\s{2,}/g, ' ').trim();
+
+  function libreGetPersonaje(id) {
+    return LIBRE_PERSONAJES.find(p => p.id === id) || LIBRE_PERSONAJES.find(p => p.id === 'emma');
+  }
+  function libreAvatarHTML(p, clase = 'chat-avatar') {
+    if (p.img) return `<img src="${p.img}" alt="${escapeHTML(p.nombre)}" class="${clase} abu">`;
+    return `<span class="${clase}" style="background:${p.color}">${p.emoji}</span>`;
+  }
+
+  let pzLibre = null;            // charla abierta: { id, tema, nivel, personaje, mensajes:[], ... }
   let pzLibrePensando = false;
-  let pzLibreForm = { tema: '' };
-  let pzLibreRevelados = new Set(); // índices de mensajes de Emma ya revelados con "Ver mensaje"
+  let pzLibreFallo = false;      // el último turno de la IA falló: se ofrece reintentar
+  let pzLibreForm = { tema: '', personaje: 'abu' };
+  let pzLibreRevelados = new Set(); // índices de mensajes del personaje ya revelados con "Ver mensaje"
 
   function pzConvLibres() {
     if (!Array.isArray(flujo.convLibres)) flujo.convLibres = [];
@@ -3122,27 +3266,39 @@
 
     const nivel = userProfile?.nivel || 'A1';
     const guardadas = pzConvLibres();
+    const elegido = libreGetPersonaje(pzLibreForm.personaje);
+    const temasSugeridos = [...elegido.temas, ...LIBRE_TEMAS];
 
     document.getElementById('mode-panel').innerHTML = `
       <div class="card-3d p-4 sm:p-5">
-        <div class="flex items-center gap-2 mb-2">
+        <div class="flex items-center gap-2 mb-3">
           <span class="bg-pink-100 text-pink-600 px-2.5 py-1 rounded-full text-[11px] font-bold uppercase">💬 Conversación libre</span>
           <span class="text-[10px] font-black text-slate-400">Nivel ${escapeHTML(nivel)}</span>
         </div>
 
+        <p class="text-xs font-black uppercase tracking-wide text-slate-400 mb-2">¿Con quién quieres hablar?</p>
+        <div id="libre-personajes" class="grid grid-cols-3 sm:grid-cols-4 gap-1.5 mb-1">
+          ${LIBRE_PERSONAJES.map(p => `
+            <button class="libre-personaje flex flex-col items-center text-center gap-1 p-2 rounded-xl border-2 transition ${p.id === elegido.id ? 'border-[#FF7A00] bg-orange-50' : 'border-slate-100 bg-white hover:border-orange-200'}" data-personaje="${p.id}" aria-pressed="${p.id === elegido.id}">
+              ${libreAvatarHTML(p)}
+              <span class="text-[11px] font-black text-slate-700 leading-tight">${escapeHTML(p.nombre)}</span>
+              <span class="text-[9px] text-slate-400 leading-tight">${escapeHTML(p.rol)}</span>
+            </button>`).join('')}
+        </div>
+        <p class="text-[10px] text-slate-400 text-center mb-3">🎭 Personajes simulados con IA en tono de humor: no son las personas reales.</p>
+
         <p class="text-xs font-black uppercase tracking-wide text-slate-400 mb-2">¿De qué quieres hablar?</p>
+        <div class="no-bar flex gap-1.5 overflow-x-auto whitespace-nowrap pb-2">
+          ${temasSugeridos.map((t, i) => `<button class="libre-tema-chip shrink-0 text-[11px] font-bold px-2.5 py-1 rounded-full ${i < elegido.temas.length ? 'bg-orange-50 text-[#FF7A00]' : 'bg-slate-100 text-slate-500'} hover:bg-orange-50 hover:text-[#FF7A00]" data-tema="${escapeHTML(t)}">${escapeHTML(t)}</button>`).join('')}
+        </div>
         <textarea id="libre-tema" rows="2" maxlength="200"
-          placeholder="Ejemplo: quiero hablar de mi nuevo trabajo; o de la comida de mi país."
+          placeholder="O escribe tu propio tema: quiero hablar de mi nuevo trabajo, de la comida de mi país…"
           class="w-full p-3 rounded-xl border-2 border-slate-200 focus:border-[#FF7A00] outline-none text-sm">${escapeHTML(pzLibreForm.tema)}</textarea>
 
-        <div class="no-bar flex gap-1.5 overflow-x-auto whitespace-nowrap py-2 mb-1">
-          ${LIBRE_TEMAS.map(t => `<button class="libre-tema-chip shrink-0 text-[11px] font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-500 hover:bg-orange-50 hover:text-[#FF7A00]" data-tema="${escapeHTML(t)}">${escapeHTML(t)}</button>`).join('')}
-        </div>
-
-        <button id="libre-empezar" class="btn-juice bg-gradient-to-br from-[#FF7A00] to-orange-600 text-white font-bold py-3 rounded-xl w-full mt-1">
-          <i class="fas fa-comments mr-2"></i>Empezar a conversar
+        <button id="libre-empezar" class="btn-juice bg-gradient-to-br from-[#FF7A00] to-orange-600 text-white font-bold py-3 rounded-xl w-full mt-2">
+          <i class="fas fa-comments mr-2"></i>Hablar con ${escapeHTML(elegido.nombre)}
         </button>
-        <p class="text-[11px] text-slate-400 text-center mt-2">Si dejas el tema vacío, Emma empieza con algo del día a día.</p>
+        <p class="text-[11px] text-slate-400 text-center mt-2">Si dejas el tema vacío, ${escapeHTML(elegido.nombre)} elige de qué hablar.</p>
       </div>
 
       ${guardadas.length ? `
@@ -3153,7 +3309,7 @@
             <div class="flex items-center gap-2 bg-slate-50 border border-slate-100 rounded-xl p-2.5">
               <button class="libre-abrir flex-1 min-w-0 text-left" data-id="${escapeHTML(c.id)}">
                 <p class="font-heading font-black text-slate-700 text-sm truncate">${escapeHTML(c.titulo || c.tema || 'Conversación libre')}</p>
-                <p class="text-[11px] text-slate-400">${(c.mensajes || []).length} mensajes · Nivel ${escapeHTML(c.nivel || 'A1')}</p>
+                <p class="text-[11px] text-slate-400">Con ${escapeHTML(libreGetPersonaje(c.personaje).nombre)} · ${(c.mensajes || []).length} mensajes · Nivel ${escapeHTML(c.nivel || 'A1')}</p>
               </button>
               <button class="libre-borrar shrink-0 w-8 h-8 rounded-full bg-white border border-slate-200 text-slate-300 hover:text-red-500" data-id="${escapeHTML(c.id)}" title="Borrar"><i class="fas fa-trash text-xs"></i></button>
             </div>`).join('')}
@@ -3162,16 +3318,20 @@
 
     const tema = document.getElementById('libre-tema');
     tema.addEventListener('input', () => { pzLibreForm.tema = tema.value; });
+    document.querySelectorAll('.libre-personaje').forEach(b => {
+      b.onclick = () => { pzLibreForm.personaje = b.dataset.personaje; renderLibre(); };
+    });
     document.querySelectorAll('.libre-tema-chip').forEach(b => {
       b.onclick = () => { tema.value = b.dataset.tema; pzLibreForm.tema = b.dataset.tema; tema.focus(); };
     });
-    document.getElementById('libre-empezar').onclick = () => pzLibreEmpezar(tema.value.trim());
+    document.getElementById('libre-empezar').onclick = () => pzLibreEmpezar(tema.value.trim(), elegido.id);
     document.querySelectorAll('.libre-abrir').forEach(b => {
       b.onclick = () => {
         const c = pzConvLibres().find(x => x.id === b.dataset.id);
         if (!c) return;
-        pzLibre = { ...c, mensajes: (c.mensajes || []).map(m => ({ ...m })) };
+        pzLibre = { ...c, personaje: c.personaje || 'emma', mensajes: (c.mensajes || []).map(m => ({ ...m })) };
         pzLibreRevelados = new Set();
+        pzLibreFallo = false;
         pintarLibreChat();
       };
     });
@@ -3185,104 +3345,126 @@
   }
 
   /* ---------- Arranque de una charla nueva ---------- */
-  async function pzLibreEmpezar(tema) {
+  async function pzLibreEmpezar(tema, personaje) {
     const nivel = userProfile?.nivel || 'A1';
+    const p = libreGetPersonaje(personaje);
     pzLibre = {
       id: 'L' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
       tema: tema || '',
-      titulo: (tema || 'Conversación libre').slice(0, 60),
+      personaje: p.id,
+      titulo: (tema || `Charla con ${p.nombre}`).slice(0, 60),
       nivel,
       mensajes: [],
       creadaEn: new Date().toISOString()
     };
     pzLibreRevelados = new Set();
+    pzLibreFallo = false;
     pintarLibreChat();
-    await pzLibreTurnoIA();          // Emma rompe el hielo
+    await pzLibreTurnoIA();          // el personaje rompe el hielo
+  }
+
+  /* El personaje viaja dentro de `tema`, que es el campo que la función
+     "conversacion-libre" ya mete en su instrucción al modelo. También se
+     manda aparte (`personaje`) por si la función lo usa directamente. */
+  function pzLibreTemaParaIA() {
+    const p = libreGetPersonaje(pzLibre.personaje);
+    if (!p.perfil) return pzLibre.tema;
+    const tema = pzLibre.tema || 'free chat: you choose a fun topic that fits your character';
+    return `ROLEPLAY — You are ${p.nombre}, not Emma. ${p.perfil} ${LIBRE_REGLAS_PERSONAJE} Conversation topic: ${tema}`;
   }
 
   /* ---------- Llamada a la Edge Function ---------- */
   async function pzLibreTurnoIA(opciones = {}) {
     if (!pzLibre || pzLibrePensando) return;
+    const charla = pzLibre;
+    const p = libreGetPersonaje(charla.personaje);
     pzLibrePensando = true;
+    pzLibreFallo = false;
     pzLibrePintarEstado(true);
 
-    const historial = pzLibre.mensajes.slice(-10).map(m => ({
+    const historial = charla.mensajes.slice(-10).map(m => ({
       role: m.rol === 'tu' ? 'user' : 'assistant',
       content: m.en
     }));
 
     const r = await pzFetchIA('conversacion-libre', {
-      tema: pzLibre.tema,
-      nivel: pzLibre.nivel,
+      tema: pzLibreTemaParaIA(),
+      nivel: charla.nivel,
       messages: historial,
-      turno: pzLibre.mensajes.filter(m => m.rol === 'tu').length,
-      cerrar: !!opciones.cerrar
+      turno: charla.mensajes.filter(m => m.rol === 'tu').length,
+      cerrar: !!opciones.cerrar,
+      personaje: p.perfil ? { nombre: p.nombre, instrucciones: `${p.perfil} ${LIBRE_REGLAS_PERSONAJE}` } : null
     });
 
     pzLibrePensando = false;
+    if (pzLibre !== charla) return;   // se cerró la charla mientras esperaba
     const reply = r?.payload?.reply;
-    if (!reply?.en) {
-      pzLibrePintarEstado(false, r?.rechazado ? '' : '⚠️ Emma no pudo responder. Intenta otra vez.');
+    const en = libreSinEtiquetas(reply?.en);
+    if (!en) {
+      pzLibreFallo = !r?.rechazado;
+      pintarLibreChat();
       return;
     }
 
     // La corrección viene junto con la respuesta: se pega al ÚLTIMO
     // mensaje tuyo, que es al que corresponde.
-    if (reply.fix) {
-      for (let i = pzLibre.mensajes.length - 1; i >= 0; i--) {
-        if (pzLibre.mensajes[i].rol === 'tu') { pzLibre.mensajes[i].fix = reply.fix; break; }
+    const fix = libreSinEtiquetas(reply.fix);
+    if (fix) {
+      for (let i = charla.mensajes.length - 1; i >= 0; i--) {
+        if (charla.mensajes[i].rol === 'tu') { charla.mensajes[i].fix = fix; break; }
       }
     }
-    pzLibre.mensajes.push({ rol: 'ia', en: reply.en, es: reply.es || '' });
-    pzLibre.sugerencias = Array.isArray(reply.sugerencias) ? reply.sugerencias.slice(0, 3) : [];
-    if (!pzLibre.tituloIA && reply.titulo) { pzLibre.tituloIA = reply.titulo; pzLibre.titulo = reply.titulo; }
-    if (pzLibre.mensajes.length > LIBRE_MAX_MENSAJES) pzLibre.mensajes = pzLibre.mensajes.slice(-LIBRE_MAX_MENSAJES);
+    charla.mensajes.push({ rol: 'ia', en, es: libreSinEtiquetas(reply.es) });
+    charla.sugerencias = Array.isArray(reply.sugerencias) ? reply.sugerencias.map(libreSinEtiquetas).filter(Boolean).slice(0, 3) : [];
+    if (!charla.tituloIA && reply.titulo) { charla.tituloIA = libreSinEtiquetas(reply.titulo); charla.titulo = charla.tituloIA; }
+    if (charla.mensajes.length > LIBRE_MAX_MENSAJES) charla.mensajes = charla.mensajes.slice(-LIBRE_MAX_MENSAJES);
 
     pintarLibreChat();
-    pzLibreDecir(pzLibre.mensajes.length - 1);
+    pzLibreDecir(charla.mensajes.length - 1);
     pzLibreGuardar();
     if (opciones.cerrar) setTimeout(pzLibreTerminar, 1200);
   }
 
   async function pzLibreEnviar(texto) {
     const t = String(texto || '').trim();
-    if (!t || !pzLibre || pzLibrePensando) return;
+    if (!t || !pzLibre || pzLibrePensando) return false;
     pzLibre.mensajes.push({ rol: 'tu', en: t, fix: '' });
     pintarLibreChat();
     await pzLibreTurnoIA();
+    return true;
   }
 
-  /* ---------- Voz de Emma ---------- */
-  // "mujer" es una etiqueta de voz de la Edge Function generar-audio-abu:
-  // una voz femenina Chirp 3: HD, distinta a las de los personajes A/B.
+  /* ---------- Voz del personaje ---------- */
   async function pzLibreDecir(indice, btn) {
     const m = pzLibre?.mensajes?.[indice];
     if (!m || m.rol !== 'ia') return;
+    const voz = libreGetPersonaje(pzLibre.personaje).voz;
     stopSpeaking();
-    if (m.audio_url) { pzTocarUrl(m.audio_url); return; }
+    if (m.audio_url) { pzTocarUrl(m.audio_url, null, pzVelConv); return; }
     const previo = btn ? btn.innerHTML : null;
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-circle-notch fa-spin text-[10px]"></i>'; }
-    const b64 = await pzAudioAbu(m.en, 'mujer');
+    const b64 = await pzAudioAbu(m.en, voz);
     if (btn) { btn.disabled = false; btn.innerHTML = previo; }
-    if (b64) { m.audio_url = `data:audio/mp3;base64,${b64}`; pzTocarUrl(m.audio_url); }
-    else speak(m.en);
+    if (b64) { m.audio_url = `data:audio/mp3;base64,${b64}`; pzTocarUrl(m.audio_url, null, pzVelConv); }
+    else speak(m.en, pzVelConv);
   }
 
   async function pzLibreEscucharTodo() {
     if (!pzLibre) return;
+    const voz = libreGetPersonaje(pzLibre.personaje).voz;
     for (let i = 0; i < pzLibre.mensajes.length; i++) {
       const m = pzLibre.mensajes[i];
       if (m.rol !== 'ia') continue;
       if (!pzLibre) return;
       await new Promise(async (resolve) => {
         if (!m.audio_url) {
-          const b64 = await pzAudioAbu(m.en, 'mujer');
+          const b64 = await pzAudioAbu(m.en, voz);
           if (b64) m.audio_url = `data:audio/mp3;base64,${b64}`;
         }
         if (m.audio_url) {
-          const a = pzTocarUrl(m.audio_url, resolve);
+          const a = pzTocarUrl(m.audio_url, resolve, pzVelConv);
           if (!a) resolve();
-        } else { speak(m.en); setTimeout(resolve, Math.max(1500, m.en.length * 60)); }
+        } else { speak(m.en, pzVelConv); setTimeout(resolve, Math.max(1500, m.en.length * 60) / pzVelConv); }
       });
       await new Promise(r => setTimeout(r, 250));
     }
@@ -3294,6 +3476,7 @@
     const lista = pzConvLibres();
     const copia = {
       id: pzLibre.id, titulo: pzLibre.titulo, tema: pzLibre.tema, nivel: pzLibre.nivel,
+      personaje: pzLibre.personaje,
       creadaEn: pzLibre.creadaEn, actualizada: new Date().toISOString(),
       // Solo texto: el audio se vuelve a pedir cuando haga falta.
       mensajes: pzLibre.mensajes.map(m => ({ rol: m.rol, en: m.en, es: m.es || '', fix: m.fix || '' }))
@@ -3307,8 +3490,10 @@
   function pzLibreTerminar() {
     pzLibreGuardar();
     stopSpeaking();
+    if (pzLibreRec) { try { pzLibreRec.detenerYa(); } catch {} pzLibreRec = null; }
     pzLibre = null;
     pzLibrePensando = false;
+    pzLibreFallo = false;
     renderLibre();
   }
 
@@ -3326,11 +3511,12 @@
           </div>
         </div>`;
     }
+    const p = libreGetPersonaje(pzLibre.personaje);
     return `
       <div class="chat-fila">
-        <span class="chat-avatar" style="background:linear-gradient(135deg,#f472b6,#db2777)">E</span>
+        ${libreAvatarHTML(p)}
         <div class="burbuja burbuja-otro">
-          <div class="burbuja-nombre" style="color:#db2777">Emma</div>
+          <div class="burbuja-nombre" style="color:${p.color}">${escapeHTML(p.nombre)}</div>
           <div id="${idMsg}" class="${oculto ? 'hidden' : ''}">${escapeHTML(m.en)}</div>
           ${oculto ? `<button data-libre-ver-mensaje="${i}" class="burbuja-link"><i class="fas fa-eye"></i> Ver mensaje</button>` : ''}
           ${m.es ? `<button data-toggle-tr="${idTr}" class="burbuja-link"><i class="fas fa-language"></i> Traducción</button>
@@ -3343,27 +3529,37 @@
       </div>`;
   }
 
+  const LIBRE_MSG_BASE = 'Habla 🎙️ o escribe; puedes corregir el texto antes de enviarlo';
+
   function pintarLibreChat() {
     if (!pzLibre) return;
+    const p = libreGetPersonaje(pzLibre.personaje);
     const viejo = document.getElementById('libre-mensajes');
     const alFinal = !viejo || (viejo.scrollHeight - viejo.scrollTop - viejo.clientHeight) < 80;
     const scrollPrevio = viejo ? viejo.scrollTop : 0;
+    // Lo que el usuario estaba escribiendo (o dictó) sobrevive al repintado.
+    const borrador = document.getElementById('libre-input')?.value || '';
 
     document.getElementById('mode-panel').innerHTML = `
       <div class="card-3d p-3 sm:p-4">
         <div class="flex items-center gap-2 mb-2">
-          <span class="bg-pink-100 text-pink-600 px-2.5 py-1 rounded-full text-[11px] font-bold uppercase shrink-0">💬 Libre</span>
+          ${libreAvatarHTML(p)}
           <div class="flex-1 min-w-0">
             <p class="font-heading font-black text-slate-800 text-sm truncate">${escapeHTML(pzLibre.titulo || 'Conversación libre')}</p>
-            <p class="text-[10px] text-slate-400">Con Emma · Nivel ${escapeHTML(pzLibre.nivel)}</p>
+            <p class="text-[10px] text-slate-400">Con ${escapeHTML(p.nombre)} · Nivel ${escapeHTML(pzLibre.nivel)}</p>
           </div>
           <button id="libre-play-todo" title="Escuchar toda la conversación" class="shrink-0 w-8 h-8 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center"><i class="fas fa-play text-[11px]"></i></button>
           <button id="libre-cerrar" title="Terminar" class="shrink-0 w-8 h-8 rounded-full bg-slate-100 text-slate-400 hover:bg-slate-200 flex items-center justify-center"><i class="fas fa-times"></i></button>
         </div>
+        ${velSelectorHTML()}
 
         <div id="libre-mensajes" class="chat-scroll chat-fondo h-[44vh] min-h-[220px] overflow-y-auto p-3 space-y-3 mb-2">
           ${pzLibre.mensajes.map((m, i) => pzLibreBurbujaHTML(m, i)).join('')}
-          <div id="libre-pensando" class="hidden flex justify-start"><div class="bg-white border border-slate-200 text-slate-400 rounded-2xl rounded-bl-sm px-3.5 py-2 text-sm"><i class="fas fa-circle-notch fa-spin mr-1"></i> Emma está escribiendo...</div></div>
+          <div id="libre-pensando" class="hidden flex justify-start"><div class="bg-white border border-slate-200 text-slate-400 rounded-2xl rounded-bl-sm px-3.5 py-2 text-sm"><i class="fas fa-circle-notch fa-spin mr-1"></i> ${escapeHTML(p.nombre)} está escribiendo...</div></div>
+          ${pzLibreFallo ? `<div class="flex flex-col items-center gap-1.5 py-1">
+            <p class="text-xs font-bold text-slate-400 text-center">⚠️ ${escapeHTML(p.nombre)} no pudo responder.</p>
+            <button id="libre-reintentar" class="btn-juice bg-white border-2 border-[#FF7A00] text-[#FF7A00] font-bold text-xs px-3 py-1.5 rounded-xl"><i class="fas fa-rotate-right mr-1"></i>Reintentar</button>
+          </div>` : ''}
         </div>
 
         <div id="libre-sugerencias" class="no-bar flex gap-1.5 overflow-x-auto whitespace-nowrap mb-2 min-h-[26px]">
@@ -3376,7 +3572,7 @@
             class="flex-1 min-w-0 bg-white border-2 border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-[#FF7A00] text-slate-700 font-medium">
           <button id="libre-enviar" class="btn-juice bg-[#FF7A00] text-white font-bold px-3.5 py-2.5 rounded-xl shrink-0"><i class="fas fa-paper-plane"></i></button>
         </div>
-        <p id="libre-msg" class="text-xs font-bold text-slate-400 min-h-[1.3em] text-center mt-1.5">Habla 🎙️ o escribe tu respuesta en inglés</p>
+        <p id="libre-msg" class="text-xs font-bold text-slate-400 min-h-[1.3em] text-center mt-1.5">${LIBRE_MSG_BASE}</p>
         <button id="libre-despedir" class="w-full text-[11px] font-bold text-slate-300 hover:text-slate-500 mt-1">Despedirme y terminar</button>
       </div>`;
 
@@ -3392,7 +3588,7 @@
         // dentro de un modal. Aquí el chat está en la página, así que al
         // cerrar la práctica basta con cerrar su modal — con pzVolverA el
         // modal se quedaba abierto encima del chat.
-        abrirPractica({ text: m.en, es: m.es, nivel: pzLibre.nivel, audioUrl: m.audio_url || null, rol: 'mujer' });
+        abrirPractica({ text: m.en, es: m.es, nivel: pzLibre.nivel, audioUrl: m.audio_url || null, rol: p.voz });
         return;
       }
       const ver = e.target.closest('[data-libre-ver-mensaje]');
@@ -3401,9 +3597,20 @@
       if (tr) { const el = document.getElementById(tr.dataset.toggleTr); if (el) el.classList.toggle('hidden'); }
     });
     box.scrollTop = alFinal ? box.scrollHeight : scrollPrevio;
+    document.getElementById('libre-reintentar')?.addEventListener('click', () => pzLibreTurnoIA());
 
     const input = document.getElementById('libre-input');
-    const enviar = () => { const t = input.value.trim(); if (!t) return; input.value = ''; pzLibreEnviar(t); };
+    input.value = borrador;
+    const msg = document.getElementById('libre-msg');
+    // Antes el input se vaciaba ANTES de saber si se podía enviar: si la
+    // IA seguía pensando, tu mensaje desaparecía sin enviarse.
+    const enviar = () => {
+      const t = input.value.trim();
+      if (!t) return;
+      if (pzLibrePensando) { msg.textContent = `Espera a que ${p.nombre} termine de responder ⏳`; return; }
+      input.value = '';
+      pzLibreEnviar(t);
+    };
     document.getElementById('libre-enviar').onclick = enviar;
     input.addEventListener('keydown', (e) => { if (e.key === 'Enter') enviar(); });
     document.querySelectorAll('.libre-sug').forEach(b => {
@@ -3413,45 +3620,45 @@
     document.getElementById('libre-cerrar').onclick = pzLibreTerminar;
     document.getElementById('libre-despedir').onclick = () => {
       if (pzLibrePensando) return;
-      pzLibre.mensajes.push({ rol: 'tu', en: 'I have to go now. Thank you, Emma!', fix: '' });
+      pzLibre.mensajes.push({ rol: 'tu', en: `I have to go now. Thank you, ${p.nombre}!`, fix: '' });
       pintarLibreChat();
       pzLibreTurnoIA({ cerrar: true });
     };
 
-    const msg = document.getElementById('libre-msg');
     document.getElementById('libre-mic').onclick = (e) => pzLibreMic(e.currentTarget, msg);
     if (pzLibrePensando) pzLibrePintarEstado(true);
   }
 
-  function pzLibrePintarEstado(pensando, error) {
+  function pzLibrePintarEstado(pensando) {
     const burbuja = document.getElementById('libre-pensando');
     if (burbuja) {
       burbuja.classList.toggle('hidden', !pensando);
       if (pensando) { const box = document.getElementById('libre-mensajes'); if (box) box.scrollTop = box.scrollHeight; }
     }
-    const msg = document.getElementById('libre-msg');
-    if (msg && error) msg.textContent = error;
     const enviar = document.getElementById('libre-enviar');
     if (enviar) enviar.disabled = !!pensando;
   }
 
   /* ---------- Micrófono de la conversación libre ----------
-     Mismo patrón que el del modo "en vivo" (pzVivoGrabar), pero suelto:
-     aquí no hay una línea modelo con la que comparar, así que lo dicho
-     se manda tal cual como tu mensaje. En celular Chrome ignora
-     "continuous" y corta solo, por eso se reanuda y se acumula lo dicho
-     entre cortes. */
+     Lo dicho NO se envía solo: se escribe en el campo de texto para que
+     puedas corregir lo que el reconocimiento entendió mal y luego tocar
+     enviar. En celular Chrome ignora "continuous" y corta solo, por eso
+     pzEscuchar reanuda y acumula lo dicho entre cortes. */
   let pzLibreRec = null;
   function pzLibreMic(btn, msg) {
     if (pzLibreRec) { try { pzLibreRec.detenerYa(); } catch {} return; }
-    if (pzLibrePensando) return;
     stopSpeaking();
     pzLibreRec = pzEscuchar(btn, msg, {
       onFin: (dicho, err) => {
         pzLibreRec = null;
-        if (!dicho) { msg.textContent = pzTextoErrorVoz(err); return; }
-        msg.textContent = 'Habla 🎙️ o escribe tu respuesta en inglés';
-        pzLibreEnviar(dicho);
+        const m = document.getElementById('libre-msg') || msg;
+        if (!dicho) { m.textContent = pzTextoErrorVoz(err); return; }
+        const input = document.getElementById('libre-input');
+        if (!input) return;
+        input.value = input.value.trim() ? `${input.value.trim()} ${dicho}` : dicho;
+        input.focus();
+        input.setSelectionRange(input.value.length, input.value.length);
+        m.textContent = '✏️ Revisa lo que se entendió, corrígelo si hace falta y toca enviar';
       }
     });
   }
