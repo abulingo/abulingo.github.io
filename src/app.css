@@ -45,6 +45,14 @@
 }
 .btn-oir:hover { color: #FF7A00; border-color: #FF7A00; }
 .btn-oir:active { transform: scale(.9); }
+.vel-selector { display: flex; align-items: center; justify-content: flex-end; gap: 4px; margin-bottom: 8px; }
+.vel-label { font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: .05em; color: #94a3b8; margin-right: 2px; }
+.vel-btn {
+  font-size: 11px; font-weight: 800; color: #64748b; background: #fff; border: 1px solid #e2e8f0;
+  border-radius: 999px; padding: 3px 10px; min-width: 44px; min-height: 28px; transition: all .15s;
+}
+.vel-btn:hover { color: #FF7A00; border-color: #fdba74; }
+.vel-btn.activa { color: #fff; background: #FF7A00; border-color: #FF7A00; }
 .turno-card {
   width: 100%; display: flex; flex-direction: column; align-items: center; gap: 6px;
   background: linear-gradient(180deg, #fff7ed, #fff); border: 2px solid #fed7aa; border-radius: 18px; padding: 12px;

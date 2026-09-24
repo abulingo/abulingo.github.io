@@ -737,6 +737,47 @@ function openAbuChat() {
   // el ritmo es el mismo se oiga una u otra. 0.85 ≈ 15 % más lento que
   // el normal, que es lo que un principiante alcanza a seguir.
   const VOZ_VELOCIDAD = 0.85;
+
+  // Velocidad de escucha de las conversaciones (selector 0.5× / 0.75× / 1×).
+  // Se aplica encima del audio tal como llega, y solo en los chats.
+  const VELOCIDADES_CONV = [0.5, 0.75, 1];
+  let velConversacion = 1;
+  try {
+    const v = parseFloat(localStorage.getItem('abu-vel-conv'));
+    if (VELOCIDADES_CONV.includes(v)) velConversacion = v;
+  } catch {}
+  let audioConvActual = null;
+  function aplicarVelocidad(audio, vel) {
+    audio.defaultPlaybackRate = vel;
+    audio.playbackRate = vel;
+    audio.preservesPitch = true;
+    audioConvActual = audio;
+  }
+  function velSelectorHTML() {
+    return `<div class="vel-selector" role="group" aria-label="Velocidad de reproducción">
+      <span class="vel-label"><i class="fas fa-gauge-high"></i> Velocidad</span>
+      ${VELOCIDADES_CONV.map(v => `<button type="button" data-vel="${v}" class="vel-btn${v === velConversacion ? ' activa' : ''}" aria-pressed="${v === velConversacion}">${v}×</button>`).join('')}
+    </div>`;
+  }
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-vel]');
+    if (!btn) return;
+    const v = parseFloat(btn.dataset.vel);
+    if (!VELOCIDADES_CONV.includes(v)) return;
+    velConversacion = v;
+    try { localStorage.setItem('abu-vel-conv', String(v)); } catch {}
+    document.querySelectorAll('[data-vel]').forEach(b => {
+      const activa = parseFloat(b.dataset.vel) === v;
+      b.classList.toggle('activa', activa);
+      b.setAttribute('aria-pressed', String(activa));
+    });
+    // La línea que ya está sonando también cambia de ritmo al instante.
+    if (audioConvActual && !audioConvActual.paused) {
+      audioConvActual.defaultPlaybackRate = v;
+      audioConvActual.playbackRate = v;
+    }
+  });
+
   let ttsVoices = [];
   function loadVoices() { ttsVoices = window.speechSynthesis ? window.speechSynthesis.getVoices() : []; }
   if (window.speechSynthesis) {
@@ -747,12 +788,12 @@ function openAbuChat() {
     if (!ttsVoices.length) loadVoices();
     return ttsVoices.find(v => /en[-_]US/i.test(v.lang)) || ttsVoices.find(v => /^en/i.test(v.lang)) || null;
   }
-  function speak(text, onend) {
+  function speak(text, onend, vel = 1) {
     if (!window.speechSynthesis) { if (onend) onend(); return; }
     const u = new SpeechSynthesisUtterance(text);
     const v = pickEnglishVoice();
     if (v) u.voice = v;
-    u.lang = 'en-US'; u.rate = VOZ_VELOCIDAD;
+    u.lang = 'en-US'; u.rate = VOZ_VELOCIDAD * vel;
     if (onend) u.onend = onend;
     window.speechSynthesis.speak(u);
   }
@@ -800,9 +841,10 @@ function openAbuChat() {
     if (abuAudioActual) { try { abuAudioActual.pause(); } catch {} abuAudioActual = null; }
   }
 
-  function reproducirBase64(audioContent, onend) {
+  function reproducirBase64(audioContent, onend, vel) {
     detenerVozReal();
     const audio = new Audio(`data:audio/mp3;base64,${audioContent}`);
+    if (vel) aplicarVelocidad(audio, vel);
     abuAudioActual = audio;
     const fin = () => { if (abuAudioActual === audio) abuAudioActual = null; if (onend) onend(); };
     audio.onended = fin;
@@ -869,6 +911,7 @@ function openAbuChat() {
     const cfg = (typeof opciones === 'string') ? { voz: opciones } : (opciones || {});
     const voz = cfg.voz || VOZ_ABU;
     const onend = cfg.onend || null;
+    const vel = cfg.vel;
     if (!t) { if (onend) onend(); return; }
 
     if (window.speechSynthesis) window.speechSynthesis.cancel();
@@ -876,7 +919,7 @@ function openAbuChat() {
 
     const clave = claveVoz(voz, t);
     const cacheado = vozCache.get(clave);
-    if (cacheado) { reproducirBase64(cacheado, onend); return; }
+    if (cacheado) { reproducirBase64(cacheado, onend, vel); return; }
 
     if (puedeIA()) {
       try {
@@ -889,7 +932,7 @@ function openAbuChat() {
           const payload = await resp.json().catch(() => null);
           if (resp.ok && payload?.audioContent) {
             vozCache.set(clave, payload.audioContent);
-            reproducirBase64(payload.audioContent, onend);
+            reproducirBase64(payload.audioContent, onend, vel);
             return;
           }
           avisarVoz(payload);
@@ -898,7 +941,7 @@ function openAbuChat() {
         console.warn('[voz] audio real no disponible, uso voz del navegador:', err?.message || err);
       }
     }
-    speak(t, onend);
+    speak(t, onend, vel || 1);
   }
 
   // Abu siempre habla con SU voz; el resto de los chats pasan la suya.
@@ -3366,6 +3409,7 @@ function openAbuChat() {
           <span class="text-[11px] font-black text-slate-400 shrink-0"><span id="gc-count">0</span>/${mensajes.length}</span>
           ${cfg.onSalir ? `<button id="gc-exit" title="Salir" class="shrink-0 w-6 h-6 rounded-full text-slate-300 hover:text-slate-500 hover:bg-slate-100 transition text-sm">&times;</button>` : ''}
         </div>
+        ${velSelectorHTML()}
         <div id="gc-messages" class="chat-scroll chat-fondo h-[42vh] min-h-[200px] overflow-y-auto p-3 space-y-3 mb-3"></div>
         <div id="gc-turno" class="flex flex-col items-center gap-1.5"></div>
       </div>`;
@@ -3379,7 +3423,7 @@ function openAbuChat() {
 
   function gcClick(e) {
     const say = e.target.closest('[data-say]');
-    if (say) { vozReal(decodeURIComponent(say.dataset.say || ''), { voz: say.dataset.voz || 'a' }); return; }
+    if (say) { vozReal(decodeURIComponent(say.dataset.say || ''), { voz: say.dataset.voz || 'a', vel: velConversacion }); return; }
     const msg = e.target.closest('[data-toggle-msg]');
     if (msg) { document.getElementById(msg.dataset.toggleMsg)?.classList.remove('hidden'); msg.classList.add('hidden'); return; }
     const tr = e.target.closest('[data-toggle-tr]');
@@ -3450,8 +3494,9 @@ function openAbuChat() {
         hecho = true; gc.idx++;
         setTimeout(() => gcPaso(), 450);
       };
-      const respaldo = setTimeout(avanzar, Math.max(3000, m.en.length * 95));
-      vozReal(m.en, { voz: gcVoz(m), onend: () => { clearTimeout(respaldo); avanzar(); } });
+      // El respaldo se alarga con la velocidad: a 0.5× la línea dura el doble.
+      const respaldo = setTimeout(avanzar, Math.max(3000, m.en.length * 95) / velConversacion);
+      vozReal(m.en, { voz: gcVoz(m), vel: velConversacion, onend: () => { clearTimeout(respaldo); avanzar(); } });
       return;
     }
 
@@ -3480,7 +3525,7 @@ function openAbuChat() {
       const el = document.getElementById(e.currentTarget.dataset.toggleTr);
       if (el) el.classList.toggle('hidden');
     });
-    document.getElementById('gc-oir').onclick = () => vozReal(m.en, { voz: gcVoz(m) });
+    document.getElementById('gc-oir').onclick = () => vozReal(m.en, { voz: gcVoz(m), vel: velConversacion });
     document.getElementById('gc-saltar').onclick = () => { if (!gc) return; gc.idx++; gcPaso(); };
 
     const msg = document.getElementById('gc-msg');
@@ -3530,7 +3575,7 @@ function openAbuChat() {
     // Se oye el modelo correcto y recién ahí sigue la conversación.
     setTimeout(() => {
       if (!gc) return;
-      vozReal(m.en, { voz: gcVoz(m), onend: () => setTimeout(() => gcPaso(), 400) });
+      vozReal(m.en, { voz: gcVoz(m), vel: velConversacion, onend: () => setTimeout(() => gcPaso(), 400) });
     }, 600);
   }
 
@@ -4154,15 +4199,16 @@ function openAbuChat() {
     });
   }
   // Reproduce el audio real grabado si existe; si no, cae a la voz del navegador.
-  function reproducirAudioDom(fila, campoTexto) {
+  function reproducirAudioDom(fila, campoTexto, vel) {
     const url = fila?.audio_url;
     if (url) {
       stopSpeaking();
       const a = new Audio(url);
-      a.play().catch(() => speak(fila[campoTexto] || ''));
+      if (vel) aplicarVelocidad(a, vel);
+      a.play().catch(() => speak(fila[campoTexto] || '', null, vel || 1));
       return a;
     }
-    speak(fila[campoTexto] || '');
+    speak(fila[campoTexto] || '', null, vel || 1);
     return null;
   }
 
@@ -4698,6 +4744,7 @@ function openAbuChat() {
           <div class="flex-1 progress-track" style="margin-top:0"><div id="dom-conv-bar" class="progress-fill" style="width:0%"></div></div>
           <span class="text-[11px] font-black text-slate-400 shrink-0"><span id="dom-conv-count">0</span>/${total}</span>
         </div>
+        ${velSelectorHTML()}
         <div id="dom-conv-messages" class="chat-scroll chat-fondo h-[42vh] min-h-[200px] overflow-y-auto p-3 space-y-3 mb-3"></div>
         <div id="dom-conv-turno" class="flex flex-col items-center gap-1.5"></div>
       </div>`;
@@ -4712,8 +4759,8 @@ function openAbuChat() {
       const say = e.target.closest('[data-say]');
       if (say) {
         stopSpeaking();
-        if (say.dataset.audio) reproducirAudioDom({ audio_url: say.dataset.audio, texto: decodeURIComponent(say.dataset.say || '') }, 'texto');
-        else speak(decodeURIComponent(say.dataset.say || ''));
+        if (say.dataset.audio) reproducirAudioDom({ audio_url: say.dataset.audio, texto: decodeURIComponent(say.dataset.say || '') }, 'texto', velConversacion);
+        else speak(decodeURIComponent(say.dataset.say || ''), null, velConversacion);
         return;
       }
       const msg = e.target.closest('[data-toggle-msg]');
@@ -4771,13 +4818,14 @@ function openAbuChat() {
       turno.innerHTML = HABLANDO_HTML;
       domConversarBubble(linea.speaker, linea.en, linea.es, linea.audio);
       const avanzar = () => domConversarPaso(nivel, n, conv, personaje, idx + 1);
+      const esperaTts = Math.max(1400, linea.en.length * 55) / velConversacion;
       if (linea.audio) {
-        const a = reproducirAudioDom({ audio_url: linea.audio, texto: linea.en }, 'texto');
+        const a = reproducirAudioDom({ audio_url: linea.audio, texto: linea.en }, 'texto', velConversacion);
         if (a) { a.onended = avanzar; a.onerror = () => setTimeout(avanzar, 1400); }
-        else setTimeout(avanzar, Math.max(1400, linea.en.length * 55));
+        else setTimeout(avanzar, esperaTts);
       } else {
-        speak(linea.en);
-        setTimeout(avanzar, Math.max(1400, linea.en.length * 55));
+        speak(linea.en, null, velConversacion);
+        setTimeout(avanzar, esperaTts);
       }
       return;
     }
@@ -4805,10 +4853,26 @@ function openAbuChat() {
         // Atraso antes de reproducir el audio de referencia: si sonaba
         // pegado al efecto de acierto/error (playSound de arriba) se
         // sentía como si ambos audios se reprodujeran a la vez.
+        // Se avanza cuando termina el audio (a 0.5× dura el doble); el
+        // respaldo evita quedarse trabado si el navegador no avisa el final.
+        let avanzado = false;
+        const seguir = () => {
+          if (avanzado) return;
+          avanzado = true;
+          domConversarPaso(nivel, n, conv, personaje, idx + 1);
+        };
+        const respaldo = setTimeout(seguir, 700 + Math.max(1600, linea.en.length * 95) / velConversacion);
+        const alTerminar = () => { clearTimeout(respaldo); setTimeout(seguir, 400); };
         setTimeout(() => {
-          if (linea.audio) reproducirAudioDom({ audio_url: linea.audio, texto: linea.en }, 'texto'); else if (!bien) speak(linea.en);
+          if (linea.audio) {
+            const a = reproducirAudioDom({ audio_url: linea.audio, texto: linea.en }, 'texto', velConversacion);
+            if (a) { a.onended = alTerminar; a.onerror = alTerminar; }
+          } else if (!bien) {
+            speak(linea.en, alTerminar, velConversacion);
+          } else {
+            alTerminar();
+          }
         }, 700);
-        setTimeout(() => domConversarPaso(nivel, n, conv, personaje, idx + 1), 2300);
       },
       onError: (err) => {
         if (err === 'no-soportado') {
