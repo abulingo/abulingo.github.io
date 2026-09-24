@@ -3303,8 +3303,7 @@ function openAbuChat() {
          una por conversación completa.
 
      Cada burbuja tuya muestra arriba la frase que debías decir, abajo
-     lo que se te entendió ("Dijiste"), el botón "Ver traducción" y la
-     corrección cuando no coincide.
+     lo que se te entendió ("Dijiste") y el botón "Ver traducción".
 
      cfg = {
        etiqueta, chipClase, mensajes:[{rol:'tu'|'otro', en, es, nombre?, voz?}],
@@ -3370,21 +3369,6 @@ function openAbuChat() {
   }
 
   const gcVoz = (m) => m.voz || (m.rol === 'tu' ? (gc?.cfg?.vozTuya || 'b') : (gc?.cfg?.vozOtro || 'a'));
-
-  /* Compara lo que dijiste con la frase que tocaba y devuelve una
-     corrección corta EN ESPAÑOL (o '' si estuvo bien). Es local: no
-     gasta IA y aparece al instante. */
-  function gcRevisar(objetivo, dicho) {
-    const obj = norm(objetivo).split(' ').filter(Boolean);
-    const dic = new Set(norm(dicho).split(' ').filter(Boolean));
-    const gram = corregirLocal(dicho);
-    if (!obj.length) return gram;
-    const faltan = obj.filter(w => !dic.has(w));
-    if (!faltan.length) return gram;
-    if (faltan.length >= obj.length) return `No se entendió la frase. Se dice así: "${objetivo}"`;
-    const lista = faltan.slice(0, 4).map(w => `"${w}"`).join(', ');
-    return `Te faltó ${lista}. La frase completa es: "${objetivo}"${gram ? ' · ' + gram : ''}`;
-  }
 
   function gcProgreso() {
     if (!gc) return;
@@ -3457,9 +3441,9 @@ function openAbuChat() {
     box.appendChild(div); box.scrollTop = box.scrollHeight;
   }
 
-  // Arriba la frase que TOCABA decir, abajo lo que se te entendió, el
-  // botón de traducción y —si hizo falta— la corrección.
-  function gcBurbujaTuya(m, dicho, fix) {
+  // Arriba la frase que TOCABA decir, abajo lo que se te entendió y el
+  // botón de traducción.
+  function gcBurbujaTuya(m, dicho) {
     const box = document.getElementById('gc-messages'); if (!box) return;
     const idTr = 'gc-tr-' + Math.random().toString(36).slice(2, 9);
     const div = document.createElement('div');
@@ -3471,7 +3455,6 @@ function openAbuChat() {
         <div>${escapeHTML(dicho || '—')}</div>
         ${m.es ? `<button data-toggle-tr="${idTr}" class="burbuja-link"><i class="fas fa-language"></i> Traducción</button>
         <div id="${idTr}" class="hidden burbuja-trad">${escapeHTML(m.es)}</div>` : ''}
-        ${fix ? `<div class="burbuja-fix">✏️ ${escapeHTML(fix)}</div>` : ''}
       </div>`;
     box.appendChild(div); box.scrollTop = box.scrollHeight;
   }
@@ -3562,7 +3545,7 @@ function openAbuChat() {
     const bien = coincideVoz(dicho, m.en);
     if (bien) gc.aciertos++;
     playSound(bien ? 'correct' : 'wrong');
-    gcBurbujaTuya(m, dicho, bien ? '' : gcRevisar(m.en, dicho));
+    gcBurbujaTuya(m, dicho);
 
     // Se retira el micrófono mientras suena el modelo: si se dejaba
     // puesto, se podía mandar dos veces la misma línea y el guion se
@@ -3833,39 +3816,6 @@ function openAbuChat() {
 
   const alAzar = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
-  /* ------------------------------------------------------------
-     CORRECTOR LOCAL ✏️
-     Garantiza que SIEMPRE haya corrección cuando el estudiante
-     comete un error típico, aunque la Edge Function no responda
-     (la IA corrige mejor, pero esto es la red de seguridad).
-     Se muestra en la cajita ámbar "✏️" de la burbuja de Abu.
-  ------------------------------------------------------------ */
-  const CORRECCIONES_LOCALES = [
-    { re: /\bi\s+(is|are)\b/i,                         fix: 'Se dice "I am", no "I is / I are".' },
-    { re: /\bi\s+has\b/i,                              fix: 'Se dice "I have", no "I has".' },
-    { re: /\b(he|she|it)\s+have\b/i,                   fix: 'Con he/she/it es "has", no "have".' },
-    { re: /\b(he|she|it)\s+don'?t\b/i,                 fix: 'Con he/she/it es "doesn\'t", no "don\'t".' },
-    { re: /\bi\s+am\s+agree\b/i,                       fix: 'Se dice "I agree" (sin "am").' },
-    { re: /\bpeoples\b/i,                              fix: '"People" ya es plural: no lleva "s".' },
-    { re: /\bmore\s+(better|worse|bigger|easier|faster)\b/i, fix: 'El comparativo va solo: "better", "bigger"... sin "more".' },
-    { re: /\bfor\s+to\s+[a-z]/i,                       fix: 'Se dice "to + verbo", no "for to".' },
-    { re: /\bdont\b/i,                                 fix: 'No olvides el apóstrofo: "don\'t".' },
-    { re: /\bcant\b/i,                                 fix: 'No olvides el apóstrofo: "can\'t".' },
-    { re: /\bdoesnt\b/i,                               fix: 'No olvides el apóstrofo: "doesn\'t".' },
-    { re: /\bim\b/i,                                   fix: 'Se escribe "I\'m" (mayúscula y apóstrofo).' },
-    { re: /(^|\s)i(\s|[,.!?]|$)/,                      fix: 'El pronombre "I" siempre va en mayúscula.' },
-    { re: /\b(que|pero|porque|hola|gracias|bueno|entonces|también|tambien|estoy|tengo)\b/i, fix: 'Vi palabras en español: intenta escribirlo todo en inglés 😉' }
-  ];
-  function corregirLocal(texto) {
-    const t = (texto || '').trim();
-    if (!t) return '';
-    const errores = [];
-    for (const c of CORRECCIONES_LOCALES) {
-      if (c.re.test(t)) errores.push(c.fix);
-      if (errores.length >= 2) break;   // máximo 2 para no abrumar
-    }
-    return errores.join(' ');
-  }
 
   /* ---------- Pantalla de la práctica ---------- */
   // Convierte los mensajes que devuelve la IA (rol "abu"/"tu") a lo que
