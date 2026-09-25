@@ -3127,8 +3127,8 @@
 
      · Texto: Edge Function "conversacion-libre" (una llamada por
        turno; es lo que hace falta para que sea libre de verdad).
-     · Personaje: el usuario elige con quién hablar (LIBRE_PERSONAJES);
-       su personalidad viaja en el tema que se manda a la función.
+     · Personaje: el usuario elige con quién hablar (LIBRE_PERSONAJES) y
+       se manda su id; la personalidad la pone la función.
      · Voz: "generar-audio-abu" con la etiqueta de voz del personaje y
        la velocidad elegida en el selector 0.5× / 0.75× / 1×.
      · Micrófono: lo dicho se escribe en el campo de texto para poder
@@ -3153,92 +3153,71 @@
     'Una entrevista de trabajo', 'Comprar en una tienda', 'El clima y las estaciones'
   ];
 
-  /* Personajes de la charla libre. Son PARODIAS amables hechas con IA:
-     `perfil` es lo que se le manda al modelo (en inglés) para que hable
-     con la personalidad y el contexto real de cada uno. Las reglas de
-     LIBRE_REGLAS_PERSONAJE mantienen el humor sano: nada de política
-     real, chismes ni ataques. `voz` es la etiqueta de generar-audio-abu. */
+  /* Personajes de la charla libre. Son PARODIAS amables: la personalidad
+     (biografía real, forma de hablar, frases, límites) vive en la Edge
+     Function "conversacion-libre", que la elige por `id`. Aquí solo va lo
+     visual, la voz de generar-audio-abu y los temas que se proponen. */
   const LIBRE_PERSONAJES = [
     { id: 'abu', nombre: 'Abu', emoji: '🦜', color: '#FF7A00', voz: 'mujer', img: 'icono.png',
       rol: 'Tu tutora, formal y elegante',
-      temas: ['Buenos modales en inglés', 'Cómo presentarme formalmente', 'Mi rutina de estudio'],
-      perfil: 'Abu, the Abulingo English tutor. She is a woman: polite, warm and very FORMAL. She uses a refined, courteous register ("Good afternoon", "Certainly", "Indeed", "It would be my pleasure"), never uses slang, and gently praises good manners. Her humor is subtle and elegant.' },
+      temas: ['Buenos modales y etiqueta', 'Presentarme en una entrevista', 'Escribir un correo formal', 'Mi rutina de estudio', 'La hora del té'] },
     { id: 'emma', nombre: 'Emma', emoji: '👩', color: '#db2777', voz: 'mujer',
-      rol: 'Una amiga para charlar', temas: [], perfil: '' },
+      rol: 'Una amiga para charlar', temas: [] },
     { id: 'messi', nombre: 'Lionel Messi', emoji: '⚽', color: '#0ea5e9', voz: 'a',
       rol: 'Tímido, humilde y crack',
-      temas: ['El Mundial de 2022', 'Asado y mate', 'Consejos para ser el mejor'],
-      perfil: 'Lionel Messi: shy, humble and a man of few words, from Rosario, Argentina. Loves football, his family, mate and a good asado. Plays for Inter Miami. When praised he changes the subject modestly, but jokes softly about his World Cup 2022 and his eight Ballon d\'Or trophies "collecting dust". Sometimes says "che".' },
+      temas: ['El Mundial de Qatar 2022', 'Tus años en el Barça', 'La vida en Miami', 'Asado, mate y familia', '"¿Qué mirás, bobo?"'] },
     { id: 'cristiano', nombre: 'Cristiano Ronaldo', emoji: '🏆', color: '#dc2626', voz: 'a',
       rol: 'Confiado y competitivo: ¡Siuuu!',
-      temas: ['Rutina de gimnasio', 'Récords y goles', 'Disciplina y sueño'],
-      perfil: 'Cristiano Ronaldo: extremely confident and competitive Portuguese footballer (Al Nassr, Portugal). Obsessed with training, healthy food, sleep and discipline. Shouts "Siuuu!" when happy and playfully reminds everyone he is the best and the all-time top scorer. Motivates the learner like a coach.' },
+      temas: ['Tu rutina de entrenamiento', 'El festejo del Siuuu', 'Real Madrid y la Champions', 'Récords y goles', 'Agua, no Coca-Cola'] },
     { id: 'shakira', nombre: 'Shakira', emoji: '💃', color: '#f59e0b', voz: 'mujer',
       rol: 'Pura energía barranquillera',
-      temas: ['Bailar y la música', 'Barranquilla y el Carnaval', 'Cómo escribir una canción'],
-      perfil: 'Shakira: energetic, playful Colombian superstar from Barranquilla. Loves dancing, music, the Carnival and her Lebanese-Colombian roots. Jokes that her hips don\'t lie, references Waka Waka and says she can turn any feeling into a hit song. Never gossips about her private life.' },
+      temas: ['Waka Waka y el Mundial', 'El Carnaval de Barranquilla', 'Bailar con las caderas', 'Cómo escribes tus canciones', 'La fundación Pies Descalzos'] },
     { id: 'rm', nombre: 'RM (BTS)', emoji: '💜', color: '#7c3aed', voz: 'a',
       rol: 'El líder filósofo de BTS',
-      temas: ['Museos y arte', 'Cómo aprendí inglés', 'ARMY y la música'],
-      perfil: 'RM (Kim Namjoon), leader of BTS: thoughtful, kind and a bit philosophical. Loves art museums, nature, books and bikes. Proudly learned English by watching the sitcom Friends. Jokes about being the clumsy "God of Destruction" who breaks everything. Says "Borahae" (I purple you).' },
+      temas: ['Aprender inglés con Friends', 'Museos y arte', 'Tus discos Indigo y Right Place, Wrong Person', 'ARMY y el regreso de BTS', 'El "dios de la destrucción"'] },
     { id: 'zayn', nombre: 'Zayn Malik', emoji: '🎤', color: '#475569', voz: 'a',
       rol: 'Tranquilo y misterioso',
-      temas: ['Dibujar y el arte', 'La vida en la granja', 'Cantar R&B'],
-      perfil: 'Zayn Malik: calm, mysterious and a little shy British singer, former member of One Direction. Loves drawing, comics, R&B and a quiet life on his farm. Answers in a cool, relaxed way and jokes about "good vibes only".' },
+      temas: ['Tu época en One Direction', 'Dibujar y los cómics', 'Tu disco Room Under the Stairs', 'La vida tranquila en la granja', 'Bradford, tu ciudad'] },
     { id: 'taylor', nombre: 'Taylor Swift', emoji: '🎸', color: '#e11d48', voz: 'mujer',
       rol: 'Cuenta todo como una canción',
-      temas: ['Gatos', 'Hornear galletas', 'Las eras de la vida'],
-      perfil: 'Taylor Swift: warm, enthusiastic storyteller. Loves her cats (Meredith, Olivia and Benjamin), baking, the number 13, friendship bracelets and hiding little "Easter eggs" in what she says. Jokes that everything could become a song and that every stage of life is a new "era".' },
+      temas: ['The Eras Tour', 'Tus gatos Meredith, Olivia y Benjamin', "Taylor's Version", 'Cómo escribes canciones', 'Pulseras de la amistad'] },
     { id: 'einstein', nombre: 'Albert Einstein', emoji: '🧠', color: '#64748b', voz: 'a',
       rol: 'Genio curioso y despeinado',
-      temas: ['El tiempo y el espacio', 'Tocar el violín', 'La imaginación'],
-      perfil: 'Albert Einstein: playful, curious genius with famously messy hair. Explains ideas with simple thought experiments, loves his violin and sailing, and believes imagination is more important than knowledge. Jokes about relativity ("time flies when you practice English") and forgetting to wear socks.' },
+      temas: ['E=mc² explicado fácil', 'Tu violín Lina', 'La oficina de patentes', 'Viajar a la velocidad de la luz', 'La foto sacando la lengua'] },
     { id: 'musk', nombre: 'Elon Musk', emoji: '🚀', color: '#1e293b', voz: 'a',
       rol: 'Cohetes, Marte y memes',
-      temas: ['Viajar a Marte', 'Carros eléctricos', 'Inventos del futuro'],
-      perfil: 'Elon Musk: nerdy engineer-entrepreneur (Tesla, SpaceX). Talks about rockets, Mars, electric cars, robots and memes. Often says "Interesting" or "Concerning", and jokes about moving to Mars and naming things strangely. Stays away from politics.' },
+      temas: ['Starship y el viaje a Marte', 'Los carros Tesla', 'Robots Optimus', 'Memes en X', 'Túneles de The Boring Company'] },
     { id: 'trump', nombre: 'Donald Trump', emoji: '🏌️', color: '#b91c1c', voz: 'a',
       rol: 'Todo es tremendo, créeme',
-      temas: ['Golf', 'Hamburguesas y comida rápida', 'Edificios enormes'],
-      perfil: 'Donald Trump in a light, APOLITICAL parody of his showman style: talks big with superlatives ("tremendous", "huge", "the best, believe me", "nobody does it better"), loves golf, fast food and big buildings with his name on them. Rates the learner\'s English as "the best English, many people are saying it".' },
+      temas: ['Golf', 'The Apprentice: "You\'re fired!"', 'Construir rascacielos', 'Hamburguesas y Diet Coke', 'Ponerle apodos a todo'] },
     { id: 'petro', nombre: 'Gustavo Petro', emoji: '🦋', color: '#ca8a04', voz: 'a',
       rol: 'Expresidente de discursos largos',
-      temas: ['Macondo y García Márquez', 'Cuidar el planeta', 'Llegar puntual'],
-      perfil: 'Gustavo Petro, former President of Colombia (2022-2026), in a friendly parody: gives long, poetic and philosophical answers about life and the planet, loves Macondo, Gabriel García Márquez and yellow butterflies, and jokes about writing many posts late at night and arriving a little late to meetings.' },
+      temas: ['Macondo y García Márquez', 'Tus trinos a las 3 a. m.', 'La Amazonía y el planeta', 'Llegar tarde a los eventos', 'Las mariposas amarillas'] },
     { id: 'fajardo', nombre: 'Sergio Fajardo', emoji: '📐', color: '#16a34a', voz: 'a',
       rol: 'El profe matemático y sereno',
-      temas: ['Matemáticas divertidas', 'Educación', 'Medellín'],
-      perfil: 'Sergio Fajardo, mathematician, professor and former mayor of Medellín, in a friendly parody: calm, patient and extremely reasonable. Explains everything with math and education examples and jokes about always looking for "the perfect middle point" of every conversation.' },
+      temas: ['Acertijos de matemáticas', 'Los parques biblioteca de Medellín', 'Ser profesor', 'La educación lo cambia todo', 'Buscar el punto medio'] },
     { id: 'espriella', nombre: 'Abelardo de la Espriella', emoji: '👔', color: '#0f172a', voz: 'a',
       rol: 'Abogado elegante y teatral',
-      temas: ['Moda y trajes', 'Buena comida', 'Hablar con seguridad'],
-      perfil: 'Abelardo de la Espriella, Colombian lawyer, in a friendly parody: very elegant and theatrical, always in a perfect suit, loves fine food and good style, and speaks with bold confidence and dramatic pauses as if he were in a courtroom ("Your honor, this sentence is excellent!").' },
+      temas: ['Casos en los tribunales', 'Trajes y elegancia', 'Hablar en público con seguridad', 'La buena mesa', 'La costa Caribe'] },
     { id: 'mj', nombre: 'Michael Jackson', emoji: '🕺', color: '#a21caf', voz: 'a',
       rol: 'El Rey del Pop: ¡Hee-hee!',
-      temas: ['Bailar el moonwalk', 'Thriller', 'La música que cambia el mundo'],
-      perfil: 'Michael Jackson: gentle, soft-spoken King of Pop. Loves dancing, the moonwalk, music and kindness. Adds a playful "Hee-hee!" or "Shamone!" and references Thriller and Billie Jean.' },
+      temas: ['El moonwalk', 'Thriller y los zombis', 'The Jackson 5', 'Tu guante brillante', 'Bubbles, tu chimpancé'] },
     { id: 'zendaya', nombre: 'Zendaya', emoji: '🎬', color: '#9333ea', voz: 'mujer',
       rol: 'Actriz y reina de la moda',
-      temas: ['Películas y series', 'Moda en la alfombra roja', 'Crecer en Oakland'],
-      perfil: 'Zendaya: cool, down-to-earth actress from Oakland, California (Euphoria, Spider-Man, Dune, Challengers) and fashion icon. Loves red carpets, films and being with her family. Jokes about being tall and about sand everywhere after filming Dune. Never talks about her private relationships.' },
+      temas: ['Euphoria', 'Dune y la arena del desierto', 'Moda en la alfombra roja', 'Tus años en Disney', 'Challengers y el tenis'] },
     { id: 'dicaprio', nombre: 'Leonardo DiCaprio', emoji: '🌊', color: '#0369a1', voz: 'a',
       rol: 'Actor que ama el planeta',
-      temas: ['Titanic', 'Cuidar la naturaleza', 'Mis películas favoritas'],
-      perfil: 'Leonardo DiCaprio: charming actor (Titanic, Inception, The Revenant) and passionate environmentalist. Jokes about waiting many years for his Oscar, about the famous Titanic door "that had space for two", and about the "Leo pointing" meme.' },
+      temas: ['Titanic y la famosa puerta', 'Tu Óscar por The Revenant', 'Proteger el planeta', 'El meme de señalar', 'One Battle After Another'] },
     { id: 'maluma', nombre: 'Maluma', emoji: '😎', color: '#db2777', voz: 'a',
       rol: '¡Maluma baby!',
-      temas: ['Medellín', 'Moda y estilo', 'Reguetón'],
-      perfil: 'Maluma: charming, stylish reggaeton star from Medellín, Colombia. Loves fashion, fitness, Medellín and music. Says "Maluma baby!" and gives confident but always respectful compliments.' },
+      temas: ['Medellín, la eterna primavera', 'Hawái y Felices los 4', 'Moda y tatuajes', 'El fútbol que casi fue tu carrera', 'Rutina fitness'] },
     { id: 'badbunny', nombre: 'Bad Bunny', emoji: '🐰', color: '#65a30d', voz: 'a',
       rol: 'Relajado y orgulloso de Puerto Rico',
-      temas: ['Puerto Rico', 'Moda atrevida', 'Lucha libre'],
-      perfil: 'Bad Bunny: relaxed, funny Puerto Rican superstar. Proud of Puerto Rico, loves bold fashion, sunglasses and wrestling (WWE). Can drop one Spanish word now and then, but speaks English here.' },
+      temas: ['Puerto Rico', 'Empacando en el supermercado', 'La lucha libre WWE', 'Moda atrevida', 'El show del Super Bowl'] },
     { id: 'westcol', nombre: 'Westcol', emoji: '🎮', color: '#16a34a', voz: 'a',
       rol: 'Streamer a todo volumen',
-      temas: ['Streams y videojuegos', 'Retos locos', 'Medellín'],
-      perfil: 'Westcol: hyper-energetic Colombian streamer from Medellín. Talks about streams, video games, crazy challenges and his community, gets very excited and says "parce". Family friendly: never talks about gambling or betting.' }
+      temas: ['Streams en Kick', 'Retos locos', 'Videojuegos', 'Colaboraciones con otros streamers', 'Tu comunidad'] }
   ];
-  const LIBRE_REGLAS_PERSONAJE = 'Rules: this is a light-hearted AI parody for an English class, not the real person. Stay in character with friendly humor. Never insult anyone, never give real political opinions, endorsements or attacks, never invent news or scandals and do not gossip about private lives. Never say your name is Emma. When the learner makes an English mistake, correct it kindly in "fix" (in Spanish), in your character\'s style.';
   const libreSinEtiquetas = (t) => String(t || '').replace(/<\/?[a-z][^>]*>/gi, '').replace(/\s{2,}/g, ' ').trim();
 
   function libreGetPersonaje(id) {
@@ -3363,21 +3342,10 @@
     await pzLibreTurnoIA();          // el personaje rompe el hielo
   }
 
-  /* El personaje viaja dentro de `tema`, que es el campo que la función
-     "conversacion-libre" ya mete en su instrucción al modelo. También se
-     manda aparte (`personaje`) por si la función lo usa directamente. */
-  function pzLibreTemaParaIA() {
-    const p = libreGetPersonaje(pzLibre.personaje);
-    if (!p.perfil) return pzLibre.tema;
-    const tema = pzLibre.tema || 'free chat: you choose a fun topic that fits your character';
-    return `ROLEPLAY — You are ${p.nombre}, not Emma. ${p.perfil} ${LIBRE_REGLAS_PERSONAJE} Conversation topic: ${tema}`;
-  }
-
   /* ---------- Llamada a la Edge Function ---------- */
   async function pzLibreTurnoIA(opciones = {}) {
     if (!pzLibre || pzLibrePensando) return;
     const charla = pzLibre;
-    const p = libreGetPersonaje(charla.personaje);
     pzLibrePensando = true;
     pzLibreFallo = false;
     pzLibrePintarEstado(true);
@@ -3388,12 +3356,12 @@
     }));
 
     const r = await pzFetchIA('conversacion-libre', {
-      tema: pzLibreTemaParaIA(),
+      tema: charla.tema,
+      personaje: charla.personaje,
       nivel: charla.nivel,
       messages: historial,
       turno: charla.mensajes.filter(m => m.rol === 'tu').length,
-      cerrar: !!opciones.cerrar,
-      personaje: p.perfil ? { nombre: p.nombre, instrucciones: `${p.perfil} ${LIBRE_REGLAS_PERSONAJE}` } : null
+      cerrar: !!opciones.cerrar
     });
 
     pzLibrePensando = false;
