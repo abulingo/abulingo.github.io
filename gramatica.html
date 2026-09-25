@@ -819,12 +819,12 @@
     const msgs = tutorAbuCargar();
     if (typeof sfx === 'function') sfx('pop');
     modalRoot.innerHTML = `
-      <div class="modal-overlay">
-        <div class="card-3d max-w-lg w-full p-7 text-center animate-pop relative">
-          <button id="modal-close" class="absolute top-3 right-4 text-slate-300 hover:text-slate-500 text-2xl z-10">&times;</button>
-          <div class="text-slate-500 mb-2">
+      <div class="modal-overlay" style="padding:.5rem">
+        <div class="card-3d max-w-lg w-full p-3 sm:p-4 text-center animate-pop relative">
+          <button id="modal-close" class="absolute top-2 right-3 text-slate-300 hover:text-slate-500 text-2xl z-10">&times;</button>
+          <div class="text-slate-500">
             <div class="text-left">
-              <div class="flex items-center gap-2 mb-3">
+              <div class="flex items-center gap-2 mb-2 pr-6">
                 <img src="icono.png" alt="Abu" class="w-10 h-10 rounded-full object-cover bg-orange-50 border-2 border-orange-200 shrink-0">
                 <div class="flex-1 min-w-0">
                   <h2 class="font-heading font-bold text-slate-800 leading-tight">Tutor Abu</h2>
@@ -832,14 +832,13 @@
                 </div>
                 <span id="abu-tutor-limite" class="shrink-0 text-[10px] font-black text-slate-400 bg-slate-100 px-2 py-1 rounded-lg" title="Mensajes de hoy"></span>
               </div>
-              <div id="abu-tutor-messages" class="chat-fondo h-[46vh] min-h-[220px] overflow-y-auto p-3 space-y-3 mb-2"></div>
-              <p id="abu-tutor-mic-msg" class="text-[11px] font-bold text-slate-400 min-h-[1.1em] text-center mb-1"></p>
+              <div id="abu-tutor-messages" class="chat-fondo h-[64vh] min-h-[220px] overflow-y-auto p-2 space-y-3 mb-1"></div>
+              <p id="abu-tutor-mic-msg" class="text-[11px] font-bold text-slate-400 text-center mb-1 empty:hidden"></p>
               <div class="flex gap-2">
                 <input id="abu-tutor-input" type="text" placeholder="Escribe tu duda… en español o inglés" autocomplete="off" autocapitalize="sentences" spellcheck="true" enterkeyhint="send" class="flex-1 min-w-0 bg-white border-2 border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-[#FF7A00] text-slate-700 font-medium">
                 <button id="abu-tutor-mic" title="Hablar por voz" class="shrink-0 w-11 rounded-xl bg-slate-100 text-slate-500 hover:bg-slate-200 transition"><i class="fas fa-microphone"></i></button>
                 <button id="abu-tutor-send" class="btn-juice bg-[#FF7A00] text-white font-bold px-4 py-2 rounded-xl shrink-0"><i class="fas fa-paper-plane"></i></button>
               </div>
-              <p class="text-[10px] text-slate-300 text-center mt-2">Esta charla no se guarda: al cerrar la ventana empieza una nueva 🧹</p>
             </div>
           </div>
         </div>

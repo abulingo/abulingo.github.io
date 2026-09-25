@@ -551,12 +551,12 @@
     const msgs = tutorAbuCargar();
     if (typeof sfx === 'function') sfx('pop');
     modalRoot.innerHTML = `
-      <div class="modal-overlay">
-        <div class="card-3d max-w-lg w-full p-7 text-center animate-pop relative">
-          <button id="modal-close" class="absolute top-3 right-4 text-slate-300 hover:text-slate-500 text-2xl z-10">&times;</button>
-          <div class="text-slate-500 mb-2">
+      <div class="modal-overlay" style="padding:.5rem">
+        <div class="card-3d max-w-lg w-full p-3 sm:p-4 text-center animate-pop relative">
+          <button id="modal-close" class="absolute top-2 right-3 text-slate-300 hover:text-slate-500 text-2xl z-10">&times;</button>
+          <div class="text-slate-500">
             <div class="text-left">
-              <div class="flex items-center gap-2 mb-3">
+              <div class="flex items-center gap-2 mb-2 pr-6">
                 <img src="icono.png" alt="Abu" class="w-10 h-10 rounded-full object-cover bg-orange-50 border-2 border-orange-200 shrink-0">
                 <div class="flex-1 min-w-0">
                   <h2 class="font-heading font-bold text-slate-800 leading-tight">Tutor Abu</h2>
@@ -564,8 +564,8 @@
                 </div>
                 <span id="abu-tutor-limite" class="shrink-0 text-[10px] font-black text-slate-400 bg-slate-100 px-2 py-1 rounded-lg" title="Mensajes de hoy"></span>
               </div>
-              <div id="abu-tutor-messages" class="chat-fondo h-[46vh] min-h-[220px] overflow-y-auto p-3 space-y-3 mb-2"></div>
-              <p id="abu-tutor-mic-msg" class="text-[11px] font-bold text-slate-400 min-h-[1.1em] text-center mb-1"></p>
+              <div id="abu-tutor-messages" class="chat-fondo h-[64vh] min-h-[220px] overflow-y-auto p-2 space-y-3 mb-1"></div>
+              <p id="abu-tutor-mic-msg" class="text-[11px] font-bold text-slate-400 text-center mb-1 empty:hidden"></p>
               <div class="flex gap-2">
                 <input id="abu-tutor-input" type="text" placeholder="Escribe tu duda… en español o inglés" autocomplete="off" autocapitalize="sentences" spellcheck="true" enterkeyhint="send" class="flex-1 min-w-0 bg-white border-2 border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-[#FF7A00] text-slate-700 font-medium">
                 <button id="abu-tutor-mic" title="Hablar por voz" class="shrink-0 w-11 rounded-xl bg-slate-100 text-slate-500 hover:bg-slate-200 transition"><i class="fas fa-microphone"></i></button>
@@ -3163,58 +3163,58 @@
       temas: ['Buenos modales y etiqueta', 'Presentarme en una entrevista', 'Escribir un correo formal', 'Mi rutina de estudio', 'La hora del té'] },
     { id: 'emma', nombre: 'Emma', emoji: '👩', color: '#db2777', voz: 'mujer',
       rol: 'Una amiga para charlar', temas: [] },
-    { id: 'messi', nombre: 'Lionel Messi', emoji: '⚽', color: '#0ea5e9', voz: 'a',
+    { id: 'messi', nombre: 'Lionel Messi', emoji: '⚽', color: '#0ea5e9', voz: 'hombre',
       rol: 'Tímido, humilde y crack',
       temas: ['El Mundial de Qatar 2022', 'Tus años en el Barça', 'La vida en Miami', 'Asado, mate y familia', '"¿Qué mirás, bobo?"'] },
-    { id: 'cristiano', nombre: 'Cristiano Ronaldo', emoji: '🏆', color: '#dc2626', voz: 'a',
+    { id: 'cristiano', nombre: 'Cristiano Ronaldo', emoji: '🏆', color: '#dc2626', voz: 'hombre',
       rol: 'Confiado y competitivo: ¡Siuuu!',
       temas: ['Tu rutina de entrenamiento', 'El festejo del Siuuu', 'Real Madrid y la Champions', 'Récords y goles', 'Agua, no Coca-Cola'] },
     { id: 'shakira', nombre: 'Shakira', emoji: '💃', color: '#f59e0b', voz: 'mujer',
       rol: 'Pura energía barranquillera',
       temas: ['Waka Waka y el Mundial', 'El Carnaval de Barranquilla', 'Bailar con las caderas', 'Cómo escribes tus canciones', 'La fundación Pies Descalzos'] },
-    { id: 'rm', nombre: 'RM (BTS)', emoji: '💜', color: '#7c3aed', voz: 'a',
+    { id: 'rm', nombre: 'RM (BTS)', emoji: '💜', color: '#7c3aed', voz: 'hombre',
       rol: 'El líder filósofo de BTS',
       temas: ['Aprender inglés con Friends', 'Museos y arte', 'Tus discos Indigo y Right Place, Wrong Person', 'ARMY y el regreso de BTS', 'El "dios de la destrucción"'] },
-    { id: 'zayn', nombre: 'Zayn Malik', emoji: '🎤', color: '#475569', voz: 'a',
+    { id: 'zayn', nombre: 'Zayn Malik', emoji: '🎤', color: '#475569', voz: 'hombre',
       rol: 'Tranquilo y misterioso',
       temas: ['Tu época en One Direction', 'Dibujar y los cómics', 'Tu disco Room Under the Stairs', 'La vida tranquila en la granja', 'Bradford, tu ciudad'] },
     { id: 'taylor', nombre: 'Taylor Swift', emoji: '🎸', color: '#e11d48', voz: 'mujer',
       rol: 'Cuenta todo como una canción',
       temas: ['The Eras Tour', 'Tus gatos Meredith, Olivia y Benjamin', "Taylor's Version", 'Cómo escribes canciones', 'Pulseras de la amistad'] },
-    { id: 'einstein', nombre: 'Albert Einstein', emoji: '🧠', color: '#64748b', voz: 'a',
+    { id: 'einstein', nombre: 'Albert Einstein', emoji: '🧠', color: '#64748b', voz: 'hombre',
       rol: 'Genio curioso y despeinado',
       temas: ['E=mc² explicado fácil', 'Tu violín Lina', 'La oficina de patentes', 'Viajar a la velocidad de la luz', 'La foto sacando la lengua'] },
-    { id: 'musk', nombre: 'Elon Musk', emoji: '🚀', color: '#1e293b', voz: 'a',
+    { id: 'musk', nombre: 'Elon Musk', emoji: '🚀', color: '#1e293b', voz: 'hombre',
       rol: 'Cohetes, Marte y memes',
       temas: ['Starship y el viaje a Marte', 'Los carros Tesla', 'Robots Optimus', 'Memes en X', 'Túneles de The Boring Company'] },
-    { id: 'trump', nombre: 'Donald Trump', emoji: '🏌️', color: '#b91c1c', voz: 'a',
+    { id: 'trump', nombre: 'Donald Trump', emoji: '🏌️', color: '#b91c1c', voz: 'hombre',
       rol: 'Todo es tremendo, créeme',
       temas: ['Golf', 'The Apprentice: "You\'re fired!"', 'Construir rascacielos', 'Hamburguesas y Diet Coke', 'Ponerle apodos a todo'] },
-    { id: 'petro', nombre: 'Gustavo Petro', emoji: '🦋', color: '#ca8a04', voz: 'a',
+    { id: 'petro', nombre: 'Gustavo Petro', emoji: '🦋', color: '#ca8a04', voz: 'hombre',
       rol: 'Expresidente de discursos largos',
       temas: ['Macondo y García Márquez', 'Tus trinos a las 3 a. m.', 'La Amazonía y el planeta', 'Llegar tarde a los eventos', 'Las mariposas amarillas'] },
-    { id: 'fajardo', nombre: 'Sergio Fajardo', emoji: '📐', color: '#16a34a', voz: 'a',
+    { id: 'fajardo', nombre: 'Sergio Fajardo', emoji: '📐', color: '#16a34a', voz: 'hombre',
       rol: 'El profe matemático y sereno',
       temas: ['Acertijos de matemáticas', 'Los parques biblioteca de Medellín', 'Ser profesor', 'La educación lo cambia todo', 'Buscar el punto medio'] },
-    { id: 'espriella', nombre: 'Abelardo de la Espriella', emoji: '👔', color: '#0f172a', voz: 'a',
+    { id: 'espriella', nombre: 'Abelardo de la Espriella', emoji: '👔', color: '#0f172a', voz: 'hombre',
       rol: 'Abogado elegante y teatral',
       temas: ['Casos en los tribunales', 'Trajes y elegancia', 'Hablar en público con seguridad', 'La buena mesa', 'La costa Caribe'] },
-    { id: 'mj', nombre: 'Michael Jackson', emoji: '🕺', color: '#a21caf', voz: 'a',
+    { id: 'mj', nombre: 'Michael Jackson', emoji: '🕺', color: '#a21caf', voz: 'hombre',
       rol: 'El Rey del Pop: ¡Hee-hee!',
       temas: ['El moonwalk', 'Thriller y los zombis', 'The Jackson 5', 'Tu guante brillante', 'Bubbles, tu chimpancé'] },
     { id: 'zendaya', nombre: 'Zendaya', emoji: '🎬', color: '#9333ea', voz: 'mujer',
       rol: 'Actriz y reina de la moda',
       temas: ['Euphoria', 'Dune y la arena del desierto', 'Moda en la alfombra roja', 'Tus años en Disney', 'Challengers y el tenis'] },
-    { id: 'dicaprio', nombre: 'Leonardo DiCaprio', emoji: '🌊', color: '#0369a1', voz: 'a',
+    { id: 'dicaprio', nombre: 'Leonardo DiCaprio', emoji: '🌊', color: '#0369a1', voz: 'hombre',
       rol: 'Actor que ama el planeta',
       temas: ['Titanic y la famosa puerta', 'Tu Óscar por The Revenant', 'Proteger el planeta', 'El meme de señalar', 'One Battle After Another'] },
-    { id: 'maluma', nombre: 'Maluma', emoji: '😎', color: '#db2777', voz: 'a',
+    { id: 'maluma', nombre: 'Maluma', emoji: '😎', color: '#db2777', voz: 'hombre',
       rol: '¡Maluma baby!',
       temas: ['Medellín, la eterna primavera', 'Hawái y Felices los 4', 'Moda y tatuajes', 'El fútbol que casi fue tu carrera', 'Rutina fitness'] },
-    { id: 'badbunny', nombre: 'Bad Bunny', emoji: '🐰', color: '#65a30d', voz: 'a',
+    { id: 'badbunny', nombre: 'Bad Bunny', emoji: '🐰', color: '#65a30d', voz: 'hombre',
       rol: 'Relajado y orgulloso de Puerto Rico',
       temas: ['Puerto Rico', 'Empacando en el supermercado', 'La lucha libre WWE', 'Moda atrevida', 'El show del Super Bowl'] },
-    { id: 'westcol', nombre: 'Westcol', emoji: '🎮', color: '#16a34a', voz: 'a',
+    { id: 'westcol', nombre: 'Westcol', emoji: '🎮', color: '#16a34a', voz: 'hombre',
       rol: 'Streamer a todo volumen',
       temas: ['Streams en Kick', 'Retos locos', 'Videojuegos', 'Colaboraciones con otros streamers', 'Tu comunidad'] }
   ];
