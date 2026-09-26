@@ -1251,6 +1251,20 @@ $('btnRandom').addEventListener('click', ev => {
 $('btnMute').addEventListener('click', ev => { ev.stopPropagation(); toggleMute(); });
 $('btnTags').addEventListener('click', ev => { ev.stopPropagation(); toggleEtiquetas(); });
 $('btnHelp').addEventListener('click', ev => { ev.stopPropagation(); $('help').classList.remove('hidden'); });
+/* ---------- Minimizar los cuadros de progreso y de misión (para ver el mapa en el celular) ----------
+   Se recuerda en este navegador; en un celular empiezan minimizados la primera vez. */
+function minimizar(id, min, guardar = true) {
+  $(id).classList.toggle('min', min);
+  $(id === 'panel' ? 'btnMinPanel' : 'btnMinMission').textContent = min ? '▾' : '▴';
+  if (id === 'panel') document.body.classList.toggle('panel-min', min);
+  if (guardar) try { localStorage.setItem('englishTown:min:' + id, min ? '1' : '0'); } catch { /* sin almacenamiento */ }
+}
+['panel', 'mission'].forEach(id => {
+  let guardado = null;
+  try { guardado = localStorage.getItem('englishTown:min:' + id); } catch { /* sin almacenamiento */ }
+  minimizar(id, guardado === null ? window.innerWidth < 760 : guardado === '1', false);
+  $(id === 'panel' ? 'btnMinPanel' : 'btnMinMission').addEventListener('click', ev => { ev.stopPropagation(); minimizar(id, !$(id).classList.contains('min')); });
+});
 $('lesson').addEventListener('click', ev => {
   if (ev.target.id === 'lWord' && lesson) Voice.speak(lesson.word, 0.6);
   else if (lesson) Voice.speak(lesson.speak || lesson.en);

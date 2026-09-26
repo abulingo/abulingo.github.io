@@ -37,9 +37,18 @@
   .fila-botones button { font: inherit; font-weight: 700; border: 0; border-radius: 10px; padding: 6px 8px; cursor: pointer; background: rgba(127,127,127,.15); color: var(--text); flex: 1; }
   .fila-botones button.off { opacity: .45; }
   #btnRandom { flex: 2; background: var(--accent); color: #fff; white-space: nowrap; }
+  .min-btn { flex: none; width: 28px; height: 26px; padding: 0; border: 0; border-radius: 8px; background: rgba(127,127,127,.16); color: var(--text);
+    font: inherit; font-size: 13px; font-weight: 800; cursor: pointer; line-height: 1; }
+  .min-btn:active { transform: translateY(1px); }
+  /* Cuadros minimizados: solo la fila de arriba, para ver el mapa en el celular */
+  #panel.min #stats, #panel.min .fila-botones { display: none; }
+  #mission.min { padding: 6px 10px; }
+  #mission.min #mChap, #mission.min .es, #mission.min .bar { display: none; }
+  #mission.min .en { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #clock { left: 50%; top: 10px; transform: translateX(-50%); padding: 5px 12px; font-weight: 700; cursor: pointer; white-space: nowrap; }
   #mission { right: 10px; top: 10px; padding: 9px 13px; width: min(360px, calc(100vw - 20px)); cursor: pointer; }
-  #mission .top { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); display: flex; justify-content: space-between; gap: 6px; }
+  #mission .top { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+  #mission .top #mChap { margin-left: auto; }
   #mission .en { font-size: 16px; font-weight: 800; margin-top: 2px; }
   #mission .es { color: var(--muted); font-size: 13px; }
   #mission .bar { margin-top: 6px; }
@@ -119,6 +128,7 @@
   }
   @media (max-width: 420px) {
     #mission { left: 10px; right: 10px; width: auto; top: 170px; }
+    body.panel-min #mission { top: 56px; }
   }
 </style>
 </head>
@@ -127,7 +137,7 @@
 <div id="loading"><span id="loadingTxt">🔑 Abriendo tu cuenta…</span><small>Tu avance se guarda en tu cuenta de Abulingo</small></div>
 
 <div id="panel" class="card">
-  <div class="row1"><a id="btnBack" href="abulingo.html" title="Volver a Abulingo">← Abulingo</a><h1 id="title">🌎 English Town</h1><span id="lvl">Lv 1</span></div>
+  <div class="row1"><a id="btnBack" href="abulingo.html" title="Volver a Abulingo">← Abulingo</a><h1 id="title">🌎 English Town</h1><span id="lvl">Lv 1</span><button class="min-btn" id="btnMinPanel" title="Minimizar / mostrar el progreso">▴</button></div>
   <div id="stats" title="Álbum de palabras y logros (V)">
     <div><div class="lbl"><span>XP</span><b id="xpTxt"></b></div><div class="bar"><i id="xpBar"></i></div></div>
     <div><div class="lbl"><span>📘 Words</span><b id="wTxt"></b></div><div class="bar g"><i id="wBar"></i></div></div>
@@ -144,7 +154,7 @@
 <div id="clock" class="card" title="Toca para escuchar la hora"></div>
 
 <div id="mission" class="card" title="Toca para escuchar la misión">
-  <div class="top"><span id="mNum"></span><span id="mChap"></span></div>
+  <div class="top"><span id="mNum"></span><span id="mChap"></span><button class="min-btn" id="btnMinMission" title="Minimizar / mostrar la misión">▴</button></div>
   <div class="en" id="mEn"></div>
   <div class="es" id="mEs"></div>
   <div class="bar p"><i id="mProg"></i></div>

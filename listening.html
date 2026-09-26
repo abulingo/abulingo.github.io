@@ -1998,7 +1998,10 @@
       P = Object.assign(baseProgreso(), r.datos || {});
       P.errores = Object.assign({ desconocida: 0, noReconocida: 0 }, P.errores || {});
 
-      const { data: profile } = await dbClient.from('profiles').select('points, lingots, nivel, plan, role, full_name, avatar_url, flujo').eq('id', currentUser.id).maybeSingle();
+      // select('*') como en abulingo.html: si se pide una columna que no existe
+      // (p. ej. avatar_url) la consulta entera falla y el usuario parecería «Gratis».
+      const { data: profile, error: errPerfil } = await dbClient.from('profiles').select('*').eq('id', currentUser.id).maybeSingle();
+      if (errPerfil) console.error('[listening] no se pudo leer el perfil:', errPerfil.message);
       userProfile = profile || {};
       flujo = userProfile.flujo || {};
       ensureDaily();
