@@ -1,0 +1,2046 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Abulingo - Listening</title>
+  <link rel="preconnect" href="https://eylwewhqeaaqkgcxhgyv.supabase.co" crossorigin>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com">
+  <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.1/dist/umd/supabase.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Work+Sans:wght@400;600;800&display=swap"
+        rel="stylesheet" media="print" onload="this.media='all'; this.onload=null;">
+  <noscript><link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Work+Sans:wght@400;600;800&display=swap" rel="stylesheet"></noscript>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
+        media="print" onload="this.media='all'; this.onload=null;">
+  <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"></noscript>
+  <link rel="icon" href="icono.png" type="image/x-icon">
+  <!-- Modal de anuncio diario, menú de perfil compartido, guardado del avance y contenido -->
+  <script defer src="anuncio-diario.js"></script>
+  <script defer src="abu-menu.js"></script>
+  <script defer src="abu-progreso.js"></script>
+  <script defer src="listening-datos.js"></script>
+  <style>
+    body { background-color: #f0f4f8; font-family: 'Work Sans', sans-serif; overflow-x: hidden; }
+    .font-heading { font-family: 'Space Grotesk', sans-serif; }
+    .card-3d {
+      background: white; border-radius: 24px;
+      box-shadow: 0 10px 0 #cbd5e1, 0 10px 20px rgba(0,0,0,0.1);
+      border: 2px solid #e2e8f0; position: relative; top: 0;
+    }
+    .btn-juice { transition: all 0.1s; border-bottom: 6px solid rgba(0,0,0,0.2); transform: translateY(0); }
+    .btn-juice:active { transform: translateY(6px); border-bottom-width: 0; box-shadow: inset 0 6px 10px rgba(0,0,0,0.2); }
+    .btn-juice:disabled { opacity: .5; pointer-events: none; }
+    @keyframes popIn { 0% { transform: scale(0.9); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+    .animate-pop { animation: popIn 0.3s ease-out forwards; }
+    .modal-overlay { position: fixed; inset: 0; background: rgba(15,23,42,0.55); backdrop-filter: blur(4px); display: flex; align-items: safe center; justify-content: center; padding: 1rem; overflow-y: auto; z-index: 200; }
+    .toast {
+      position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(20px);
+      background: #1e293b; color: #fff; font-weight: 700; padding: 10px 18px; border-radius: 14px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.25); z-index: 300; opacity: 0;
+      transition: opacity .25s, transform .25s; pointer-events: none; max-width: 90vw; text-align: center;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    .tool-btn { transition: transform 0.15s; min-width: 44px; }
+    .tool-btn:active { transform: scale(0.90); }
+    .recording { animation: micPulse 1.1s ease-in-out infinite; background: #ef4444 !important; color: #fff !important; }
+    @keyframes micPulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.08); } }
+
+    /* ---------- Listening ---------- */
+    .act-card { text-align: left; background: #fff; border: 2px solid #e2e8f0; border-radius: 20px; padding: 14px; box-shadow: 0 5px 0 #e2e8f0; transition: transform .12s, border-color .12s; }
+    .act-card:hover { border-color: #FF7A00; }
+    .act-card:active { transform: translateY(4px); box-shadow: 0 1px 0 #e2e8f0; }
+    .act-ico { width: 44px; height: 44px; border-radius: 14px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 1.15rem; flex-shrink: 0; }
+    .barra { height: 7px; background: #e2e8f0; border-radius: 99px; overflow: hidden; }
+    .barra > i { display: block; height: 100%; background: linear-gradient(90deg, #FF7A00, #ffaa00); border-radius: 99px; transition: width .4s; }
+    .chip-nivel { min-width: 52px; }
+    .vel-chip { font-size: 11px; font-weight: 900; padding: 5px 9px; border-radius: 9px; background: #f1f5f9; color: #64748b; }
+    .vel-chip.on { background: #1e293b; color: #fff; }
+    .play-btn { width: 40px; height: 40px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+      background: #fff; border: 2px solid #e2e8f0; color: #FF7A00; transition: border-color .12s; }
+    .play-btn:hover, .play-btn.sonando { border-color: #FF7A00; }
+    .play-btn.lento { color: #0D47A1; }
+    .dict-input { width: 100%; border: 2px solid #e2e8f0; border-radius: 14px; padding: 10px 12px; font-size: 16px; font-weight: 600; outline: none; }
+    .dict-input:focus { border-color: #FF7A00; }
+    .tok { display: inline-block; padding: 1px 6px; margin: 2px 1px; border-radius: 8px; font-weight: 700; font-size: 15px; }
+    .tok.ok { background: #dcfce7; color: #15803d; }
+    .tok.casi { background: #fef9c3; color: #a16207; }
+    .tok.mal { background: #fee2e2; color: #b91c1c; }
+    .tok.falta { background: #fff; color: #b91c1c; border: 2px dashed #fca5a5; }
+    .tok.sobra { background: #f1f5f9; color: #94a3b8; text-decoration: line-through; }
+    .tok small { display: block; font-size: 10px; font-weight: 800; line-height: 1; }
+    .clasif button { font-size: 11px; font-weight: 800; padding: 5px 8px; border-radius: 9px; border: 2px solid #e2e8f0; background: #fff; color: #475569; }
+    .clasif button.on-d { background: #0D47A1; border-color: #0D47A1; color: #fff; }
+    .clasif button.on-r { background: #FF7A00; border-color: #FF7A00; color: #fff; }
+    .opcion { width: 100%; text-align: left; border: 2px solid #e2e8f0; background: #fff; border-radius: 16px; padding: 12px 14px; font-weight: 700; color: #334155; box-shadow: 0 4px 0 #e2e8f0; }
+    .opcion:active { transform: translateY(3px); box-shadow: 0 1px 0 #e2e8f0; }
+    .opcion.bien { background: #dcfce7; border-color: #22c55e; color: #15803d; }
+    .opcion.malo { background: #fee2e2; border-color: #ef4444; color: #b91c1c; }
+    .opcion:disabled { cursor: default; }
+    .num-btn { width: 52px; height: 52px; border-radius: 16px; font-size: 20px; font-weight: 900; background: #fff; border: 2px solid #e2e8f0; color: #334155; box-shadow: 0 4px 0 #e2e8f0; }
+    .num-btn.bien { background: #dcfce7; border-color: #22c55e; color: #15803d; }
+    .num-btn.malo { background: #fee2e2; border-color: #ef4444; color: #b91c1c; }
+    .pred-chip { padding: 8px 12px; border-radius: 999px; border: 2px solid #e2e8f0; background: #fff; font-weight: 800; color: #475569; }
+    .pred-chip.on { background: #FF7A00; border-color: #FF7A00; color: #fff; }
+    .pred-chip.acierto { background: #dcfce7; border-color: #22c55e; color: #15803d; }
+    .pred-chip.fallo { background: #f1f5f9; border-color: #e2e8f0; color: #94a3b8; text-decoration: line-through; }
+    .pred-chip.perdida { background: #fff; border-color: #22c55e; border-style: dashed; color: #15803d; }
+    .linea-dialogo { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border-radius: 14px; }
+    .linea-dialogo.sonando { background: #fff7ed; }
+    .voz-dot { width: 30px; height: 30px; border-radius: 99px; color: #fff; font-weight: 900; font-size: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    mark.obj { background: #ffedd5; color: #c2410c; border-radius: 5px; padding: 0 3px; font-weight: 800; }
+    .ruta-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 14px; border: 2px solid #f1f5f9; background: #f8fafc; }
+    .ruta-item.hecho { background: #f0fdf4; border-color: #bbf7d0; }
+    .ruta-check { width: 26px; height: 26px; border-radius: 99px; border: 2px solid #cbd5e1; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: #fff; font-size: 12px; }
+    .ruta-item.hecho .ruta-check { background: #22c55e; border-color: #22c55e; }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+    }
+  </style>
+  <link rel="stylesheet" href="app.css">
+</head>
+<body class="min-h-screen flex flex-col">
+  <!-- BARRA SUPERIOR: logo · herramientas · perfil (igual que en las demás páginas) -->
+  <header id="top-bar" class="fixed top-0 left-0 w-full bg-white/95 backdrop-blur border-b border-slate-200 z-50">
+    <div class="max-w-3xl mx-auto flex items-center gap-1 px-3 h-14">
+      <a href="abulingo.html" class="font-heading font-bold text-sm sm:text-base shrink-0 mr-1 leading-none"><span style="color:#0D47A1;">Abulingo</span><span style="color:#FF7A00;">.</span></a>
+      <nav class="flex-1 flex items-center justify-around gap-0.5">
+        <button data-tool="gramatica" class="tool-btn flex flex-col items-center justify-center px-2 py-1 rounded-lg text-slate-500 hover:bg-slate-100">
+          <i class="fas fa-book text-base"></i><span class="hidden md:block text-[10px] font-bold leading-tight mt-0.5">Gramática</span>
+        </button>
+        <button data-tool="pronunciacion" class="tool-btn flex flex-col items-center justify-center px-2 py-1 rounded-lg text-slate-500 hover:bg-slate-100">
+          <i class="fas fa-microphone-lines text-base"></i><span class="hidden md:block text-[10px] font-bold leading-tight mt-0.5">Pronunciación</span>
+        </button>
+        <button data-tool="listening" class="tool-btn flex flex-col items-center justify-center px-2 py-1 rounded-lg text-white bg-gradient-to-br from-[#FF7A00] to-orange-600 shadow">
+          <i class="fas fa-headphones text-base"></i><span class="hidden md:block text-[10px] font-bold leading-tight mt-0.5">Listening</span>
+        </button>
+        <button data-tool="traductor" class="tool-btn flex flex-col items-center justify-center px-2 py-1 rounded-lg text-slate-500 hover:bg-slate-100">
+          <i class="fas fa-language text-base"></i><span class="hidden md:block text-[10px] font-bold leading-tight mt-0.5">Traductor</span>
+        </button>
+        <button data-tool="ia" title="Habla con Abu" class="tool-btn flex flex-col items-center justify-center px-2 py-1 rounded-lg text-slate-500 hover:bg-slate-100">
+          <i class="fas fa-comment-dots text-base"></i><span class="hidden md:block text-[10px] font-bold leading-tight mt-0.5">Tutor</span>
+        </button>
+      </nav>
+
+      <!-- Perfil -->
+      <div class="relative shrink-0">
+        <button id="profile-menu-button" title="Perfil y progreso" class="relative block rounded-full ring-2 ring-transparent hover:ring-[#FF7A00] transition">
+          <img id="user-avatar" src="icono.png" alt="Perfil" class="w-9 h-9 rounded-full object-cover bg-slate-100">
+          <span class="absolute -bottom-0.5 -right-0.5 w-[17px] h-[17px] rounded-full bg-[#FF7A00] text-white flex items-center justify-center shadow ring-2 ring-white">
+            <i class="fas fa-chevron-down text-[8px]"></i>
+          </span>
+        </button>
+        <div id="profile-menu-dropdown" class="hidden absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-xl border border-slate-200 z-50 overflow-hidden">
+          <div class="p-4 border-b">
+            <h3 id="user-name-dropdown" class="font-bold text-slate-800">Cargando...</h3>
+            <p class="mt-1.5 flex items-center gap-1.5">
+              <span id="user-nivel-dropdown" class="bg-orange-100 text-[#FF7A00] text-[10px] font-black px-2 py-0.5 rounded-full uppercase">Nivel A1</span>
+              <span id="user-plan-dropdown" class="bg-slate-100 text-slate-500 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">Gratis</span>
+            </p>
+            <button id="mision-dia-widget" class="mt-2 w-full flex items-center gap-2 bg-gradient-to-r from-orange-50 to-amber-50 px-2.5 py-2 rounded-lg border-2 border-orange-200 hover:border-orange-300 transition">
+              <span class="text-lg shrink-0">🎯</span>
+              <span class="flex-1 min-w-0 text-left text-[11px] font-bold text-orange-700 leading-snug">
+                Misión del día<br>
+                <span id="mision-palabras-txt" class="text-slate-700">0/30 palabras</span> · <span id="mision-frases-txt" class="text-slate-700">0/5 frases</span>
+              </span>
+              <i class="fas fa-chevron-right text-orange-300 text-[10px] shrink-0"></i>
+            </button>
+          </div>
+          <div class="py-2 max-h-80 overflow-y-auto">
+            <div class="flex items-center px-4 py-2 text-slate-700"><i class="fas fa-coins w-6 text-yellow-600"></i><span><span id="user-lingots" class="font-bold">0</span> Lingots</span></div>
+            <button data-menu="juego" class="w-full text-left flex items-center px-4 py-2 text-slate-700 hover:bg-orange-50"><i class="fas fa-gamepad fa-fw w-6 text-[#FF7A00]"></i><span>Juego</span><span class="ml-auto text-[10px] font-black text-[#FF7A00]">English Town</span></button>
+            <button data-menu="fonetica" class="w-full text-left flex items-center px-4 py-2 text-slate-700 hover:bg-orange-50"><i class="fas fa-spell-check fa-fw w-6 text-[#0D47A1]"></i><span>Fonética</span><span class="ml-auto text-[10px] font-black text-[#0D47A1]">/ə/</span></button>
+            <button data-menu="club" class="w-full text-left flex items-center px-4 py-2 text-slate-700 hover:bg-orange-50"><i class="fas fa-users fa-fw w-6 text-[#FF7A00]"></i><span>Club</span><span class="ml-auto text-[10px] font-black text-slate-400">conversación</span></button>
+            <button data-menu="ranking-global" class="w-full text-left flex items-center px-4 py-2 text-slate-700 hover:bg-slate-100"><i class="fas fa-globe fa-fw w-6 text-slate-500"></i><span>Ranking Global</span></button>
+            <button data-menu="ranking-equipo" class="w-full text-left flex items-center px-4 py-2 text-slate-700 hover:bg-slate-100"><i class="fas fa-users fa-fw w-6 text-slate-500"></i><span>Ranking Equipo</span></button>
+            <button data-menu="progreso-nivel" class="w-full text-left flex items-center px-4 py-2 text-slate-700 hover:bg-slate-100"><i class="fas fa-chart-line fa-fw w-6 text-slate-500"></i><span>Progreso nivel</span></button>
+            <button data-menu="certificados" class="w-full text-left flex items-center px-4 py-2 text-slate-700 hover:bg-slate-100"><i class="fas fa-certificate fa-fw w-6 text-slate-500"></i><span>Certificados</span><span id="cert-menu-count" class="ml-auto text-[10px] font-black text-[#FF7A00]"></span></button>
+            <button data-menu="mazo" class="w-full text-left flex items-center px-4 py-2 text-slate-700 hover:bg-slate-100"><i class="fas fa-layer-group fa-fw w-6 text-slate-500"></i><span>Mazo</span><span id="mazo-menu-count" class="ml-auto text-[10px] font-black text-[#FF7A00]"></span></button>
+            <button data-menu="soporte" class="w-full text-left flex items-center px-4 py-2 text-slate-700 hover:bg-slate-100"><i class="fas fa-headset fa-fw w-6 text-slate-500"></i><span>Soporte</span></button>
+            <button id="menu-solicitar-tutor" data-menu="solicitar-tutor" class="hidden w-full text-left flex items-center px-4 py-2 text-slate-700 hover:bg-slate-100"><i class="fas fa-chalkboard-user fa-fw w-6 text-[#FF7A00]"></i><span>Solicitar Tutor</span></button>
+            <a id="whatsapp-comunidad-link" href="#" target="_blank" rel="noopener" class="w-full text-left flex items-center px-4 py-2 text-green-600 hover:bg-green-50"><i class="fab fa-whatsapp fa-fw w-6 text-green-500"></i><span>Unirse a la comunidad</span></a>
+          </div>
+          <div class="py-2 border-t"><button id="logout-btn" class="w-full text-left flex items-center px-4 py-2 text-red-600 hover:bg-red-50"><i class="fas fa-sign-out-alt w-6"></i><span>Cerrar Sesión</span></button></div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Pantalla de carga -->
+  <main id="loading-screen" class="w-full max-w-lg mx-auto px-4 flex-1 flex flex-col justify-center pb-8">
+    <div class="text-center animate-pulse">
+      <h1 class="text-3xl font-heading font-bold text-slate-400">Cargando experiencia...</h1>
+      <i class="fas fa-circle-notch fa-spin text-4xl text-[#FF7A00] mt-4"></i>
+    </div>
+  </main>
+
+  <!-- Contenido principal: cada vista se pinta en #mode-panel -->
+  <main id="app-container" class="hidden w-full max-w-2xl mx-auto px-4 pt-20 flex-1 flex flex-col pb-10">
+    <div id="mode-panel"></div>
+  </main>
+
+  <div id="modal-root"></div>
+
+<script type="module">
+  /* ============================================================
+     1. CONFIGURACIÓN (mismo proyecto de Supabase que abulingo.html)
+  ============================================================ */
+  const SUPABASE_URL = 'https://eylwewhqeaaqkgcxhgyv.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV5bHdld2hxZWFhcWtnY3hoZ3l2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQzMzAxODgsImV4cCI6MjA5OTkwNjE4OH0.Ji8huj-ny2VcMT5UQSjOuwUKz4k23quNS0fLk-gZr7A';
+  const NIVELES_FIJOS = ['A1', 'A2', 'B1', 'B2'];
+  const WHATSAPP_COMUNIDAD_URL = 'https://chat.whatsapp.com/FItyG5Nyj0FJmjtk9Fjpvx';
+  const MISION_FRASES_DIA = 5;
+  const MISION_PALABRAS_DIA = 30;
+  const MISION_RECOMPENSA_LINGOTS = 2;
+
+  const { createClient } = supabase;
+  const dbClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const D = window.LISTENING_DATOS;
+
+  let currentUser = null;
+  let userProfile = null;
+  let flujo = null;
+
+  /* ============================================================
+     2. UTILIDADES (las mismas de pronunciacion.html)
+  ============================================================ */
+  const escapeHTML = (s) => (s || '').toString()
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+  const pzSinPuntuacion = (s) => (s || '').toString()
+    .replace(/[.,!?;:¡¿'"“”‘’`´()\[\]{}\-–—_/\\]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  function pzLevenshtein(a, b) {
+    const m = a.length, n = b.length;
+    if (!m) return n;
+    if (!n) return m;
+    let prev = Array.from({ length: n + 1 }, (_, j) => j);
+    for (let i = 1; i <= m; i++) {
+      const curr = [i];
+      for (let j = 1; j <= n; j++) {
+        const costo = a[i - 1] === b[j - 1] ? 0 : 1;
+        curr[j] = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + costo);
+      }
+      prev = curr;
+    }
+    return prev[n];
+  }
+
+  function pzCalificarLocal(objetivo, dicho) {
+    const t = pzSinPuntuacion(objetivo).toLowerCase();
+    const d = pzSinPuntuacion(dicho).toLowerCase();
+    if (!t || !d) return 0;
+    if (t === d) return 5;
+    const distancia = pzLevenshtein(t, d);
+    const similitud = 1 - distancia / Math.max(t.length, d.length);
+    if (similitud >= 0.85) return 4;
+    if (similitud >= 0.65) return 3;
+    if (similitud >= 0.4) return 2;
+    return 1;
+  }
+
+  let toastTimer = null;
+  function showToast(msg, ms = 2600) {
+    let t = document.getElementById('app-toast');
+    if (!t) { t = document.createElement('div'); t.id = 'app-toast'; t.className = 'toast'; document.body.appendChild(t); }
+    t.innerHTML = msg;
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), ms);
+  }
+
+  const barajar = (a) => { a = [...a]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  const dormir = (ms) => new Promise(r => setTimeout(r, ms));
+  const hoy = () => new Date().toISOString().slice(0, 10);
+  const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  const confeti = (n = 70) => { if (window.confetti) confetti({ particleCount: n, spread: 60, origin: { y: 0.7 }, colors: ['#FF7A00', '#fbbf24', '#0D47A1'] }); };
+
+  /* ---------- Flujo compartido (lo necesita el menú de perfil) ---------- */
+  const todayStr = () => new Date().toISOString().slice(0, 10);
+  function ensureDaily() {
+    if (!flujo.daily) flujo.daily = { date: todayStr(), newWords: 0, reviewed: 0, points: 0, goalShown: false, unlockAt: null, misionPalabras: 0, misionFrases: 0, misionCumplida: false };
+    if (flujo.daily.date !== todayStr()) {
+      Object.assign(flujo.daily, { date: todayStr(), points: 0, reviewed: 0, goalShown: false, club: { msgs: 0, joins: 0 }, misionPalabras: 0, misionFrases: 0, misionCumplida: false });
+    }
+    if (!flujo.daily.club) flujo.daily.club = { msgs: 0, joins: 0 };
+  }
+  async function updateUserFlow() {
+    flujo.savedAt = new Date().toISOString();
+    userProfile.flujo = flujo;
+    const { error } = await dbClient.from('profiles').update({ flujo }).eq('id', currentUser.id);
+    if (error) console.error('Error guardando flujo:', error.message);
+  }
+
+  /* ---------- Modal genérico (mismo patrón que las otras páginas) ---------- */
+  const modalRoot = document.getElementById('modal-root');
+  function closeModal() { modalRoot.innerHTML = ''; }
+  function showModal({ icon, title, body, actions = [], dismissable = true, size = 'md' }) {
+    const maxW = size === 'lg' ? 'max-w-lg' : 'max-w-sm';
+    const actionsHTML = actions.map((a, i) =>
+      `<button data-idx="${i}" class="modal-action w-full btn-juice ${a.style || 'bg-[#FF7A00] text-white'} font-bold py-3 rounded-xl text-lg">${a.label}</button>`
+    ).join('');
+    modalRoot.innerHTML = `
+      <div class="modal-overlay">
+        <div class="card-3d ${maxW} w-full p-7 text-center animate-pop relative max-h-[90vh] flex flex-col">
+          ${dismissable ? '<button id="modal-close" class="absolute top-3 right-4 text-slate-300 hover:text-slate-500 text-2xl z-10">&times;</button>' : ''}
+          ${icon ? `<div class="text-6xl mb-3 shrink-0">${icon}</div>` : ''}
+          ${title ? `<h2 class="text-2xl font-heading font-bold text-slate-800 mb-2 shrink-0">${title}</h2>` : ''}
+          <div class="text-slate-500 mb-6 overflow-y-auto flex-1 min-h-0">${body || ''}</div>
+          <div class="space-y-3 shrink-0">${actionsHTML}</div>
+        </div>
+      </div>`;
+    if (dismissable) {
+      document.getElementById('modal-close').onclick = closeModal;
+      modalRoot.querySelector('.modal-overlay').addEventListener('click', (e) => { if (e.target.classList.contains('modal-overlay')) closeModal(); });
+    }
+    actions.forEach((a, i) => {
+      const btn = modalRoot.querySelector(`.modal-action[data-idx="${i}"]`);
+      if (btn) btn.onclick = () => { if (a.onClick) a.onClick(); };
+    });
+  }
+
+  // Sonido de tap (idéntico al de las otras páginas)
+  let audioCtx = null;
+  function getAudioCtx() {
+    try {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+      return audioCtx;
+    } catch { return null; }
+  }
+  function tono(f1, f2, dur, vol = 0.08, tipo = 'triangle', retraso = 0) {
+    const ctx = getAudioCtx();
+    if (!ctx) return;
+    try {
+      const t0 = ctx.currentTime + retraso;
+      const osc = ctx.createOscillator(), gain = ctx.createGain();
+      osc.type = tipo;
+      osc.frequency.setValueAtTime(f1, t0);
+      osc.frequency.exponentialRampToValueAtTime(f2, t0 + dur);
+      gain.gain.setValueAtTime(vol, t0);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(t0); osc.stop(t0 + dur + 0.02);
+    } catch {}
+  }
+  document.addEventListener('pointerdown', (e) => { if (e.target.closest('button')) tono(880, 660, 0.05); }, { passive: true });
+  const sonidoBien = () => { tono(660, 880, 0.12, 0.1); tono(880, 1175, 0.14, 0.1, 'triangle', 0.1); };
+  const sonidoMal = () => tono(220, 150, 0.25, 0.07, 'sawtooth');
+
+  /* ============================================================
+     3. AUDIO
+     Cada clip es un mp3 del bucket "listening" (carpeta actividades/),
+     generado con voces Chirp3-HD. Se guardan a velocidad normal y el
+     navegador los ralentiza con playbackRate, sin cambiar el tono. Si un
+     archivo no carga, se lee con la voz del dispositivo para no dejar a
+     nadie sin práctica.
+  ============================================================ */
+  const AUDIO_BASE = `${SUPABASE_URL}/storage/v1/object/public/listening/actividades/`;
+  const audioUrl = (archivo) => `${AUDIO_BASE}${archivo}.mp3`;
+  const VELOCIDADES = [0.5, 0.75, 1, 1.25];
+  let velocidad = 1;
+  try { const v = parseFloat(localStorage.getItem('abu-vel-listening')); if (VELOCIDADES.includes(v)) velocidad = v; } catch {}
+  let audioActual = null;
+  let colaId = 0;
+
+  let ttsVoces = [];
+  const cargarVoces = () => { ttsVoces = window.speechSynthesis ? speechSynthesis.getVoices() : []; };
+  if (window.speechSynthesis) { cargarVoces(); speechSynthesis.onvoiceschanged = cargarVoces; }
+  function hablarRespaldo(texto, vel) {
+    return new Promise(resolve => {
+      if (!window.speechSynthesis || !texto) return resolve();
+      speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(texto);
+      const v = ttsVoces.find(x => /en[-_]US/i.test(x.lang)) || ttsVoces.find(x => /^en/i.test(x.lang));
+      if (v) u.voice = v;
+      u.lang = 'en-US';
+      u.rate = 0.95 * vel;
+      u.onend = resolve; u.onerror = resolve;
+      speechSynthesis.speak(u);
+    });
+  }
+
+  function stopSpeaking() {
+    colaId++;
+    if (audioActual) { try { audioActual.pause(); } catch {} audioActual = null; }
+    lsDetenerAudio();   // el audio del shadowing de textos va por su lado
+    if (window.speechSynthesis) speechSynthesis.cancel();
+    document.querySelectorAll('.sonando').forEach(el => el.classList.remove('sonando'));
+  }
+
+  // Reproduce un clip y resuelve al terminar. `texto` es el respaldo.
+  function tocarClip(archivo, { vel = velocidad, texto = '' } = {}) {
+    return new Promise(resolve => {
+      if (audioActual) { try { audioActual.pause(); } catch {} }
+      const a = new Audio(audioUrl(archivo));
+      a.preservesPitch = true; a.mozPreservesPitch = true; a.webkitPreservesPitch = true;
+      a.defaultPlaybackRate = vel;
+      a.playbackRate = vel;
+      audioActual = a;
+      let hecho = false;
+      const fin = () => { if (hecho) return; hecho = true; if (audioActual === a) audioActual = null; resolve(); };
+      a.onended = fin;
+      a.onplay = () => { a.playbackRate = vel; };
+      a.onerror = () => { if (hecho) return; hecho = true; hablarRespaldo(texto, vel).then(resolve); };
+      a.play().catch(() => { if (!hecho) { hecho = true; hablarRespaldo(texto, vel).then(resolve); } });
+    });
+  }
+
+  // Un solo clip (corta lo que suene). Devuelve true si terminó sin interrupción.
+  async function tocar(archivo, opciones = {}) {
+    const id = ++colaId;
+    await tocarClip(archivo, opciones);
+    return id === colaId;
+  }
+
+  // Varios clips seguidos, con pausa entre uno y otro. `alPaso(i)` avisa cuál suena.
+  async function tocarLista(items, { pausa = 450, alPaso } = {}) {
+    const id = ++colaId;
+    for (let i = 0; i < items.length; i++) {
+      if (id !== colaId) return false;
+      if (alPaso) alPaso(i);
+      await tocarClip(items[i].archivo, { texto: items[i].texto });
+      if (id !== colaId) return false;
+      await dormir(pausa);
+    }
+    if (alPaso) alPaso(-1);
+    return id === colaId;
+  }
+
+  function velocidadesHTML() {
+    return `<div class="flex items-center gap-1.5 flex-wrap">
+      <span class="text-[10px] font-black uppercase tracking-wide text-slate-400 mr-0.5"><i class="fas fa-gauge-high"></i> Velocidad</span>
+      ${VELOCIDADES.map(v => `<button class="vel-chip ${v === velocidad ? 'on' : ''}" data-vel="${v}">${v}×</button>`).join('')}
+    </div>`;
+  }
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-vel]');
+    if (!b) return;
+    velocidad = parseFloat(b.dataset.vel);
+    try { localStorage.setItem('abu-vel-listening', String(velocidad)); } catch {}
+    document.querySelectorAll('[data-vel]').forEach(x => x.classList.toggle('on', parseFloat(x.dataset.vel) === velocidad));
+    if (audioActual) audioActual.playbackRate = velocidad;
+  });
+
+  /* ============================================================
+     4. PROGRESO (tabla progreso_apps, app = 'listening')
+     El shadowing de textos sigue guardándose en listening_progreso,
+     como cuando vivía en pronunciacion.html.
+  ============================================================ */
+  let P = null;
+  const baseProgreso = () => ({
+    nivel: null,
+    dictado: {},      // { id: { mejor, veces, fecha } }
+    conectada: {},    // { id: { mejor, fecha } }
+    vocab: {},        // { nivel: { palabra: { ok, bad } } }
+    prediccion: {},   // { id: { mejor } }
+    contar: {},       // { nivel: { mejor, veces } }
+    errores: { desconocida: 0, noReconocida: 0 },
+    rutina: { fecha: null, dictado: false, conectada: false, subtitulos: false, vocab: false },
+    minutos: 0
+  });
+  function guardar() { AbuProgreso.guardar(P); }
+  function rutinaHoy() {
+    if (P.rutina.fecha !== hoy()) P.rutina = { fecha: hoy(), dictado: false, conectada: false, subtitulos: false, vocab: false };
+    return P.rutina;
+  }
+  function marcarRutina(clave) {
+    const r = rutinaHoy();
+    if (r[clave]) return;
+    r[clave] = true;
+    guardar();
+    const hechas = ['dictado', 'conectada', 'subtitulos', 'vocab'].filter(k => r[k]).length;
+    if (hechas === 4) { showToast('🏆 ¡Rutina de hoy completa! Así se entrena el oído.', 3600); confeti(120); }
+  }
+  // Minutos de práctica (aproximados): se suma uno por cada minuto con la página visible.
+  setInterval(() => { if (P && !document.hidden) { P.minutos = (P.minutos || 0) + 1; guardar(); } }, 60000);
+
+  let nivel = 'A1';
+
+  /* ============================================================
+     5. INICIO: nivel, consejos, rutina y actividades
+  ============================================================ */
+  const panel = () => document.getElementById('mode-panel');
+
+  const ACTIVIDADES = [
+    { id: 'dictado', icon: 'fa-pen-to-square', color: 'from-[#FF7A00] to-orange-600', titulo: 'Dictado', desc: 'Escribe lo que oyes, frase por frase, y descubre si el error fue de vocabulario o de oído.', tiempo: '10 min' },
+    { id: 'conectada', icon: 'fa-link', color: 'from-[#0D47A1] to-blue-500', titulo: 'Habla conectada', desc: 'Formas débiles, enlaces, elisiones y reducciones como gonna o wanna.', tiempo: '5 min' },
+    { id: 'vocab', icon: 'fa-ear-listen', color: 'from-emerald-500 to-green-600', titulo: 'Vocabulario por el oído', desc: 'Palabras frecuentes que conoces escritas pero no reconoces al oírlas.', tiempo: '5 min' },
+    { id: 'prediccion', icon: 'fa-wand-magic-sparkles', color: 'from-purple-500 to-fuchsia-600', titulo: 'Predice y escucha', desc: 'Anticipa lo que vas a oír, escucha sin texto y revisa después.', tiempo: '8 min' },
+    { id: 'contar', icon: 'fa-hashtag', color: 'from-amber-500 to-orange-500', titulo: 'Cuenta las palabras', desc: 'Frases rápidas: ¿cuántas palabras hay de verdad en lo que oíste?', tiempo: '3 min' },
+    { id: 'shadowing', icon: 'fa-headphones', color: 'from-slate-700 to-slate-900', titulo: 'Shadowing de textos', desc: 'Escucha un texto, ordena sus frases y repítelas encima del audio.', tiempo: '10 min' }
+  ];
+
+  function progresoActividad(id) {
+    if (id === 'dictado') { const l = D.dictados[nivel]; return [l.filter(d => P.dictado[d.id]).length, l.length]; }
+    if (id === 'conectada') { const l = D.conectada[nivel]; return [l.filter(c => (P.conectada[c.id]?.mejor || 0) >= 80).length, l.length]; }
+    if (id === 'vocab') { const l = D.vocab[nivel], v = P.vocab[nivel] || {}; return [l.filter(w => (v[w[0]]?.ok || 0) > 0).length, l.length]; }
+    if (id === 'prediccion') { const l = D.prediccion[nivel]; return [l.filter(p => P.prediccion[p.id]).length, l.length]; }
+    if (id === 'contar') { const m = P.contar[nivel]?.mejor || 0; return [m, D.contar[nivel].length]; }
+    return null;
+  }
+
+  function renderInicio() {
+    stopSpeaking();
+    const r = rutinaHoy();
+    const rutina = [
+      ['dictado', '10 min · Dictado', 'Un clip frase por frase.'],
+      ['conectada', '5 min · Un patrón de habla conectada', 'Lento vs. natural y su práctica.'],
+      ['subtitulos', '25 min · Serie o video con subtítulos en inglés', 'Fuera de aquí: márcalo tú al terminar.'],
+      ['vocab', '5 min · Vocabulario nuevo dentro de frases', 'Una ronda de vocabulario por el oído.']
+    ];
+    const hechas = rutina.filter(([k]) => r[k]).length;
+    const e = P.errores || { desconocida: 0, noReconocida: 0 };
+    const totalErr = (e.desconocida || 0) + (e.noReconocida || 0);
+
+    panel().innerHTML = `
+      <div class="card-3d p-5 mb-5 animate-pop">
+        <div class="flex items-start gap-3">
+          <div class="act-ico bg-gradient-to-br from-[#FF7A00] to-orange-600 shadow"><i class="fas fa-headphones"></i></div>
+          <div class="min-w-0 flex-1">
+            <h1 class="font-heading font-black text-2xl text-slate-800 leading-tight">Listening</h1>
+            <p class="text-xs text-slate-500 leading-snug mt-0.5">Entrena el oído para el inglés americano: decodificar el habla rápida, reconocer palabras al oírlas y entender más cada día.</p>
+          </div>
+        </div>
+        <p class="text-[10px] font-black uppercase tracking-wide text-slate-400 mt-4 mb-2">Tu nivel</p>
+        <div class="flex gap-2">
+          ${NIVELES_FIJOS.map(n => `<button class="chip-nivel btn-juice ${n === nivel ? 'bg-[#FF7A00] text-white' : 'bg-slate-100 text-slate-600'} font-black text-sm py-2.5 px-3 rounded-xl flex-1" data-nivel="${n}">${n}</button>`).join('')}
+        </div>
+      </div>
+
+      <div class="card-3d p-5 mb-5">
+        <button id="consejo-toggle" class="w-full flex items-center gap-3 text-left">
+          <span class="text-2xl">🎬</span>
+          <span class="flex-1 min-w-0">
+            <span class="block font-heading font-black text-slate-800 leading-tight">Series y videos: con subtítulos en inglés</span>
+            <span class="block text-[11px] text-slate-500 leading-snug">Nunca en español. Eso lo practicas por tu cuenta; aquí entrenas lo que casi nadie entrena.</span>
+          </span>
+          <i class="fas fa-chevron-down text-slate-300 transition-transform" id="consejo-flecha"></i>
+        </button>
+        <div id="consejo-cuerpo" class="hidden mt-4 text-sm text-slate-600 space-y-3 leading-relaxed">
+          <p><b class="text-slate-800">¿Por qué no entiendes?</b> Son dos problemas distintos: <b>te faltan palabras</b> (con unas 3.000 familias de palabras frecuentes se entiende el 95 % de los diálogos de series) o <b>conoces la palabra escrita pero no la reconoces al oírla</b> en el habla rápida.</p>
+          <p><b class="text-slate-800">Subtítulos en inglés, nunca en español.</b> Los subtítulos en tu idioma empeoran la percepción del inglés; los subtítulos en inglés la mejoran, porque te dicen qué palabras (y qué sonidos) se están diciendo.</p>
+          <p><b class="text-slate-800">Escucha mucho material «cómodo»:</b> 30–60 minutos al día de algo que entiendas en su mayor parte. Sigue al mismo youtuber o podcast varias semanas para acostumbrarte a una voz; después cambia de acentos.</p>
+          <p><b class="text-slate-800">Aquí practicas lo demás:</b> dictado, habla conectada, vocabulario por el oído y predicción. Es justo lo que evita que te estanques.</p>
+        </div>
+      </div>
+
+      <div class="card-3d p-5 mb-5">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="font-heading font-black text-slate-800">Rutina de hoy · 45 min</h2>
+          <span class="text-[11px] font-black ${hechas === 4 ? 'text-green-600' : 'text-[#FF7A00]'}">${hechas}/4</span>
+        </div>
+        <div class="space-y-2">
+          ${rutina.map(([k, t, d]) => `
+            <button class="ruta-item w-full text-left ${r[k] ? 'hecho' : ''}" data-rutina="${k}">
+              <span class="ruta-check">${r[k] ? '<i class="fas fa-check"></i>' : ''}</span>
+              <span class="flex-1 min-w-0"><span class="block text-sm font-bold text-slate-700">${t}</span><span class="block text-[11px] text-slate-400">${d}</span></span>
+              ${k === 'subtitulos' ? `<span class="text-[10px] font-black ${r[k] ? 'text-green-600' : 'text-slate-400'}">${r[k] ? 'HECHO' : 'MARCAR'}</span>` : '<i class="fas fa-chevron-right text-slate-300 text-xs"></i>'}
+            </button>`).join('')}
+        </div>
+        <p class="text-[11px] text-slate-400 mt-3"><i class="fas fa-user-group mr-1"></i>Una vez por semana, suma 30 minutos de conversación real con una persona: el <button id="ir-club" class="font-black text-[#FF7A00] underline">Club</button> de Abulingo o un tutor.</p>
+      </div>
+
+      <div class="grid sm:grid-cols-2 gap-3 mb-5">
+        ${ACTIVIDADES.map(a => {
+          const pr = progresoActividad(a.id);
+          return `
+          <button class="act-card" data-act="${a.id}">
+            <div class="flex items-start gap-3">
+              <div class="act-ico bg-gradient-to-br ${a.color}"><i class="fas ${a.icon}"></i></div>
+              <div class="min-w-0 flex-1">
+                <p class="font-heading font-black text-slate-800 leading-tight">${a.titulo}</p>
+                <p class="text-[11px] text-slate-500 leading-snug mt-0.5">${a.desc}</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-2 mt-3">
+              <span class="text-[10px] font-black text-slate-400 uppercase">${a.tiempo}</span>
+              ${pr ? `<div class="barra flex-1"><i style="width:${pr[1] ? Math.round(pr[0] / pr[1] * 100) : 0}%"></i></div><span class="text-[10px] font-black text-slate-500">${pr[0]}/${pr[1]}</span>` : '<span class="flex-1"></span><span class="text-[10px] font-black text-slate-400">textos con audio</span>'}
+            </div>
+          </button>`;
+        }).join('')}
+      </div>
+
+      ${totalErr ? `
+      <div class="card-3d p-5 mb-5">
+        <h2 class="font-heading font-black text-slate-800 mb-1">Tu diagnóstico</h2>
+        <p class="text-[11px] text-slate-400 mb-3">Según cómo clasificaste tus errores en los dictados.</p>
+        ${[['desconocida', 'No conocía la palabra', 'bg-[#0D47A1]'], ['noReconocida', 'La conocía, pero no la reconocí', 'bg-[#FF7A00]']].map(([k, t, c]) => `
+          <div class="mb-2">
+            <div class="flex justify-between text-xs font-bold text-slate-600 mb-1"><span>${t}</span><span>${e[k] || 0}</span></div>
+            <div class="barra"><i class="${c}" style="background:none;width:${Math.round((e[k] || 0) / totalErr * 100)}%"></i></div>
+          </div>`).join('')}
+        <p class="text-xs text-slate-500 mt-3">${(e.noReconocida || 0) >= (e.desconocida || 0)
+          ? '👂 Tu reto principal es <b>reconocer</b> palabras que ya conoces. Dale prioridad a <b>Habla conectada</b> y a <b>Cuenta las palabras</b>.'
+          : '📚 Tu reto principal es <b>vocabulario</b>. Dale prioridad a <b>Vocabulario por el oído</b> y aprende palabras siempre dentro de frases.'}</p>
+      </div>` : ''}
+
+      <div class="card-3d p-5">
+        <h2 class="font-heading font-black text-slate-800 mb-1">Frases para no perder el hilo</h2>
+        <p class="text-[11px] text-slate-400 mb-3">Cuando hables con una persona y no entiendas, usa estas frases. Escúchalas y repítelas.</p>
+        <div class="space-y-1.5">
+          ${D.supervivencia.map(([en, es], i) => `
+            <div class="flex items-center gap-3 py-1.5">
+              <button class="play-btn" data-sup="${i}" title="Escuchar"><i class="fas fa-play text-xs"></i></button>
+              <div class="min-w-0"><p class="text-sm font-bold text-slate-700 leading-snug">${escapeHTML(en)}</p><p class="text-[11px] text-slate-400">${escapeHTML(es)}</p></div>
+            </div>`).join('')}
+        </div>
+      </div>`;
+
+    panel().querySelectorAll('[data-nivel]').forEach(b => b.onclick = () => { nivel = b.dataset.nivel; P.nivel = nivel; guardar(); renderInicio(); });
+    document.getElementById('consejo-toggle').onclick = () => {
+      document.getElementById('consejo-cuerpo').classList.toggle('hidden');
+      document.getElementById('consejo-flecha').classList.toggle('rotate-180');
+    };
+    document.getElementById('ir-club').onclick = () => { window.location.href = 'abulingo.html?menu=club'; };
+    panel().querySelectorAll('[data-rutina]').forEach(b => b.onclick = () => {
+      const k = b.dataset.rutina;
+      if (k === 'subtitulos') { const rr = rutinaHoy(); rr.subtitulos = !rr.subtitulos; guardar(); if (rr.subtitulos) marcarRutina('subtitulos'); renderInicio(); return; }
+      abrirActividad(k);
+    });
+    panel().querySelectorAll('[data-act]').forEach(b => b.onclick = () => abrirActividad(b.dataset.act));
+    panel().querySelectorAll('[data-sup]').forEach(b => b.onclick = async () => {
+      const i = Number(b.dataset.sup);
+      stopSpeaking();
+      b.classList.add('sonando');
+      await tocar(`s-${i}`, { texto: D.supervivencia[i][0] });
+      b.classList.remove('sonando');
+    });
+  }
+
+  function abrirActividad(id) {
+    stopSpeaking();
+    window.scrollTo({ top: 0 });
+    if (id === 'dictado') return renderDictados();
+    if (id === 'conectada') return renderConectadaLista();
+    if (id === 'vocab') return iniciarVocab();
+    if (id === 'prediccion') return renderPrediccionLista();
+    if (id === 'contar') return iniciarContar();
+    if (id === 'shadowing') return renderListening();
+  }
+
+  function cabecera(titulo, subtitulo, { volver = renderInicio, extra = '' } = {}) {
+    return `
+      <div class="card-3d p-4 sm:p-5 mb-4">
+        <button class="volver-btn text-[11px] font-black text-slate-400 hover:text-[#FF7A00] mb-2"><i class="fas fa-arrow-left mr-1"></i>Volver</button>
+        <p class="text-[10px] font-black uppercase tracking-widest text-slate-400">Nivel ${nivel}</p>
+        <h2 class="font-heading font-black text-2xl text-[#FF7A00] leading-tight">${titulo}</h2>
+        ${subtitulo ? `<p class="text-xs text-slate-500 mt-1 leading-snug">${subtitulo}</p>` : ''}
+        ${extra}
+      </div>`;
+  }
+  function engancharVolver(fn = renderInicio) {
+    panel().querySelectorAll('.volver-btn').forEach(b => b.onclick = () => { stopSpeaking(); window.scrollTo({ top: 0 }); fn(); });
+  }
+
+  /* ============================================================
+     6. DICTADO
+     Se escucha el clip completo, luego cada frase (las veces que haga
+     falta) y se escribe. Al comprobar se alinean las palabras con lo
+     que se dijo de verdad y cada error se clasifica: ¿no conocías la
+     palabra, o la conocías pero no la reconociste? Esa diferencia dice
+     qué practicar después.
+  ============================================================ */
+  const CONTRACCIONES = {
+    "i'm": 'i am', "you're": 'you are', "we're": 'we are', "they're": 'they are', "he's": 'he is', "she's": 'she is',
+    "it's": 'it is', "that's": 'that is', "what's": 'what is', "where's": 'where is', "who's": 'who is', "how's": 'how is',
+    "there's": 'there is', "here's": 'here is', "let's": 'let us', "i've": 'i have', "you've": 'you have', "we've": 'we have',
+    "they've": 'they have', "i'll": 'i will', "you'll": 'you will', "he'll": 'he will', "she'll": 'she will', "it'll": 'it will',
+    "we'll": 'we will', "they'll": 'they will', "i'd": 'i would', "you'd": 'you would', "he'd": 'he would', "she'd": 'she would',
+    "we'd": 'we would', "they'd": 'they would', "it'd": 'it would', "don't": 'do not', "doesn't": 'does not', "didn't": 'did not',
+    "isn't": 'is not', "aren't": 'are not', "wasn't": 'was not', "weren't": 'were not', "can't": 'can not', "cannot": 'can not',
+    "won't": 'will not', "wouldn't": 'would not', "shouldn't": 'should not', "couldn't": 'could not', "haven't": 'have not',
+    "hasn't": 'has not', "hadn't": 'had not', "ok": 'okay'
+  };
+  function tokens(texto) {
+    const t = (texto || '').toLowerCase().replace(/[’‘`´]/g, "'")
+      .replace(/[^a-z0-9' ]+/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!t) return [];
+    return t.split(' ').flatMap(w => (CONTRACCIONES[w] || w.replace(/^'+|'+$/g, '')).split(' ')).filter(Boolean);
+  }
+  // Tokens "de pantalla": las palabras tal como se dijeron, para mostrarlas.
+  // Alinea lo esperado con lo escrito (distancia de edición por palabras).
+  function alinear(esperado, escrito) {
+    const a = esperado, b = escrito, m = a.length, n = b.length;
+    const dp = Array.from({ length: m + 1 }, (_, i) => Array.from({ length: n + 1 }, (_, j) => i === 0 ? j : j === 0 ? i : 0));
+    const cercana = (x, y) => x.length >= 4 && pzLevenshtein(x, y) <= 1;
+    const coste = (x, y) => x === y ? 0 : cercana(x, y) ? 0.4 : 1;
+    for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++)
+      dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + coste(a[i - 1], b[j - 1]));
+    const ops = [];
+    let i = m, j = n;
+    while (i > 0 || j > 0) {
+      if (i > 0 && j > 0 && dp[i][j] === dp[i - 1][j - 1] + coste(a[i - 1], b[j - 1])) {
+        const x = a[i - 1], y = b[j - 1];
+        ops.push({ tipo: x === y ? 'ok' : cercana(x, y) ? 'casi' : 'mal', esp: x, escr: y });
+        i--; j--;
+      } else if (i > 0 && dp[i][j] === dp[i - 1][j] + 1) { ops.push({ tipo: 'falta', esp: a[i - 1] }); i--; }
+      else { ops.push({ tipo: 'sobra', escr: b[j - 1] }); j--; }
+    }
+    return ops.reverse();
+  }
+
+  let dict = null;   // { d, respuestas: [], resultados: [], clasif: {} }
+
+  function renderDictados() {
+    const lista = D.dictados[nivel];
+    panel().innerHTML = cabecera('Dictado', 'Toma un clip de 20–30 segundos, escríbelo frase por frase y compáralo con la transcripción. Luego clasifica cada error.') + `
+      <div class="space-y-2">
+        ${lista.map(d => {
+          const p = P.dictado[d.id];
+          return `<button class="act-card w-full" data-dict="${d.id}">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-xl ${p ? 'bg-green-500' : 'bg-slate-100'} flex items-center justify-center shrink-0">
+                <i class="fas ${p ? 'fa-check text-white' : 'fa-pen text-[#FF7A00]'} text-sm"></i></div>
+              <div class="flex-1 min-w-0">
+                <p class="font-heading font-black text-slate-800 leading-tight">${escapeHTML(d.titulo)}</p>
+                <p class="text-[11px] text-slate-400">${escapeHTML(d.es)} · ${d.frases.length} frases</p>
+              </div>
+              ${p ? `<span class="text-xs font-black text-green-600">${p.mejor}%</span>` : ''}
+            </div>
+          </button>`;
+        }).join('')}
+      </div>`;
+    engancharVolver();
+    panel().querySelectorAll('[data-dict]').forEach(b => b.onclick = () => abrirDictado(lista.find(d => d.id === b.dataset.dict)));
+  }
+
+  function abrirDictado(d) {
+    dict = { d, respuestas: d.frases.map(() => ''), resultados: d.frases.map(() => null), clasif: {}, escuchas: d.frases.map(() => 0) };
+    pintarDictado();
+  }
+
+  function pintarDictado() {
+    const { d } = dict;
+    panel().innerHTML = cabecera(escapeHTML(d.titulo), `${escapeHTML(d.es)} · Escucha el clip completo una vez sin escribir. Luego ve frase por frase: puedes repetir cada una las veces que necesites.`, {
+      extra: `<div class="flex flex-wrap items-center gap-2 mt-3">
+        <button id="dict-todo" class="btn-juice bg-slate-800 text-white font-bold py-2.5 px-4 rounded-xl text-sm"><i class="fas fa-play mr-2"></i>Escuchar todo</button>
+        ${velocidadesHTML()}
+      </div>` }) + `
+      <div class="space-y-3" id="dict-frases">
+        ${d.frases.map((f, i) => `
+          <div class="card-3d p-4" data-fila="${i}">
+            <div class="flex items-center gap-2 mb-2">
+              <button class="play-btn" data-play="${i}" title="Escuchar la frase"><i class="fas fa-play text-xs"></i></button>
+              <button class="play-btn lento" data-lento="${i}" title="Escuchar más despacio"><span class="text-sm">🐢</span></button>
+              <span class="text-[10px] font-black text-slate-300">FRASE ${i + 1} DE ${d.frases.length}</span>
+              <span class="flex-1"></span>
+              <span class="text-[10px] font-bold text-slate-400" data-esc="${i}"></span>
+            </div>
+            <input class="dict-input" data-in="${i}" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Escribe lo que oyes…" value="${escapeHTML(dict.respuestas[i])}">
+            <div class="flex justify-end mt-2"><button class="btn-juice bg-[#FF7A00] text-white font-bold py-2 px-4 rounded-xl text-sm" data-check="${i}">Comprobar</button></div>
+            <div class="dict-res mt-2" data-res="${i}"></div>
+          </div>`).join('')}
+      </div>
+      <div id="dict-final" class="mt-4"></div>`;
+    engancharVolver(renderDictados);
+    document.getElementById('dict-todo').onclick = async (e) => {
+      const b = e.currentTarget;
+      if (b.dataset.on) { stopSpeaking(); b.dataset.on = ''; b.innerHTML = '<i class="fas fa-play mr-2"></i>Escuchar todo'; return; }
+      b.dataset.on = '1'; b.innerHTML = '<i class="fas fa-stop mr-2"></i>Detener';
+      await tocarLista(d.frases.map((f, i) => ({ archivo: `${d.id}-${i}`, texto: f[0] })), { pausa: 350 });
+      b.dataset.on = ''; b.innerHTML = '<i class="fas fa-play mr-2"></i>Escuchar todo';
+    };
+    panel().querySelectorAll('[data-play]').forEach(b => b.onclick = () => tocarFraseDictado(Number(b.dataset.play), b));
+    panel().querySelectorAll('[data-lento]').forEach(b => b.onclick = () => tocarFraseDictado(Number(b.dataset.lento), b, 0.75));
+    panel().querySelectorAll('[data-in]').forEach(inp => {
+      inp.oninput = () => { dict.respuestas[Number(inp.dataset.in)] = inp.value; };
+      inp.onkeydown = (e) => { if (e.key === 'Enter') comprobarFrase(Number(inp.dataset.in)); };
+    });
+    panel().querySelectorAll('[data-check]').forEach(b => b.onclick = () => comprobarFrase(Number(b.dataset.check)));
+    dict.resultados.forEach((r, i) => { if (r) pintarResultadoFrase(i); });
+    pintarFinalDictado();
+  }
+
+  async function tocarFraseDictado(i, btn, vel) {
+    stopSpeaking();
+    dict.escuchas[i]++;
+    const esc = panel().querySelector(`[data-esc="${i}"]`);
+    if (esc) esc.textContent = `${dict.escuchas[i]} ${dict.escuchas[i] === 1 ? 'escucha' : 'escuchas'}`;
+    btn.classList.add('sonando');
+    await tocar(`${dict.d.id}-${i}`, { vel: vel ? Math.min(vel, velocidad) : velocidad, texto: dict.d.frases[i][0] });
+    btn.classList.remove('sonando');
+    panel().querySelector(`[data-in="${i}"]`)?.focus();
+  }
+
+  function comprobarFrase(i) {
+    const inp = panel().querySelector(`[data-in="${i}"]`);
+    const escrito = (inp?.value || '').trim();
+    if (!escrito) { showToast('✍️ Escribe primero lo que oíste.'); return; }
+    dict.respuestas[i] = escrito;
+    const ops = alinear(tokens(dict.d.frases[i][0]), tokens(escrito));
+    const total = ops.filter(o => o.tipo !== 'sobra').length;
+    const buenas = ops.filter(o => o.tipo === 'ok').length + ops.filter(o => o.tipo === 'casi').length * 0.75;
+    const sobran = ops.filter(o => o.tipo === 'sobra').length;
+    const pct = Math.max(0, Math.round((buenas - sobran * 0.5) / Math.max(1, total) * 100));
+    dict.resultados[i] = { ops, pct };
+    if (pct === 100) sonidoBien(); else if (pct < 60) sonidoMal();
+    pintarResultadoFrase(i);
+    pintarFinalDictado();
+  }
+
+  function pintarResultadoFrase(i) {
+    const box = panel().querySelector(`[data-res="${i}"]`);
+    const r = dict.resultados[i];
+    if (!box || !r) return;
+    const errores = r.ops.map((o, k) => ({ ...o, k })).filter(o => o.tipo === 'mal' || o.tipo === 'falta');
+    box.innerHTML = `
+      <div class="bg-slate-50 rounded-xl p-3">
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-[10px] font-black uppercase tracking-wide text-slate-400">Corrección</span>
+          <span class="text-xs font-black ${r.pct === 100 ? 'text-green-600' : r.pct >= 70 ? 'text-amber-600' : 'text-red-500'}">${r.pct}%</span>
+        </div>
+        <div class="leading-loose">${r.ops.map(o => {
+          if (o.tipo === 'ok') return `<span class="tok ok">${escapeHTML(o.esp)}</span>`;
+          if (o.tipo === 'casi') return `<span class="tok casi" title="Casi: revisa la ortografía">${escapeHTML(o.esp)}<small>escribiste «${escapeHTML(o.escr)}»</small></span>`;
+          if (o.tipo === 'mal') return `<span class="tok mal">${escapeHTML(o.esp)}<small>escribiste «${escapeHTML(o.escr)}»</small></span>`;
+          if (o.tipo === 'falta') return `<span class="tok falta">${escapeHTML(o.esp)}<small>faltó</small></span>`;
+          return `<span class="tok sobra">${escapeHTML(o.escr)}</span>`;
+        }).join(' ')}</div>
+        <p class="text-sm font-bold text-slate-700 mt-2">${escapeHTML(dict.d.frases[i][0])}</p>
+        <p class="text-[12px] text-slate-400">${escapeHTML(dict.d.frases[i][1])}</p>
+        ${errores.length ? `
+          <p class="text-[11px] font-black text-slate-500 mt-3 mb-1.5">¿Por qué fallaste cada palabra?</p>
+          <div class="space-y-1.5">
+            ${errores.map(o => {
+              const c = dict.clasif[`${i}:${o.k}`];
+              return `<div class="flex items-center gap-2 flex-wrap clasif">
+                <span class="tok mal" style="margin:0">${escapeHTML(o.esp)}</span>
+                <button class="${c === 'd' ? 'on-d' : ''}" data-clasif="${i}:${o.k}:d">No la conocía</button>
+                <button class="${c === 'r' ? 'on-r' : ''}" data-clasif="${i}:${o.k}:r">La conocía, no la reconocí</button>
+              </div>`;
+            }).join('')}
+          </div>` : ''}
+      </div>`;
+    box.querySelectorAll('[data-clasif]').forEach(b => b.onclick = () => {
+      const [fi, k, tipo] = b.dataset.clasif.split(':');
+      dict.clasif[`${fi}:${k}`] = tipo;
+      pintarResultadoFrase(Number(fi));
+      pintarFinalDictado();
+    });
+  }
+
+  function pintarFinalDictado() {
+    const cont = document.getElementById('dict-final');
+    if (!cont) return;
+    const hechos = dict.resultados.filter(Boolean);
+    if (hechos.length < dict.d.frases.length) { cont.innerHTML = ''; return; }
+    const pct = Math.round(hechos.reduce((s, r) => s + r.pct, 0) / hechos.length);
+    const vals = Object.values(dict.clasif);
+    const nD = vals.filter(v => v === 'd').length, nR = vals.filter(v => v === 'r').length;
+    cont.innerHTML = `
+      <div class="card-3d p-5 text-center animate-pop">
+        <div class="text-5xl mb-2">${pct >= 90 ? '🏆' : pct >= 70 ? '👏' : '💪'}</div>
+        <h3 class="font-heading font-black text-2xl text-slate-800">${pct}% del dictado</h3>
+        <p class="text-sm text-slate-500 mt-1">${nD + nR ? `Errores clasificados: <b class="text-[#0D47A1]">${nD} de vocabulario</b> · <b class="text-[#FF7A00]">${nR} de oído</b>` : 'Clasifica tus errores arriba para ver tu diagnóstico.'}</p>
+        ${nR > nD ? '<p class="text-xs text-slate-500 mt-2">👂 Conocías la mayoría: practica <b>Habla conectada</b> para reconocerlas en el habla rápida.</p>' : nD > 0 ? '<p class="text-xs text-slate-500 mt-2">📚 Te faltó vocabulario: prueba <b>Vocabulario por el oído</b>.</p>' : ''}
+        <button id="dict-guardar" class="w-full btn-juice bg-[#FF7A00] text-white font-bold py-3 rounded-xl mt-4">Terminar y guardar</button>
+        <button id="dict-repetir" class="w-full btn-juice bg-slate-100 text-slate-600 font-bold py-3 rounded-xl mt-2">Repetir este dictado</button>
+      </div>`;
+    document.getElementById('dict-guardar').onclick = () => {
+      const prev = P.dictado[dict.d.id] || { mejor: 0, veces: 0 };
+      P.dictado[dict.d.id] = { mejor: Math.max(prev.mejor || 0, pct), veces: (prev.veces || 0) + 1, fecha: hoy() };
+      P.errores.desconocida = (P.errores.desconocida || 0) + nD;
+      P.errores.noReconocida = (P.errores.noReconocida || 0) + nR;
+      guardar();
+      marcarRutina('dictado');
+      if (pct >= 90) confeti();
+      showToast(`✍️ Dictado guardado: ${pct}%`);
+      renderDictados();
+    };
+    document.getElementById('dict-repetir').onclick = () => { abrirDictado(dict.d); window.scrollTo({ top: 0 }); };
+  }
+
+  /* ============================================================
+     7. HABLA CONECTADA
+     Cada patrón: explicación, ejemplos lento (palabra por palabra) vs.
+     natural (como suena de verdad) y una práctica en la que suena la
+     versión natural y hay que elegir qué frase completa se dijo.
+  ============================================================ */
+  function renderConectadaLista() {
+    const lista = D.conectada[nivel];
+    panel().innerHTML = cabecera('Habla conectada', 'Estudia un patrón al día (5 min). Primero lento, luego natural, y al final practica reconocerlo.') + `
+      <div class="space-y-2">
+        ${lista.map(c => {
+          const p = P.conectada[c.id];
+          const ok = (p?.mejor || 0) >= 80;
+          return `<button class="act-card w-full" data-con="${c.id}">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-xl ${ok ? 'bg-green-500' : 'bg-blue-50'} flex items-center justify-center shrink-0">
+                <i class="fas ${ok ? 'fa-check text-white' : 'fa-link text-[#0D47A1]'} text-sm"></i></div>
+              <div class="flex-1 min-w-0">
+                <p class="font-heading font-black text-slate-800 leading-tight">${escapeHTML(c.titulo)}</p>
+                <p class="text-[11px] text-slate-400 truncate">${escapeHTML(c.patron)}</p>
+              </div>
+              ${p ? `<span class="text-xs font-black ${ok ? 'text-green-600' : 'text-slate-400'}">${p.mejor}%</span>` : ''}
+            </div>
+          </button>`;
+        }).join('')}
+      </div>`;
+    engancharVolver();
+    panel().querySelectorAll('[data-con]').forEach(b => b.onclick = () => abrirPatron(lista.find(c => c.id === b.dataset.con)));
+  }
+
+  function abrirPatron(c) {
+    panel().innerHTML = cabecera(escapeHTML(c.titulo), '', {
+      extra: `<p class="inline-block mt-2 bg-blue-50 text-[#0D47A1] font-black text-sm rounded-xl px-3 py-1.5">${escapeHTML(c.patron)}</p>
+        <p class="text-sm text-slate-600 mt-3 leading-relaxed">${escapeHTML(c.explica)}</p>
+        <div class="mt-3">${velocidadesHTML()}</div>` }) + `
+      <div class="card-3d p-4 sm:p-5 mb-4">
+        <p class="text-[10px] font-black uppercase tracking-wide text-slate-400 mb-2">Escucha la diferencia</p>
+        <div class="space-y-3">
+          ${c.ejemplos.map((e, i) => `
+            <div class="border-2 border-slate-100 rounded-2xl p-3">
+              <div class="flex items-center gap-2">
+                <button class="play-btn lento" data-l="${i}" title="Lento, palabra por palabra"><span class="text-sm">🐢</span></button>
+                <div class="min-w-0 flex-1"><p class="text-[10px] font-black text-[#0D47A1] uppercase">Lento</p><p class="text-sm font-bold text-slate-700">${escapeHTML(e.lento)}</p></div>
+              </div>
+              <div class="flex items-center gap-2 mt-2">
+                <button class="play-btn" data-n="${i}" title="Natural, como se dice de verdad"><i class="fas fa-bolt text-xs"></i></button>
+                <div class="min-w-0 flex-1"><p class="text-[10px] font-black text-[#FF7A00] uppercase">Natural</p><p class="text-sm font-bold text-slate-700">${escapeHTML(e.natural)}</p></div>
+              </div>
+              <p class="text-[11px] text-slate-400 mt-1.5 pl-12">${escapeHTML(e.es)}</p>
+            </div>`).join('')}
+        </div>
+        <button id="con-practicar" class="w-full btn-juice bg-[#0D47A1] text-white font-bold py-3 rounded-xl mt-4"><i class="fas fa-dumbbell mr-2"></i>Practicar (${c.ejemplos.length} preguntas)</button>
+      </div>`;
+    engancharVolver(renderConectadaLista);
+    const tocarBtn = async (b, archivo, texto) => { stopSpeaking(); b.classList.add('sonando'); await tocar(archivo, { texto }); b.classList.remove('sonando'); };
+    panel().querySelectorAll('[data-l]').forEach(b => b.onclick = () => { const i = Number(b.dataset.l); tocarBtn(b, `${c.id}-${i}-l`, c.ejemplos[i].lento); });
+    panel().querySelectorAll('[data-n]').forEach(b => b.onclick = () => { const i = Number(b.dataset.n); tocarBtn(b, `${c.id}-${i}-n`, c.ejemplos[i].natural); });
+    document.getElementById('con-practicar').onclick = () => practicarPatron(c);
+  }
+
+  function practicarPatron(c) {
+    const orden = barajar(c.ejemplos.map((e, i) => i));
+    let k = 0, aciertos = 0;
+    const paso = () => {
+      if (k >= orden.length) return finPatron();
+      const i = orden[k], e = c.ejemplos[i];
+      const opciones = barajar([e.lento, ...e.trampas]);
+      panel().innerHTML = cabecera(escapeHTML(c.titulo), `Pregunta ${k + 1} de ${orden.length} · Suena la versión <b>natural</b>. ¿Qué frase completa se dijo?`, { extra: `<div class="mt-3">${velocidadesHTML()}</div>` }) + `
+        <div class="card-3d p-5">
+          <div class="flex justify-center mb-4">
+            <button id="con-oir" class="btn-juice bg-[#FF7A00] text-white font-bold py-3 px-6 rounded-2xl"><i class="fas fa-volume-high mr-2"></i>Escuchar otra vez</button>
+          </div>
+          <div class="space-y-2">${opciones.map((o, j) => `<button class="opcion" data-op="${j}">${escapeHTML(o)}</button>`).join('')}</div>
+          <div id="con-fb" class="mt-4"></div>
+        </div>`;
+      engancharVolver(() => abrirPatron(c));
+      const oir = () => tocar(`${c.id}-${i}-n`, { texto: e.natural });
+      document.getElementById('con-oir').onclick = oir;
+      setTimeout(oir, 300);
+      panel().querySelectorAll('[data-op]').forEach(b => b.onclick = async () => {
+        const elegido = opciones[Number(b.dataset.op)];
+        const bien = elegido === e.lento;
+        panel().querySelectorAll('[data-op]').forEach(x => {
+          x.disabled = true;
+          if (opciones[Number(x.dataset.op)] === e.lento) x.classList.add('bien');
+        });
+        if (!bien) b.classList.add('malo');
+        if (bien) { aciertos++; sonidoBien(); } else sonidoMal();
+        document.getElementById('con-fb').innerHTML = `
+          <div class="rounded-2xl ${bien ? 'bg-green-50' : 'bg-orange-50'} p-3 text-sm">
+            <p class="font-black ${bien ? 'text-green-700' : 'text-[#c2570a]'}">${bien ? '✅ ¡Bien!' : 'Casi…'} Sonaba: «${escapeHTML(e.natural)}»</p>
+            <p class="text-slate-500 text-xs mt-0.5">${escapeHTML(e.es)}</p>
+            <div class="flex gap-2 mt-2">
+              <button class="play-btn lento" id="fb-l"><span class="text-sm">🐢</span></button>
+              <button class="play-btn" id="fb-n"><i class="fas fa-bolt text-xs"></i></button>
+              <span class="flex-1"></span>
+              <button id="con-sig" class="btn-juice bg-[#FF7A00] text-white font-bold py-2 px-4 rounded-xl text-sm">Siguiente</button>
+            </div>
+          </div>`;
+        document.getElementById('fb-l').onclick = () => tocar(`${c.id}-${i}-l`, { texto: e.lento });
+        document.getElementById('fb-n').onclick = () => tocar(`${c.id}-${i}-n`, { texto: e.natural });
+        document.getElementById('con-sig').onclick = () => { stopSpeaking(); k++; paso(); };
+        if (!bien) setTimeout(() => tocar(`${c.id}-${i}-l`, { texto: e.lento }), 350);
+      });
+    };
+    const finPatron = () => {
+      const pct = Math.round(aciertos / orden.length * 100);
+      const prev = P.conectada[c.id]?.mejor || 0;
+      P.conectada[c.id] = { mejor: Math.max(prev, pct), fecha: hoy() };
+      guardar();
+      marcarRutina('conectada');
+      if (pct >= 80) confeti();
+      panel().innerHTML = cabecera(escapeHTML(c.titulo), '') + `
+        <div class="card-3d p-6 text-center animate-pop">
+          <div class="text-5xl mb-2">${pct === 100 ? '🏆' : pct >= 80 ? '👏' : '💪'}</div>
+          <h3 class="font-heading font-black text-2xl text-slate-800">${aciertos} de ${orden.length}</h3>
+          <p class="text-sm text-slate-500 mt-1">${pct >= 80 ? '¡Tu oído ya reconoce este patrón!' : 'Vuelve a escuchar los ejemplos lento y natural, y repite la práctica.'}</p>
+          <button id="con-otra" class="w-full btn-juice bg-[#0D47A1] text-white font-bold py-3 rounded-xl mt-4">Practicar otra vez</button>
+          <button id="con-lista" class="w-full btn-juice bg-slate-100 text-slate-600 font-bold py-3 rounded-xl mt-2">Ver todos los patrones</button>
+        </div>`;
+      engancharVolver(renderConectadaLista);
+      document.getElementById('con-otra').onclick = () => practicarPatron(c);
+      document.getElementById('con-lista').onclick = renderConectadaLista;
+    };
+    paso();
+  }
+
+  /* ============================================================
+     8. VOCABULARIO POR EL OÍDO
+     Rondas de 10: suena una frase y hay que elegir la palabra que se
+     oyó entre otras que suenan parecido. Primero salen las que nunca
+     has acertado y las que más fallas.
+  ============================================================ */
+  function iniciarVocab() {
+    const lista = D.vocab[nivel];
+    const reg = P.vocab[nivel] || (P.vocab[nivel] = {});
+    const peso = (w) => { const r = reg[w[0]]; if (!r) return 0; return (r.ok || 0) - (r.bad || 0) * 2; };
+    const ronda = barajar(lista).sort((a, b) => peso(a) - peso(b)).slice(0, 10);
+    let k = 0, aciertos = 0;
+    const paso = () => {
+      if (k >= ronda.length) return fin();
+      const [w, distractores, frase, fraseEs, wEs] = ronda[k];
+      const i = lista.indexOf(ronda[k]);
+      const base = `v-${nivel.toLowerCase()}-${slug(w)}`;
+      const opciones = barajar([w, ...distractores]);
+      panel().innerHTML = cabecera('Vocabulario por el oído', `Palabra ${k + 1} de ${ronda.length} · Escucha la frase. ¿Qué palabra oíste?`, { extra: `<div class="mt-3">${velocidadesHTML()}</div>` }) + `
+        <div class="card-3d p-5">
+          <div class="flex justify-center mb-4">
+            <button id="voc-oir" class="btn-juice bg-emerald-500 text-white font-bold py-3 px-6 rounded-2xl"><i class="fas fa-volume-high mr-2"></i>Escuchar la frase</button>
+          </div>
+          <div class="grid grid-cols-2 gap-2">${opciones.map((o, j) => `<button class="opcion text-center" data-op="${j}">${escapeHTML(o)}</button>`).join('')}</div>
+          <div id="voc-fb" class="mt-4"></div>
+        </div>`;
+      engancharVolver();
+      const oir = () => tocar(base, { texto: frase.replace(/\*/g, '') });
+      document.getElementById('voc-oir').onclick = oir;
+      setTimeout(oir, 300);
+      panel().querySelectorAll('[data-op]').forEach(b => b.onclick = () => {
+        const bien = opciones[Number(b.dataset.op)] === w;
+        panel().querySelectorAll('[data-op]').forEach(x => { x.disabled = true; if (opciones[Number(x.dataset.op)] === w) x.classList.add('bien'); });
+        if (!bien) b.classList.add('malo');
+        const r = reg[w] || (reg[w] = { ok: 0, bad: 0 });
+        if (bien) { r.ok++; aciertos++; sonidoBien(); } else { r.bad++; sonidoMal(); }
+        guardar();
+        const fraseHTML = escapeHTML(frase).replace(/\*(.+?)\*/g, '<mark class="obj">$1</mark>');
+        document.getElementById('voc-fb').innerHTML = `
+          <div class="rounded-2xl ${bien ? 'bg-green-50' : 'bg-orange-50'} p-3">
+            <p class="text-base font-bold text-slate-700">${fraseHTML}</p>
+            <p class="text-xs text-slate-500">${escapeHTML(fraseEs)}</p>
+            <p class="text-xs mt-2"><b class="text-slate-700">${escapeHTML(w)}</b> <span class="text-slate-400">= ${escapeHTML(wEs)}</span></p>
+            <div class="flex gap-2 mt-2 items-center">
+              <button class="play-btn" id="voc-palabra" title="La palabra sola"><i class="fas fa-volume-low text-xs"></i></button>
+              <button class="play-btn" id="voc-frase" title="La frase otra vez"><i class="fas fa-rotate-right text-xs"></i></button>
+              <span class="flex-1"></span>
+              <button id="voc-sig" class="btn-juice bg-[#FF7A00] text-white font-bold py-2 px-4 rounded-xl text-sm">Siguiente</button>
+            </div>
+          </div>`;
+        document.getElementById('voc-palabra').onclick = () => tocar(`${base}-w`, { texto: w });
+        document.getElementById('voc-frase').onclick = oir;
+        document.getElementById('voc-sig').onclick = () => { stopSpeaking(); k++; paso(); };
+        setTimeout(() => tocar(`${base}-w`, { texto: w }), 300);
+        void i;
+      });
+    };
+    const fin = () => {
+      marcarRutina('vocab');
+      if (aciertos >= 9) confeti();
+      panel().innerHTML = cabecera('Vocabulario por el oído', '') + `
+        <div class="card-3d p-6 text-center animate-pop">
+          <div class="text-5xl mb-2">${aciertos >= 9 ? '🏆' : aciertos >= 7 ? '👏' : '💪'}</div>
+          <h3 class="font-heading font-black text-2xl text-slate-800">${aciertos} de ${ronda.length}</h3>
+          <p class="text-sm text-slate-500 mt-1">Aprende cada palabra nueva escuchándola siempre dentro de una frase, nunca sola.</p>
+          <button id="voc-otra" class="w-full btn-juice bg-emerald-500 text-white font-bold py-3 rounded-xl mt-4">Otra ronda</button>
+          <button id="voc-ini" class="w-full btn-juice bg-slate-100 text-slate-600 font-bold py-3 rounded-xl mt-2">Volver al inicio</button>
+        </div>`;
+      engancharVolver();
+      document.getElementById('voc-otra').onclick = iniciarVocab;
+      document.getElementById('voc-ini').onclick = renderInicio;
+    };
+    paso();
+  }
+
+  /* ============================================================
+     9. PREDICE Y ESCUCHA
+     1) leer el contexto y predecir palabras, 2) escuchar sin texto
+     (máximo dos veces antes de responder), 3) responder, 4) revisar
+     con la transcripción y ver qué predicciones acertaste.
+  ============================================================ */
+  const COLOR_VOZ = { leda: '#e11d48', aoede: '#db2777', kore: '#9333ea', charon: '#0D47A1', puck: '#0891b2', fenrir: '#15803d' };
+  const NOMBRE_VOZ = { leda: 'A', aoede: 'A', kore: 'A', charon: 'B', puck: 'B', fenrir: 'B' };
+
+  function renderPrediccionLista() {
+    const lista = D.prediccion[nivel];
+    panel().innerHTML = cabecera('Predice y escucha', 'Antes de escuchar, piensa qué vas a oír. Predecir prepara al oído y hace que entiendas mucho más.') + `
+      <div class="space-y-2">
+        ${lista.map(p => {
+          const r = P.prediccion[p.id];
+          return `<button class="act-card w-full" data-pred="${p.id}">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-xl ${r ? 'bg-green-500' : 'bg-purple-50'} flex items-center justify-center shrink-0">
+                <i class="fas ${r ? 'fa-check text-white' : 'fa-wand-magic-sparkles text-purple-600'} text-sm"></i></div>
+              <div class="flex-1 min-w-0">
+                <p class="font-heading font-black text-slate-800 leading-tight">${escapeHTML(p.titulo)}</p>
+                <p class="text-[11px] text-slate-400 truncate">${escapeHTML(p.contexto)}</p>
+              </div>
+              ${r ? `<span class="text-xs font-black text-green-600">${r.mejor}/${p.preguntas.length}</span>` : ''}
+            </div>
+          </button>`;
+        }).join('')}
+      </div>`;
+    engancharVolver();
+    panel().querySelectorAll('[data-pred]').forEach(b => b.onclick = () => abrirPrediccion(lista.find(p => p.id === b.dataset.pred)));
+  }
+
+  function abrirPrediccion(p) {
+    const st = { elegidas: new Set(), escuchas: 0, respuestas: [] };
+    const clips = p.lineas.map((l, i) => ({ archivo: `${p.id}-${i}`, texto: l[1] }));
+
+    // Paso 1: predecir
+    const paso1 = () => {
+      panel().innerHTML = cabecera(escapeHTML(p.titulo), '<b>Paso 1 de 3 · Predice.</b> Lee la situación y marca las palabras que crees que vas a oír.') + `
+        <div class="card-3d p-5">
+          <p class="text-base font-bold text-slate-700 mb-4">📍 ${escapeHTML(p.contexto)}</p>
+          <div class="flex flex-wrap gap-2">${p.predice.opciones.map(o => `<button class="pred-chip ${st.elegidas.has(o) ? 'on' : ''}" data-pc="${escapeHTML(o)}">${escapeHTML(o)}</button>`).join('')}</div>
+          <button id="pred-ok" class="w-full btn-juice bg-purple-600 text-white font-bold py-3 rounded-xl mt-5">Listo, quiero escuchar</button>
+        </div>`;
+      engancharVolver(renderPrediccionLista);
+      panel().querySelectorAll('[data-pc]').forEach(b => b.onclick = () => {
+        const o = b.dataset.pc;
+        if (st.elegidas.has(o)) st.elegidas.delete(o); else st.elegidas.add(o);
+        b.classList.toggle('on');
+      });
+      document.getElementById('pred-ok').onclick = () => {
+        if (!st.elegidas.size) { showToast('🔮 Marca al menos una palabra.'); return; }
+        paso2();
+      };
+    };
+
+    // Paso 2: escuchar sin texto y responder
+    const paso2 = () => {
+      panel().innerHTML = cabecera(escapeHTML(p.titulo), '<b>Paso 2 de 3 · Escucha y responde.</b> Sin texto. Puedes escuchar dos veces antes de responder.', { extra: `<div class="mt-3">${velocidadesHTML()}</div>` }) + `
+        <div class="card-3d p-5">
+          <div class="flex flex-col items-center gap-2 mb-5">
+            <button id="pred-oir" class="btn-juice bg-purple-600 text-white font-bold py-3 px-6 rounded-2xl"><i class="fas fa-play mr-2"></i>Escuchar</button>
+            <span id="pred-esc" class="text-[11px] font-bold text-slate-400">Te quedan 2 escuchas</span>
+          </div>
+          <div class="space-y-4">
+            ${p.preguntas.map(([q, qEs, ops], i) => `
+              <div>
+                <p class="text-sm font-black text-slate-700">${i + 1}. ${escapeHTML(q)}</p>
+                <p class="text-[11px] text-slate-400 mb-1.5">${escapeHTML(qEs)}</p>
+                <div class="space-y-1.5">${ops.map((o, j) => `<button class="opcion text-sm py-2.5" data-q="${i}" data-o="${j}">${escapeHTML(o)}</button>`).join('')}</div>
+              </div>`).join('')}
+          </div>
+          <button id="pred-rev" class="w-full btn-juice bg-[#FF7A00] text-white font-bold py-3 rounded-xl mt-5">Ver respuestas y transcripción</button>
+        </div>`;
+      engancharVolver(renderPrediccionLista);
+      const btn = document.getElementById('pred-oir');
+      btn.onclick = async () => {
+        if (btn.dataset.on) { stopSpeaking(); return; }
+        if (st.escuchas >= 2) { showToast('🎧 Responde primero; luego podrás escuchar todo lo que quieras.'); return; }
+        st.escuchas++;
+        document.getElementById('pred-esc').textContent = st.escuchas >= 2 ? 'Ya no quedan escuchas' : 'Te queda 1 escucha';
+        btn.dataset.on = '1'; btn.innerHTML = '<i class="fas fa-stop mr-2"></i>Detener';
+        await tocarLista(clips, { pausa: 380 });
+        btn.dataset.on = ''; btn.innerHTML = '<i class="fas fa-play mr-2"></i>Escuchar';
+      };
+      panel().querySelectorAll('[data-q]').forEach(b => b.onclick = () => {
+        const i = Number(b.dataset.q);
+        st.respuestas[i] = Number(b.dataset.o);
+        panel().querySelectorAll(`[data-q="${i}"]`).forEach(x => x.classList.toggle('bg-purple-50', x === b));
+        panel().querySelectorAll(`[data-q="${i}"]`).forEach(x => x.classList.toggle('border-purple-400', x === b));
+      });
+      document.getElementById('pred-rev').onclick = () => {
+        if (st.respuestas.filter(x => x !== undefined).length < p.preguntas.length) { showToast('Responde todas las preguntas 🙂'); return; }
+        stopSpeaking();
+        paso3();
+      };
+    };
+
+    // Paso 3: revisar
+    const paso3 = () => {
+      const buenas = p.preguntas.filter((q, i) => st.respuestas[i] === q[3]).length;
+      const correctas = new Set(p.predice.correctas);
+      const aciertosPred = [...st.elegidas].filter(o => correctas.has(o)).length;
+      const prev = P.prediccion[p.id]?.mejor || 0;
+      P.prediccion[p.id] = { mejor: Math.max(prev, buenas), fecha: hoy() };
+      guardar();
+      if (buenas === p.preguntas.length) { confeti(); sonidoBien(); }
+      panel().innerHTML = cabecera(escapeHTML(p.titulo), '<b>Paso 3 de 3 · Revisa.</b> Escucha otra vez leyendo la transcripción: así cada sonido se une a su palabra.', { extra: `<div class="mt-3">${velocidadesHTML()}</div>` }) + `
+        <div class="card-3d p-5 mb-4 text-center">
+          <p class="text-4xl mb-1">${buenas === p.preguntas.length ? '🏆' : buenas >= p.preguntas.length - 1 ? '👏' : '💪'}</p>
+          <p class="font-heading font-black text-xl text-slate-800">${buenas} de ${p.preguntas.length} respuestas</p>
+          <p class="text-xs text-slate-500 mt-1">Acertaste ${aciertosPred} de tus ${st.elegidas.size} predicciones.</p>
+          <div class="flex flex-wrap justify-center gap-1.5 mt-3">${p.predice.opciones.map(o => {
+            const elegida = st.elegidas.has(o), esta = correctas.has(o);
+            const cls = elegida && esta ? 'acierto' : elegida ? 'fallo' : esta ? 'perdida' : '';
+            return cls ? `<span class="pred-chip ${cls} text-xs py-1">${escapeHTML(o)}</span>` : '';
+          }).join('')}</div>
+          <p class="text-[10px] text-slate-400 mt-2">verde = acertaste · punteado = sí salió y no la marcaste · tachado = no salió</p>
+        </div>
+        <div class="card-3d p-5 mb-4">
+          <p class="text-[10px] font-black uppercase tracking-wide text-slate-400 mb-2">Tus respuestas</p>
+          ${p.preguntas.map(([q, qEs, ops, ok], i) => `
+            <div class="mb-2 text-sm">
+              <p class="font-bold text-slate-700">${escapeHTML(q)}</p>
+              <p class="${st.respuestas[i] === ok ? 'text-green-600' : 'text-red-500'} font-bold text-xs">${st.respuestas[i] === ok ? '✅' : '❌'} ${escapeHTML(ops[st.respuestas[i]])}${st.respuestas[i] === ok ? '' : ` → <span class="text-green-600">${escapeHTML(ops[ok])}</span>`}</p>
+            </div>`).join('')}
+        </div>
+        <div class="card-3d p-5">
+          <div class="flex items-center justify-between mb-2">
+            <p class="text-[10px] font-black uppercase tracking-wide text-slate-400">Transcripción</p>
+            <button id="pred-todo" class="text-xs font-black text-purple-600"><i class="fas fa-play mr-1"></i>Escuchar todo</button>
+          </div>
+          <div class="space-y-1">
+            ${p.lineas.map(([voz, en, es], i) => `
+              <div class="linea-dialogo" data-ld="${i}">
+                <span class="voz-dot" style="background:${COLOR_VOZ[voz]}">${NOMBRE_VOZ[voz]}</span>
+                <div class="flex-1 min-w-0">
+                  <p class="text-sm font-bold text-slate-700 leading-snug">${escapeHTML(en)}</p>
+                  <p class="text-[11px] text-slate-400">${escapeHTML(es)}</p>
+                </div>
+                <button class="play-btn" data-lp="${i}" style="width:32px;height:32px"><i class="fas fa-play text-[10px]"></i></button>
+              </div>`).join('')}
+          </div>
+          <button id="pred-otra" class="w-full btn-juice bg-purple-600 text-white font-bold py-3 rounded-xl mt-4">Siguiente situación</button>
+        </div>`;
+      engancharVolver(renderPrediccionLista);
+      const marcar = (i) => panel().querySelectorAll('[data-ld]').forEach(x => x.classList.toggle('sonando', Number(x.dataset.ld) === i));
+      document.getElementById('pred-todo').onclick = () => tocarLista(clips, { pausa: 380, alPaso: marcar });
+      panel().querySelectorAll('[data-lp]').forEach(b => b.onclick = async () => {
+        const i = Number(b.dataset.lp);
+        marcar(i);
+        await tocar(clips[i].archivo, { texto: clips[i].texto });
+        marcar(-1);
+      });
+      document.getElementById('pred-otra').onclick = () => {
+        const lista = D.prediccion[nivel];
+        const sig = lista.find(x => !P.prediccion[x.id] && x.id !== p.id) || lista[(lista.indexOf(p) + 1) % lista.length];
+        abrirPrediccion(sig);
+      };
+    };
+    paso1();
+  }
+
+  /* ============================================================
+     10. CUENTA LAS PALABRAS
+     Suena una frase rápida con contracciones y reducciones; hay que
+     decir cuántas palabras tiene su forma completa (I'm = I am = 2).
+  ============================================================ */
+  const contarPalabras = (s) => s.replace(/[^A-Za-z' ]+/g, ' ').trim().split(/\s+/).filter(Boolean).length;
+
+  function iniciarContar() {
+    const lista = D.contar[nivel];
+    const orden = barajar(lista.map((x, i) => i));
+    let k = 0, aciertos = 0;
+    const paso = () => {
+      if (k >= orden.length) return fin();
+      const i = orden[k], [natural, completa] = lista[i];
+      const n = contarPalabras(completa);
+      const archivo = `k-${nivel.toLowerCase()}-${i}`;
+      const opciones = Array.from({ length: 6 }, (_, j) => j + Math.max(2, n - 2));
+      panel().innerHTML = cabecera('Cuenta las palabras', `Frase ${k + 1} de ${orden.length} · ¿Cuántas palabras hay en la forma completa? (Ojo: <b>I'm</b> = <b>I am</b> = 2)`, { extra: `<div class="mt-3">${velocidadesHTML()}</div>` }) + `
+        <div class="card-3d p-5">
+          <div class="flex justify-center mb-5">
+            <button id="k-oir" class="btn-juice bg-amber-500 text-white font-bold py-3 px-6 rounded-2xl"><i class="fas fa-volume-high mr-2"></i>Escuchar</button>
+          </div>
+          <div class="flex flex-wrap justify-center gap-2">${opciones.map(o => `<button class="num-btn" data-num="${o}">${o}</button>`).join('')}</div>
+          <div id="k-fb" class="mt-5"></div>
+        </div>`;
+      engancharVolver();
+      const oir = () => tocar(archivo, { texto: natural });
+      document.getElementById('k-oir').onclick = oir;
+      setTimeout(oir, 300);
+      panel().querySelectorAll('[data-num]').forEach(b => b.onclick = () => {
+        const bien = Number(b.dataset.num) === n;
+        panel().querySelectorAll('[data-num]').forEach(x => { x.disabled = true; if (Number(x.dataset.num) === n) x.classList.add('bien'); });
+        if (!bien) b.classList.add('malo');
+        if (bien) { aciertos++; sonidoBien(); } else sonidoMal();
+        const palabras = completa.replace(/[^A-Za-z' ]+/g, ' ').trim().split(/\s+/);
+        document.getElementById('k-fb').innerHTML = `
+          <div class="rounded-2xl ${bien ? 'bg-green-50' : 'bg-orange-50'} p-3 text-center">
+            <p class="text-xs font-black text-slate-400 uppercase">Sonaba</p>
+            <p class="text-lg font-black text-slate-700">${escapeHTML(natural)}</p>
+            <p class="text-xs font-black text-slate-400 uppercase mt-2">Forma completa · ${n} palabras</p>
+            <div class="flex flex-wrap justify-center gap-1 mt-1">${palabras.map((w, j) => `<span class="tok ok">${escapeHTML(w)}<small>${j + 1}</small></span>`).join('')}</div>
+            <button id="k-sig" class="btn-juice bg-[#FF7A00] text-white font-bold py-2 px-5 rounded-xl text-sm mt-3">Siguiente</button>
+          </div>`;
+        document.getElementById('k-sig').onclick = () => { stopSpeaking(); k++; paso(); };
+      });
+    };
+    const fin = () => {
+      const reg = P.contar[nivel] || { mejor: 0, veces: 0 };
+      P.contar[nivel] = { mejor: Math.max(reg.mejor || 0, aciertos), veces: (reg.veces || 0) + 1 };
+      guardar();
+      if (aciertos >= orden.length - 1) confeti();
+      panel().innerHTML = cabecera('Cuenta las palabras', '') + `
+        <div class="card-3d p-6 text-center animate-pop">
+          <div class="text-5xl mb-2">${aciertos === orden.length ? '🏆' : aciertos >= 7 ? '👏' : '💪'}</div>
+          <h3 class="font-heading font-black text-2xl text-slate-800">${aciertos} de ${orden.length}</h3>
+          <p class="text-sm text-slate-500 mt-1">Contar palabras obliga al oído a separar lo que en el habla rápida suena como una sola.</p>
+          <button id="k-otra" class="w-full btn-juice bg-amber-500 text-white font-bold py-3 rounded-xl mt-4">Otra vez</button>
+          <button id="k-ini" class="w-full btn-juice bg-slate-100 text-slate-600 font-bold py-3 rounded-xl mt-2">Volver al inicio</button>
+        </div>`;
+      engancharVolver();
+      document.getElementById('k-otra').onclick = iniciarContar;
+      document.getElementById('k-ini').onclick = renderInicio;
+    };
+    paso();
+  }
+
+  /* ============================================================
+     11. SHADOWING DE TEXTOS (traído de pronunciacion.html)
+  ============================================================ */
+  /* Mismo motor de voz v4 que pronunciacion.html y abulingo.html: el corte
+     del navegador por una pausa no envía; se sigue escuchando y se envía con
+     el silencio real, el segundo toque o el tope. */
+  const pzVivoEsMovil = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const PZ_VOZ_SILENCIO_MS = 4000;
+  const PZ_VOZ_TOPE_MS = 60000;
+  const PZ_VOZ_REINICIOS = 3;
+
+  function limpiarRepeticionesVoz(texto) {
+    let p = (texto || '').trim().split(/\s+/).filter(Boolean);
+    if (p.length < 2) return (texto || '').trim();
+    let cambio = true;
+    while (cambio) {
+      cambio = false;
+      for (let n = Math.floor(p.length / 2); n >= 2; n--) {
+        const fin = p.slice(-n).join(' ').toLowerCase();
+        const antes = p.slice(-2 * n, -n).join(' ').toLowerCase();
+        if (fin && fin === antes) { p = p.slice(0, -n); cambio = true; break; }
+      }
+    }
+    const salida = [];
+    for (const w of p) {
+      const n = salida.length;
+      if (n >= 2 && salida[n - 1].toLowerCase() === w.toLowerCase() && salida[n - 2].toLowerCase() === w.toLowerCase()) continue;
+      salida.push(w);
+    }
+    return salida.join(' ');
+  }
+  function unirSesionesVoz(previo, nuevo) {
+    const a = (previo || '').trim().split(/\s+/).filter(Boolean);
+    const b = (nuevo || '').trim().split(/\s+/).filter(Boolean);
+    if (!a.length) return b.join(' ');
+    if (!b.length) return a.join(' ');
+    const lim = (w) => w.toLowerCase().replace(/[.,!?;:"]/g, '');
+    for (let n = Math.min(a.length, b.length); n >= 1; n--) {
+      if (n < 2 && n < a.length) break;
+      if (a.slice(-n).map(lim).join(' ') === b.slice(0, n).map(lim).join(' ')) return [...a, ...b.slice(n)].join(' ');
+    }
+    return [...a, ...b].join(' ');
+  }
+  function pzEscuchar(btn, msg, { lang = 'en-US', onFin, textoEscuchando = 'Escuchando... habla y se enviará solo 🎙️' }) {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { if (msg) msg.textContent = 'Tu navegador no reconoce voz 😉'; return null; }
+    const rec = new SR();
+    rec.lang = lang;
+    rec.interimResults = true;
+    rec.maxAlternatives = 1;
+    rec.continuous = !pzVivoEsMovil;
+    let dicho = '', previo = '', cerrado = false, errorDuro = null;
+    let paradoManual = false, reinicios = 0, silencio = null, tope = null;
+    const t0 = Date.now();
+    if (btn) btn.classList.add('recording');
+    if (msg) msg.textContent = textoEscuchando;
+    const limpiarSilencio = () => { if (silencio) { clearTimeout(silencio); silencio = null; } };
+    const terminar = () => { paradoManual = true; try { rec.stop(); } catch { cerrar(dicho.trim()); } };
+    const rearmarSilencio = () => { limpiarSilencio(); if (!dicho.trim()) return; silencio = setTimeout(terminar, PZ_VOZ_SILENCIO_MS); };
+    const cerrar = (texto) => {
+      if (cerrado) return;
+      cerrado = true;
+      limpiarSilencio();
+      if (tope) { clearTimeout(tope); tope = null; }
+      if (btn) btn.classList.remove('recording');
+      onFin && onFin(texto, errorDuro);
+    };
+    rec.onresult = (e) => {
+      let texto = '';
+      for (let i = 0; i < e.results.length; i++) texto += e.results[i][0].transcript + ' ';
+      dicho = limpiarRepeticionesVoz(unirSesionesVoz(previo, texto.trim()));
+      if (msg) msg.textContent = dicho ? `"${dicho}"` : 'Escuchando...';
+      rearmarSilencio();
+    };
+    rec.onerror = (e) => {
+      const err = e.error || 'error';
+      if (err === 'no-speech' || err === 'aborted') return;
+      if (err === 'not-allowed' || err === 'service-not-allowed') errorDuro = 'sin-permiso';
+      else if (err === 'audio-capture') errorDuro = 'microfono-ocupado';
+      else errorDuro = err;
+    };
+    rec.onend = () => {
+      if (cerrado) return;
+      if (errorDuro || paradoManual) return cerrar(dicho.trim());
+      previo = dicho;
+      const conTexto = !!dicho.trim();
+      if (Date.now() - t0 < PZ_VOZ_TOPE_MS && (conTexto || reinicios < PZ_VOZ_REINICIOS)) {
+        if (!conTexto) reinicios++;
+        try { rec.start(); return; } catch {}
+      }
+      cerrar(dicho.trim());
+    };
+    rec.detenerYa = () => { limpiarSilencio(); terminar(); };
+    try { rec.start(); } catch (err) {
+      console.warn('[voz] no se pudo iniciar:', err);
+      errorDuro = 'no-inicio';
+      cerrar('');
+      return null;
+    }
+    tope = setTimeout(terminar, PZ_VOZ_TOPE_MS);
+    return rec;
+  }
+  function pzTextoErrorVoz(err) {
+    if (err === 'sin-permiso') return 'Bloqueaste el micrófono 🔒 — actívalo en el candado de la barra de direcciones';
+    if (err === 'microfono-ocupado') return 'Otra app está usando el micrófono. Ciérrala e intenta de nuevo.';
+    if (err === 'no-inicio') return 'El micrófono está ocupado — espera un segundo e inténtalo otra vez';
+    return 'No te escuché, inténtalo otra vez 🎙️';
+  }
+
+  /* ============================================================
+     SHADOWING DE TEXTOS — "Shadowing + Audio + transcript" (antes el modo 7 de pronunciacion.html)
+     ------------------------------------------------------------
+     El método, en tres pasos, es el que usan los intérpretes:
+
+       1. ESCUCHAR el texto entero sin leer nada, para acostumbrar el
+          oído al ritmo real.
+       2. LEER el transcript mientras vuelve a sonar, así cada sonido
+          se ata a su palabra escrita.
+       3. SHADOWING frase por frase: se reproduce UNA frase, se baja la
+          velocidad si hace falta y se repite encima hasta que sale.
+
+     Por eso la pantalla está partida igual que el método: arriba el
+     texto completo con su reproductor, y abajo una tarjeta por frase
+     con SUS palabras sueltas, su propio botón de play, su control de
+     velocidad y su micrófono.
+
+     Los audios viven en el bucket público "listening" de Supabase
+     (un mp3 por texto + un mp3 por frase, voz en-US-Chirp3-HD-Leda —
+     la misma de Abu). Se generaron con scripts/generar_audios_listening.py (fuera del repo).
+     Se guardan a velocidad 1.0 y el navegador los ralentiza con
+     `playbackRate`: así un solo archivo sirve para todas las
+     velocidades y no hay que descargar cuatro versiones.
+  ============================================================ */
+  const LISTENING_BUCKET = `${SUPABASE_URL}/storage/v1/object/public/listening/`;
+  const LS_VELOCIDADES = [0.5, 0.75, 1, 1.25];
+
+  let lsNivelElegido = null;
+  let lsTextosNivel = [];
+  let lsTextoActual = null;     // el texto abierto en la vista de práctica
+  let lsProgreso = {};          // { [textoId]: { "0": 5, "1": 4 } }
+  let lsVelocidad = 1;          // velocidad global elegida por la persona
+  let lsAudio = null;           // <audio> en curso (uno a la vez)
+  let lsFraseSonando = null;    // índice de la frase que está sonando
+  let lsTextoAbierto = false;   // ¿está desplegado el transcript completo?
+  let lsOrden = {};             // { [frase]: { puestas: [], banco: [] } } del ejercicio de ordenar
+  let lsRec = null;             // reconocimiento de voz del shadowing
+
+  const lsUrl = (ruta) => (ruta ? LISTENING_BUCKET + ruta : null);
+
+  function lsDetenerAudio() {
+    if (lsAudio) { try { lsAudio.pause(); } catch {} lsAudio = null; }
+    lsFraseSonando = null;
+  }
+
+  /* Reproduce una pista a la velocidad elegida. `playbackRate` se aplica
+     DESPUÉS de play() en algunos navegadores móviles, por eso se pone en
+     los dos sitios. */
+  function lsTocar(url, { onFin } = {}) {
+    lsDetenerAudio();
+    stopSpeaking();
+    const a = new Audio(url);
+    a.playbackRate = lsVelocidad;
+    a.preservesPitch = true;          // que no suene a ardilla al bajarla
+    a.mozPreservesPitch = true;
+    a.webkitPreservesPitch = true;
+    lsAudio = a;
+    const fin = () => {
+      if (lsAudio === a) { lsAudio = null; lsFraseSonando = null; }
+      lsPintarEstadoBotones();
+      if (onFin) onFin();
+    };
+    a.onended = fin;
+    a.onerror = fin;
+    a.onplay = () => { a.playbackRate = lsVelocidad; };
+    a.play().catch(fin);
+    return a;
+  }
+
+  /* ---------- Pantalla 1: textos del nivel elegido ---------- */
+  function renderListening() {
+    lsDetenerAudio();
+    lsTextoActual = null;
+    const cambio = lsNivelElegido !== nivel;
+    panel().innerHTML = cabecera('Shadowing de textos', 'Escucha el texto, léelo mientras suena y repite frase por frase encima del audio. Puedes bajar la velocidad cuando quieras.') + `
+      <div class="card-3d p-4 sm:p-5">
+        <div id="ls-lista-wrap">${!cambio && lsTextosNivel.length ? lsListaHTML() : '<p class="text-center text-slate-300 text-lg py-6"><i class="fas fa-circle-notch fa-spin"></i></p>'}</div>
+      </div>`;
+    engancharVolver();
+    if (cambio || !lsTextosNivel.length) lsElegirNivel(nivel); else lsBindLista();
+  }
+
+  async function lsElegirNivel(nivelX) {
+    lsNivelElegido = nivelX;
+    const { data, error } = await dbClient.from('textos_listening')
+      .select('id,nivel,titulo,tema,texto,traduccion,frases,audio_url,palabras')
+      .eq('nivel', nivelX)
+      .order('orden', { ascending: true });
+
+    // El usuario pudo cambiar de pantalla mientras cargaba.
+    if (!document.getElementById('ls-lista-wrap') || lsNivelElegido !== nivelX) return;
+    if (error) {
+      document.getElementById('ls-lista-wrap').innerHTML =
+        `<p class="text-center text-red-400 text-sm py-6">No se pudieron cargar los textos.<br><span class="text-[11px] text-slate-400">${escapeHTML(error.message)}</span></p>`;
+      return;
+    }
+    lsTextosNivel = data || [];
+    if (!lsTextosNivel.length) {
+      document.getElementById('ls-lista-wrap').innerHTML = '<p class="text-center text-slate-400 text-sm py-6">Todavía no hay textos cargados para este nivel.</p>';
+      return;
+    }
+    await lsCargarProgreso(lsTextosNivel.map(t => t.id));
+    lsPintarLista();
+  }
+
+  // Cuántas frases lleva dominadas (4-5 estrellas) en cada texto.
+  async function lsCargarProgreso(ids) {
+    if (!ids.length || !currentUser) return;
+    const { data, error } = await dbClient.from('listening_progreso')
+      .select('texto_id,frases_ok,completado')
+      .eq('user_id', currentUser.id).in('texto_id', ids);
+    if (error) { console.warn('[listening] progreso:', error.message); return; }
+    (data || []).forEach(r => { lsProgreso[r.texto_id] = r.frases_ok || {}; });
+  }
+
+  const lsFrasesOk = (textoId) =>
+    Object.values(lsProgreso[textoId] || {}).filter(p => Number(p) >= 4).length;
+
+  function lsListaHTML() {
+    if (!lsTextosNivel.length) return '';
+    return `
+      <p class="text-xs font-black uppercase tracking-wide text-slate-400 mb-2">Toca un texto para practicarlo</p>
+      <div class="space-y-2">
+        ${lsTextosNivel.map(t => {
+          const total = (t.frases || []).length;
+          const ok = lsFrasesOk(t.id);
+          const pct = total ? Math.round((ok / total) * 100) : 0;
+          return `
+          <button class="ls-abrir w-full text-left btn-juice bg-slate-50 border-2 ${pct === 100 ? 'border-green-300' : 'border-slate-100'} hover:border-[#FF7A00] rounded-xl p-3" data-id="${t.id}">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-xl ${pct === 100 ? 'bg-green-500' : 'bg-white border-2 border-slate-200'} flex items-center justify-center shrink-0">
+                <i class="fas ${pct === 100 ? 'fa-check text-white' : 'fa-play text-[#FF7A00] text-xs'}"></i>
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="font-heading font-black text-slate-800 leading-tight truncate">${escapeHTML(t.titulo)}</p>
+                <p class="text-[11px] text-slate-400 truncate">${escapeHTML(t.tema || '')} · ${t.palabras || 0} palabras · ${total} frases</p>
+              </div>
+              <span class="shrink-0 text-[10px] font-black ${pct === 100 ? 'text-green-600' : 'text-slate-400'}">${ok}/${total}</span>
+            </div>
+            <div class="h-1.5 bg-slate-200 rounded-full mt-2 overflow-hidden">
+              <div class="h-full ${pct === 100 ? 'bg-green-500' : 'bg-[#FF7A00]'} rounded-full transition-all" style="width:${pct}%"></div>
+            </div>
+          </button>`;
+        }).join('')}
+      </div>`;
+  }
+
+  function lsPintarLista() {
+    const wrap = document.getElementById('ls-lista-wrap');
+    if (!wrap) return;
+    wrap.innerHTML = lsListaHTML();
+    lsBindLista();
+  }
+
+  function lsBindLista() {
+    document.querySelectorAll('.ls-abrir').forEach(b => {
+      b.onclick = () => {
+        const t = lsTextosNivel.find(x => String(x.id) === b.dataset.id);
+        if (t) lsAbrirTexto(t);
+      };
+    });
+  }
+
+  /* ---------- Pantalla 2: practicar un texto ----------
+     Al tocar un texto se entra DIRECTO al shadowing frase por frase: esa
+     es la práctica, no un paso posterior. El texto completo y su
+     traducción quedan plegados arriba, a un toque, para quien quiera
+     leerlos; pero lo primero que ves es la lista de frases.
+
+     La práctica de cada frase es ORDENAR SUS PALABRAS:
+       1. suena el audio de la frase (a la velocidad que tengas puesta),
+       2. las palabras aparecen desordenadas abajo,
+       3. las vas tocando en el orden que creas y se van colocando arriba,
+       4. al completarlas se corrige sola y se guarda la nota.
+     Tocar una palabra ya colocada la devuelve al montón, así se puede
+     rectificar sin empezar de cero. */
+  function lsAbrirTexto(t) {
+    lsDetenerAudio();
+    lsTextoActual = t;
+    lsVelocidad = 1;
+    lsOrden = {};              // { [indiceFrase]: [palabras colocadas] }
+    lsTextoAbierto = false;
+    lsPintarPractica();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function lsChipsVelocidadHTML(tam = '') {
+    return LS_VELOCIDADES.map(v => `
+      <button class="ls-vel btn-juice px-2.5 py-1.5 rounded-lg text-[11px] font-black ${v === lsVelocidad ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-500'}" data-v="${v}">${v}×</button>
+    `).join('');
+  }
+
+  function lsPintarPractica() {
+    const t = lsTextoActual;
+    if (!t) return;
+    const frases = t.frases || [];
+    const ok = lsFrasesOk(t.id);
+
+    document.getElementById('mode-panel').innerHTML = `
+      <!-- ── Cabecera compacta: título, velocidad y el texto plegado ──── -->
+      <div class="card-3d p-4 sm:p-5 mb-3">
+        <button id="ls-volver" class="text-[11px] font-black text-slate-400 hover:text-[#FF7A00] mb-3"><i class="fas fa-arrow-left mr-1"></i>Volver a los textos</button>
+
+        <p class="text-[10px] font-black uppercase tracking-widest text-slate-400">Nivel ${escapeHTML(t.nivel)} · ${t.palabras || 0} palabras</p>
+        <h2 class="font-heading font-black text-2xl text-[#FF7A00] leading-tight mb-1">${escapeHTML(t.titulo)}</h2>
+        <p class="text-slate-400 text-xs mb-3">${escapeHTML(t.tema || '')} · <span id="ls-contador">${ok}/${frases.length}</span> frases dominadas</p>
+
+        <div class="flex flex-wrap items-center gap-2 mb-3">
+          <button id="ls-play-full" class="btn-juice bg-slate-800 text-white font-bold py-2.5 px-4 rounded-xl text-sm">
+            <i class="fas fa-play mr-2"></i>Escuchar el texto
+          </button>
+          <button id="ls-ver-texto" class="btn-juice bg-slate-100 text-slate-600 font-bold py-2.5 px-3 rounded-xl text-xs">
+            <i class="fas fa-file-lines mr-1"></i>${lsTextoAbierto ? 'Ocultar' : 'Ver'} transcript
+          </button>
+        </div>
+
+        <!-- El transcript arranca PLEGADO: si se ve el texto entero, ordenar
+             las palabras deja de tener gracia. Quien lo necesite lo abre. -->
+        <div id="ls-caja-texto" class="${lsTextoAbierto ? '' : 'hidden'} bg-slate-50 border border-slate-100 rounded-xl p-3 mb-3">
+          <p class="text-slate-700 text-[15px] leading-relaxed font-medium">${escapeHTML(t.texto)}</p>
+          <p class="text-slate-400 text-[13px] leading-relaxed mt-2">${escapeHTML(t.traduccion || '')}</p>
+        </div>
+
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="text-[10px] font-black uppercase tracking-wide text-slate-400">Velocidad</span>
+          <div id="ls-velocidades" class="flex gap-1.5">${lsChipsVelocidadHTML()}</div>
+        </div>
+        <p class="text-[10px] text-slate-300 mt-2">Vale para el texto completo y para cada frase. Empieza en 0.5× y sube cuando te salga natural. 🐢→🐇</p>
+      </div>
+
+      <!-- ── La práctica: escuchar y ordenar, frase por frase ─────────── -->
+      <div class="card-3d p-4 sm:p-5">
+        <p class="text-xs font-black uppercase tracking-wide text-slate-400 mb-1">Shadowing · frase por frase</p>
+        <p class="text-[11px] text-slate-400 mb-3">Escucha la frase y ordena sus palabras tocándolas. Luego repítela en voz alta con el micrófono 🎙️</p>
+        <div id="ls-frases" class="space-y-2">${frases.map((f, i) => lsFraseHTML(f, i)).join('')}</div>
+
+        <button id="ls-play-todo" class="w-full btn-juice bg-[#FF7A00] text-white font-bold py-3 rounded-xl mt-4 text-sm">
+          <i class="fas fa-list-ol mr-2"></i>Reproducir frase por frase, en orden
+        </button>
+      </div>`;
+
+    document.getElementById('ls-volver').onclick = () => { lsDetenerAudio(); renderListening(); };
+    document.getElementById('ls-play-full').onclick = () => lsPlayFull();
+    document.getElementById('ls-play-todo').onclick = () => lsPlaySecuencia(0);
+    document.getElementById('ls-ver-texto').onclick = () => {
+      lsTextoAbierto = !lsTextoAbierto;
+      document.getElementById('ls-caja-texto').classList.toggle('hidden', !lsTextoAbierto);
+      document.getElementById('ls-ver-texto').innerHTML =
+        `<i class="fas fa-file-lines mr-1"></i>${lsTextoAbierto ? 'Ocultar' : 'Ver'} transcript`;
+    };
+    lsBindVelocidades();
+    lsBindFrases();
+  }
+
+  /* Baraja las palabras de la frase. Se evita que salgan ya en su sitio
+     (sería un ejercicio regalado) reintentando unas cuantas veces; en
+     frases de una o dos palabras eso es imposible y da igual. */
+  function lsBarajar(palabras) {
+    const original = palabras.join(' ');
+    for (let intento = 0; intento < 8; intento++) {
+      const a = [...palabras];
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      if (a.join(' ') !== original || palabras.length < 3) return a;
+    }
+    return [...palabras].reverse();
+  }
+
+  const lsPalabrasDe = (f) => String(f.en || '').split(/\s+/).filter(Boolean);
+
+  function lsFraseHTML(f, i) {
+    const puntaje = Number((lsProgreso[lsTextoActual?.id] || {})[String(i)] || 0);
+    const estrellas = puntaje
+      ? Array.from({ length: 5 }, (_, k) => `<i class="fas fa-star text-[9px] ${k < puntaje ? 'text-yellow-400' : 'text-slate-200'}"></i>`).join('')
+      : '';
+    return `
+      <div class="ls-frase rounded-xl border-2 ${puntaje >= 4 ? 'border-green-200 bg-green-50/40' : 'border-slate-100 bg-slate-50'} p-3" data-i="${i}">
+        <div class="flex items-center gap-2 mb-2">
+          <button class="ls-play-frase shrink-0 w-9 h-9 rounded-full bg-white border-2 border-slate-200 text-[#FF7A00] hover:border-[#FF7A00] flex items-center justify-center" data-i="${i}" title="Escuchar esta frase">
+            <i class="fas fa-play text-xs"></i>
+          </button>
+          <span class="text-[10px] font-black text-slate-300">FRASE ${i + 1}</span>
+          <span class="ls-estrellas">${estrellas}</span>
+          <span class="flex-1"></span>
+          <button class="ls-mic shrink-0 w-9 h-9 rounded-full bg-[#FF7A00] text-white flex items-center justify-center" data-i="${i}" title="Repetir esta frase en voz alta">
+            <i class="fas fa-microphone text-xs"></i>
+          </button>
+        </div>
+
+        <!-- Renglón donde se van colocando las palabras elegidas -->
+        <div class="ls-linea min-h-[38px] rounded-lg border-2 border-dashed border-slate-200 bg-white p-1.5 flex flex-wrap gap-1 items-start mb-1.5" data-i="${i}"></div>
+        <!-- Montón de palabras desordenadas -->
+        <div class="ls-banco flex flex-wrap gap-1" data-i="${i}"></div>
+
+        <p class="ls-frase-es text-[11px] text-slate-400 mt-1.5 hidden"></p>
+        <p class="ls-msg text-[11px] font-bold text-slate-400 mt-1.5 hidden"></p>
+      </div>`;
+  }
+
+  /* Pinta el estado del ejercicio de una frase: lo colocado arriba y lo
+     que queda en el banco abajo. Se repinta solo esta frase (no el panel
+     entero) para no cortar el audio ni hacer saltar el scroll. */
+  function lsPintarOrden(i, { corregido = null } = {}) {
+    const fila = document.querySelector(`.ls-frase[data-i="${i}"]`);
+    if (!fila) return;
+    const f = (lsTextoActual?.frases || [])[i];
+    const palabras = lsPalabrasDe(f);
+    const puestas = lsOrden[i]?.puestas || [];
+    const banco = lsOrden[i]?.banco || [];
+
+    const linea = fila.querySelector('.ls-linea');
+    const cajaBanco = fila.querySelector('.ls-banco');
+
+    linea.innerHTML = puestas.length
+      ? puestas.map((w, k) => {
+          let color = 'bg-white border-slate-200 text-slate-700';
+          if (corregido) color = (w === palabras[k])
+            ? 'bg-green-100 border-green-300 text-green-700'
+            : 'bg-red-100 border-red-300 text-red-700';
+          return `<button class="ls-quitar border rounded-md px-1.5 py-0.5 text-[13px] font-semibold ${color}" data-i="${i}" data-k="${k}">${escapeHTML(w)}</button>`;
+        }).join('')
+      : `<span class="text-[11px] text-slate-300 px-1 py-0.5">Toca las palabras en orden…</span>`;
+
+    cajaBanco.innerHTML = banco.map((w, k) =>
+      `<button class="ls-poner bg-white border border-slate-300 hover:border-[#FF7A00] rounded-md px-1.5 py-0.5 text-[13px] font-semibold text-slate-700" data-i="${i}" data-k="${k}">${escapeHTML(w)}</button>`
+    ).join('');
+    cajaBanco.classList.toggle('hidden', banco.length === 0);
+
+    fila.querySelectorAll('.ls-poner').forEach(b => {
+      b.onclick = () => lsPonerPalabra(Number(b.dataset.i), Number(b.dataset.k));
+    });
+    fila.querySelectorAll('.ls-quitar').forEach(b => {
+      b.onclick = () => lsQuitarPalabra(Number(b.dataset.i), Number(b.dataset.k));
+    });
+  }
+
+  function lsPrepararOrden(i, { rebarajar = true } = {}) {
+    const f = (lsTextoActual?.frases || [])[i];
+    if (!f) return;
+    const palabras = lsPalabrasDe(f);
+    if (rebarajar || !lsOrden[i]) lsOrden[i] = { puestas: [], banco: lsBarajar(palabras) };
+    lsPintarOrden(i);
+  }
+
+  function lsPonerPalabra(i, k) {
+    const st = lsOrden[i];
+    if (!st) return;
+    st.puestas.push(st.banco.splice(k, 1)[0]);
+    lsPintarOrden(i);
+    if (!st.banco.length) lsCorregirOrden(i);
+  }
+
+  function lsQuitarPalabra(i, k) {
+    const st = lsOrden[i];
+    if (!st) return;
+    st.banco.push(st.puestas.splice(k, 1)[0]);
+    lsPintarOrden(i);
+    const fila = document.querySelector(`.ls-frase[data-i="${i}"]`);
+    const msg = fila?.querySelector('.ls-msg');
+    if (msg) { msg.classList.add('hidden'); msg.textContent = ''; }
+  }
+
+  /* Corrige el orden. La nota se calcula por posiciones acertadas, no es
+     todo-o-nada: así una frase larga con una palabra fuera de sitio no
+     puntúa lo mismo que una hecha al azar. */
+  async function lsCorregirOrden(i) {
+    const f = (lsTextoActual?.frases || [])[i];
+    const st = lsOrden[i];
+    if (!f || !st) return;
+    const correcto = lsPalabrasDe(f);
+    const aciertos = st.puestas.filter((w, k) => w === correcto[k]).length;
+    const perfecto = aciertos === correcto.length;
+    const ratio = correcto.length ? aciertos / correcto.length : 0;
+    const puntaje = perfecto ? 5 : (ratio >= 0.8 ? 4 : ratio >= 0.6 ? 3 : ratio >= 0.4 ? 2 : 1);
+
+    lsPintarOrden(i, { corregido: true });
+
+    const fila = document.querySelector(`.ls-frase[data-i="${i}"]`);
+    const msg = fila?.querySelector('.ls-msg');
+    const es = fila?.querySelector('.ls-frase-es');
+    if (msg) {
+      msg.classList.remove('hidden');
+      msg.innerHTML = perfecto
+        ? '<span class="text-green-600">✅ ¡Perfecto! Ahora repítela en voz alta 🎙️</span>'
+        : `<span class="text-slate-500">${aciertos} de ${correcto.length} en su sitio. Toca una palabra para moverla, o <button class="ls-reintentar underline font-black text-[#FF7A00]" data-i="${i}">empezar de nuevo</button>.</span>`;
+      const re = msg.querySelector('.ls-reintentar');
+      if (re) re.onclick = () => { lsPrepararOrden(i); msg.classList.add('hidden'); lsPlayFrase(i); };
+    }
+    // La traducción solo se revela DESPUÉS de intentarlo: antes sería un chivatazo.
+    if (es && f.es) { es.textContent = f.es; es.classList.remove('hidden'); }
+
+    await lsGuardarPuntaje(i, puntaje);
+    lsRefrescarFrase(i, puntaje);
+    if (perfecto && window.confetti) {
+      confetti({ particleCount: 55, spread: 55, origin: { y: 0.7 }, colors: ['#FF7A00', '#fbbf24'] });
+    }
+    if (!perfecto) setTimeout(() => lsPlayFrase(i), 400);   // vuelve a sonar el modelo
+  }
+
+  function lsBindVelocidades() {
+    document.querySelectorAll('.ls-vel').forEach(b => {
+      b.onclick = () => {
+        lsVelocidad = Number(b.dataset.v);
+        // Si algo está sonando, el cambio se nota al instante.
+        if (lsAudio) lsAudio.playbackRate = lsVelocidad;
+        document.querySelectorAll('.ls-vel').forEach(x => {
+          const activo = Number(x.dataset.v) === lsVelocidad;
+          x.className = `ls-vel btn-juice px-2.5 py-1.5 rounded-lg text-[11px] font-black ${activo ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-500'}`;
+        });
+      };
+    });
+  }
+
+  function lsBindFrases() {
+    (lsTextoActual?.frases || []).forEach((f, i) => lsPrepararOrden(i, { rebarajar: !lsOrden[i] }));
+    document.querySelectorAll('.ls-play-frase').forEach(b => {
+      b.onclick = () => lsPlayFrase(Number(b.dataset.i));
+    });
+    document.querySelectorAll('.ls-mic').forEach(b => {
+      b.onclick = () => lsShadow(Number(b.dataset.i), b);
+    });
+  }
+
+  function lsPlayFull() {
+    const t = lsTextoActual;
+    const btn = document.getElementById('ls-play-full');
+    if (!t?.audio_url) { showToast('⚠️ Este texto todavía no tiene audio generado.'); return; }
+    if (lsAudio && lsFraseSonando === null) {   // segundo toque = parar
+      lsDetenerAudio();
+      if (btn) btn.innerHTML = '<i class="fas fa-play mr-2"></i>Escuchar el texto';
+      return;
+    }
+    lsTocar(lsUrl(t.audio_url), {
+      onFin: () => { const b = document.getElementById('ls-play-full'); if (b) b.innerHTML = '<i class="fas fa-play mr-2"></i>Escuchar el texto'; }
+    });
+    if (btn) btn.innerHTML = '<i class="fas fa-stop mr-2"></i>Detener';
+  }
+
+  function lsPlayFrase(i, onFin) {
+    const f = (lsTextoActual?.frases || [])[i];
+    if (!f) return;
+    if (!f.audio) { showToast('⚠️ Esta frase todavía no tiene audio generado.'); return; }
+    // Segundo toque en la misma frase = parar.
+    if (lsFraseSonando === i && lsAudio) { lsDetenerAudio(); lsPintarEstadoBotones(); return; }
+    lsTocar(lsUrl(f.audio), { onFin });
+    lsFraseSonando = i;
+    lsPintarEstadoBotones();
+  }
+
+  // Encadena todas las frases con una pausa para repetir en medio.
+  function lsPlaySecuencia(i) {
+    const frases = lsTextoActual?.frases || [];
+    if (i >= frases.length) { lsPintarEstadoBotones(); return; }
+    const fila = document.querySelector(`.ls-frase[data-i="${i}"]`);
+    if (fila) fila.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    lsPlayFrase(i, () => setTimeout(() => {
+      // Si el usuario tocó otra cosa mientras tanto, la cadena se corta.
+      if (lsFraseSonando === null && lsTextoActual) lsPlaySecuencia(i + 1);
+    }, 900));
+  }
+
+  function lsPintarEstadoBotones() {
+    document.querySelectorAll('.ls-play-frase').forEach(b => {
+      const activa = Number(b.dataset.i) === lsFraseSonando;
+      b.innerHTML = `<i class="fas ${activa ? 'fa-stop' : 'fa-play'} text-xs"></i>`;
+      b.classList.toggle('border-[#FF7A00]', activa);
+    });
+  }
+
+  /* ---------- Shadowing: repetir una frase y que te califique ----------
+     Usa el MISMO motor de voz que el modal de práctica (pzEscuchar), así
+     el micrófono se comporta igual en toda la app. */
+  function lsShadow(i, btn) {
+    const f = (lsTextoActual?.frases || [])[i];
+    if (!f) return;
+    const fila = document.querySelector(`.ls-frase[data-i="${i}"]`);
+    const msg = fila?.querySelector('.ls-msg');
+    if (msg) msg.classList.remove('hidden');
+
+    if (lsRec) { try { lsRec.detenerYa(); } catch {} return; }   // segundo toque = cortar
+
+    lsDetenerAudio();
+    btn.innerHTML = '<i class="fas fa-stop text-xs"></i>';
+    lsRec = pzEscuchar(btn, msg, {
+      textoEscuchando: 'Repite la frase… 🎙️',
+      onFin: async (dicho, err) => {
+        lsRec = null;
+        btn.innerHTML = '<i class="fas fa-microphone text-xs"></i>';
+        if (!dicho) { if (msg) msg.textContent = pzTextoErrorVoz(err); return; }
+        const puntaje = pzCalificarLocal(f.en, dicho);
+        if (msg) {
+          msg.innerHTML = puntaje >= 4
+            ? `<span class="text-green-600">✅ ¡Bien dicho!</span> <span class="text-slate-400 font-normal">"${escapeHTML(dicho)}"</span>`
+            : `<span class="text-slate-500">Casi. Escucha el modelo y repite 👇</span> <span class="text-slate-400 font-normal">"${escapeHTML(dicho)}"</span>`;
+        }
+        await lsGuardarPuntaje(i, puntaje);
+        lsRefrescarFrase(i, puntaje);
+        if (puntaje >= 5 && window.confetti) {
+          confetti({ particleCount: 60, spread: 55, origin: { y: 0.7 }, colors: ['#FF7A00', '#fbbf24'] });
+        }
+        if (puntaje < 4) setTimeout(() => lsPlayFrase(i), 500);   // vuelve a sonar el modelo
+      }
+    });
+    if (!lsRec) btn.innerHTML = '<i class="fas fa-microphone text-xs"></i>';
+  }
+
+  // Repinta solo esa tarjeta: repintar el panel entero cortaría el audio y
+  // haría saltar el scroll justo cuando la persona está repitiendo.
+  function lsRefrescarFrase(i, puntaje) {
+    const fila = document.querySelector(`.ls-frase[data-i="${i}"]`);
+    if (!fila) return;
+    const est = fila.querySelector('.ls-estrellas');
+    if (est) {
+      est.innerHTML = Array.from({ length: 5 }, (_, k) =>
+        `<i class="fas fa-star text-[9px] ${k < puntaje ? 'text-yellow-400' : 'text-slate-200'}"></i>`).join('');
+    }
+    fila.classList.toggle('border-green-200', puntaje >= 4);
+    fila.classList.toggle('bg-green-50/40', puntaje >= 4);
+    fila.classList.toggle('border-slate-100', puntaje < 4);
+    fila.classList.toggle('bg-slate-50', puntaje < 4);
+  }
+
+  /* Solo se guarda si MEJORA la marca anterior: así una repetición mala
+     no borra una buena (mismo criterio que frases_puntuaciones). */
+  async function lsGuardarPuntaje(i, puntaje) {
+    const t = lsTextoActual;
+    if (!t || !currentUser) return;
+    const previo = lsProgreso[t.id] || (lsProgreso[t.id] = {});
+    if (Number(previo[String(i)] || 0) >= puntaje) return;
+    previo[String(i)] = puntaje;
+
+    const total = (t.frases || []).length;
+    const ok = lsFrasesOk(t.id);
+    const { error } = await dbClient.from('listening_progreso').upsert({
+      user_id: currentUser.id,
+      texto_id: t.id,
+      frases_ok: previo,
+      mejor_puntaje: Math.max(...Object.values(previo).map(Number), 0),
+      completado: total > 0 && ok >= total,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'user_id,texto_id' });
+    if (error) console.warn('[listening] no se pudo guardar el avance:', error.message);
+
+    const cont = document.getElementById('ls-contador');
+    if (cont) cont.textContent = `${ok}/${total}`;
+
+    if (total > 0 && ok >= total) {
+      showToast('🎧 ¡Texto completo! Dominaste todas sus frases.', 3200);
+      if (window.confetti) confetti({ particleCount: 110, spread: 70, origin: { y: 0.6 }, colors: ['#FF7A00', '#3b82f6', '#fbbf24'] });
+    }
+  }
+
+
+  /* ============================================================
+     12. BARRA SUPERIOR Y MENÚ
+  ============================================================ */
+  document.querySelectorAll('#top-bar button[data-tool]').forEach(btn => {
+    btn.onclick = () => {
+      const tool = btn.dataset.tool;
+      if (tool === 'gramatica') window.location.href = 'gramatica.html';
+      else if (tool === 'pronunciacion') window.location.href = 'pronunciacion.html';
+      else if (tool === 'listening') { stopSpeaking(); renderInicio(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+      else window.location.href = `abulingo.html?tool=${tool}`;   // traductor y tutor viven en abulingo.html
+    };
+  });
+  const profileBtn = document.getElementById('profile-menu-button');
+  const profileDropdown = document.getElementById('profile-menu-dropdown');
+  profileBtn.onclick = (e) => { e.stopPropagation(); profileDropdown.classList.toggle('hidden'); };
+  document.addEventListener('click', (e) => {
+    if (!profileDropdown.contains(e.target) && !profileBtn.contains(e.target)) profileDropdown.classList.add('hidden');
+  });
+  document.getElementById('logout-btn').onclick = async () => {
+    AbuProgreso.guardarYa();
+    await dbClient.auth.signOut();
+    window.location.href = 'index.html';
+  };
+  const setTxt = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  const setSrc = (id, val) => { const el = document.getElementById(id); if (el && val) el.src = val; };
+  const PLAN_LABEL = { gratis: 'Gratis', plus: 'Plus', pro: 'Pro', super_pro: 'Super Pro' };
+  function fillProfileMenu() {
+    setTxt('user-name-dropdown', (userProfile.full_name || '').split(' ')[0] || 'Mi Perfil');
+    setTxt('user-lingots', userProfile.lingots || 0);
+    setSrc('user-avatar', userProfile.avatar_url);
+    setTxt('user-nivel-dropdown', `Nivel ${userProfile.nivel || 'A1'}`);
+    setTxt('user-plan-dropdown', PLAN_LABEL[userProfile.plan || 'gratis'] || 'Gratis');
+    const menuTutor = document.getElementById('menu-solicitar-tutor');
+    if (menuTutor) menuTutor.classList.toggle('hidden', userProfile.plan !== 'super_pro');
+  }
+
+  /* ============================================================
+     13. ARRANQUE
+  ============================================================ */
+  document.addEventListener('DOMContentLoaded', async () => {
+    try {
+      const r = await AbuProgreso.iniciar({ app: 'listening', dbClient });
+      if (!r) return;   // sin sesión: ya se redirigió al login
+      currentUser = r.user;
+      P = Object.assign(baseProgreso(), r.datos || {});
+      P.errores = Object.assign({ desconocida: 0, noReconocida: 0 }, P.errores || {});
+
+      const { data: profile } = await dbClient.from('profiles').select('points, lingots, nivel, plan, role, full_name, avatar_url, flujo').eq('id', currentUser.id).maybeSingle();
+      userProfile = profile || {};
+      flujo = userProfile.flujo || {};
+      ensureDaily();
+      fillProfileMenu();
+
+      const nivelPerfil = NIVELES_FIJOS.includes(userProfile.nivel) ? userProfile.nivel : (/^C/.test(userProfile.nivel || '') ? 'B2' : 'A1');
+      nivel = NIVELES_FIJOS.includes(P.nivel) ? P.nivel : nivelPerfil;
+
+      document.getElementById('loading-screen').classList.add('hidden');
+      document.getElementById('app-container').classList.remove('hidden');
+
+      // Listening es parte de las herramientas de pago (como Pronunciación, de
+      // donde viene); el equipo (admin) entra siempre para revisar el contenido.
+      if ((userProfile.plan || 'gratis') === 'gratis' && !['admin', 'super_admin'].includes(userProfile.role)) {
+        panel().innerHTML = `
+          <div class="card-3d p-7 text-center animate-pop mt-6">
+            <div class="text-5xl mb-3">🔒</div>
+            <h2 class="text-2xl font-heading font-bold text-slate-800 mb-2">Función Pro</h2>
+            <p class="text-slate-500 mb-6">Listening (dictado, habla conectada, vocabulario por el oído y shadowing) es parte de los planes de pago: Plus, Pro y Super Pro.</p>
+            <button id="ls-volver-app" class="w-full btn-juice bg-[#FF7A00] text-white font-bold py-3 rounded-xl text-lg">Volver a Abulingo</button>
+          </div>`;
+        document.getElementById('ls-volver-app').onclick = () => { window.location.href = 'abulingo.html'; };
+      } else {
+        renderInicio();
+      }
+
+      window.AbuMenu?.init({
+        dbClient, currentUser, userProfile, flujo,
+        showModal, closeModal, showToast, escapeHTML,
+        guardarFlujo: updateUserFlow,
+        pagina: 'listening',
+        config: { WHATSAPP_COMUNIDAD_URL, NIVELES_FIJOS, MISION_PALABRAS_DIA, MISION_FRASES_DIA, MISION_RECOMPENSA_LINGOTS }
+      });
+      window.AbuMenu?.bind({ perfil: false });
+      window.AbuMenu?.refreshBadges();
+      window.AbuAnuncio?.mostrarSiToca({ dbClient, userId: currentUser.id, pagina: 'listening', plan: userProfile.plan || 'gratis' });
+    } catch (e) {
+      console.error(e);
+      document.getElementById('loading-screen').innerHTML =
+        '<div class="text-center"><h1 class="text-2xl font-heading font-bold text-slate-600">😵 Algo salió mal</h1><p class="text-slate-400 text-sm mt-2">Recarga la página.</p></div>';
+    }
+  });
+</script>
+</body>
+</html>

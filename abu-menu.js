@@ -685,7 +685,15 @@
     'mision': abrirMisionDia
   };
 
+  const PAGINAS_MENU = {
+    palabras: 'abulingo.html',
+    club: 'abulingo.html?menu=club',
+    juego: 'mundo_ingles.html',
+    fonetica: 'fonetica.html'
+  };
+
   function abrir(nombre) {
+    if (PAGINAS_MENU[nombre]) { window.location.href = PAGINAS_MENU[nombre]; return; }
     const fn = ACCIONES[nombre];
     if (!fn) { console.warn('[AbuMenu] opción desconocida:', nombre); return; }
     fn();
@@ -716,8 +724,13 @@
     document.querySelectorAll('[data-menu]').forEach(b => {
       b.onclick = () => {
         drop?.classList.add('hidden');
-        // "palabras" es lo único que vive solo en abulingo.html
-        if (b.dataset.menu === 'palabras') { window.location.href = 'abulingo.html'; return; }
+        // Estas opciones son páginas aparte (o, el Club, un modal que vive
+        // solo en abulingo.html): se navega en vez de abrir un modal aquí.
+        const destino = PAGINAS_MENU[b.dataset.menu];
+        if (destino) {
+          if (!location.pathname.endsWith('/' + destino.split('?')[0])) window.location.href = destino;
+          return;
+        }
         abrir(b.dataset.menu);
       };
     });

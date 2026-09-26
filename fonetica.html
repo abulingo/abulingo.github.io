@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Abulingo - Fonética del inglés americano</title>
+<meta name="description" content="Aprende los sonidos del Alfabeto Fonético Internacional (AFI/IPA) del inglés americano, explicados para hispanohablantes: tabla interactiva, audio, pares mínimos y juegos.">
+<meta name="theme-color" content="#FF7A00">
+<link rel="icon" href="icono.png" type="image/x-icon">
+<link rel="preconnect" href="https://eylwewhqeaaqkgcxhgyv.supabase.co" crossorigin>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- Work Sans / Space Grotesk son las letras de Abulingo; Noto Sans trae
+     todos los símbolos del AFI (ə, ɪ, ʊ, θ, ʃ…), que las otras no tienen. -->
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;600;800&family=Space+Grotesk:wght@500;700&family=Work+Sans:wght@400;600;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="fonetica/estilo.css">
+<script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.1/dist/umd/supabase.min.js"></script>
+<script defer src="abu-progreso.js"></script>
+<script defer src="fonetica/datos.js"></script>
+<script defer src="fonetica/app.js"></script>
+</head>
+<body>
+<header class="top">
+  <a class="volver" href="abulingo.html" title="Volver a Abulingo"><span aria-hidden="true">←</span><span class="volver-txt">Abulingo</span></a>
+  <div class="marca">
+    <span class="logo">/ə/</span>
+    <div>
+      <h1>Fonética del inglés americano</h1>
+      <p class="sub">Los sonidos del AFI explicados en español</p>
+    </div>
+  </div>
+  <div class="ajustes">
+    <span class="racha" id="rachaTop" title="Racha de respuestas correctas">🔥 0</span>
+    <button class="icono" id="btnAjustes" aria-label="Ajustes de voz">⚙️</button>
+  </div>
+</header>
+
+<nav class="tabs" id="tabs" aria-label="Secciones">
+  <button data-tab="aprende" class="on">🧭 Aprende</button>
+  <button data-tab="tabla">🔤 Tabla AFI</button>
+  <button data-tab="vocales">👄 Vocales</button>
+  <button data-tab="consonantes">🦷 Consonantes</button>
+  <button data-tab="especiales">🇺🇸 Acento americano</button>
+  <button data-tab="practica">🎮 Práctica</button>
+  <button data-tab="diccionario">🔎 Diccionario</button>
+  <button data-tab="progreso">📈 Progreso</button>
+</nav>
+
+<div id="avisoVoz" class="aviso oculto"></div>
+
+<div id="cargando" class="cargando"><span class="spinner"></span> Cargando tu progreso…</div>
+<main id="vista"></main>
+
+<div id="modal" class="modal oculto" role="dialog" aria-modal="true">
+  <div class="modal-caja">
+    <button class="cerrar" id="cerrarModal" aria-label="Cerrar">✕</button>
+    <div id="modalCuerpo"></div>
+  </div>
+</div>
+
+<footer class="pie">
+  <a href="abulingo.html"><b style="color:#0D47A1">Abulingo</b><b style="color:#FF7A00">.</b></a> · Tu progreso se guarda en tu cuenta ·
+  El audio usa la voz en inglés de tu dispositivo
+</footer>
+</body>
+</html>

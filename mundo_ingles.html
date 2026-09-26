@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#2f7d4f">
+<title>Abulingo - English Town</title>
+<meta name="description" content="Juego de Abulingo para aprender 1000 palabras de inglés: recorre un pueblo lleno de cosas, personas y lugares, descubre palabras y completa 300 misiones.">
+<link rel="icon" href="icono.png" type="image/x-icon">
+<link rel="preconnect" href="https://eylwewhqeaaqkgcxhgyv.supabase.co" crossorigin>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<style>
+  :root {
+    --panel: rgba(255, 255, 255, 0.95); --text: #1f2421; --muted: #5d655f; --border: rgba(0, 0, 0, 0.12);
+    --accent: #2f7d4f; --gold: #f5b700; --shadow: 0 6px 22px rgba(0, 0, 0, 0.2); --naranja: #FF7A00;
+  }
+  * { box-sizing: border-box; margin: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; overflow: hidden; background: #7cb461; overscroll-behavior: none; }
+  body { font: 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--text); user-select: none; -webkit-user-select: none; }
+  canvas { display: block; width: 100vw; height: 100vh; height: 100dvh; touch-action: none; outline: none; }
+  .card { position: absolute; background: var(--panel); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); }
+  #panel { left: 10px; top: 10px; padding: 9px 11px; display: flex; flex-direction: column; gap: 6px; width: 252px; }
+  #panel .row1 { display: flex; align-items: center; gap: 8px; }
+  #panel h1 { font-size: 15px; font-weight: 800; cursor: pointer; flex: 1; white-space: nowrap; }
+  #btnBack { display: inline-flex; align-items: center; gap: 4px; background: var(--naranja); color: #fff; font-weight: 800; font-size: 12px; text-decoration: none;
+    padding: 5px 9px; border-radius: 10px; box-shadow: 0 3px 0 #c2570a; white-space: nowrap; }
+  #btnBack:active { transform: translateY(2px); box-shadow: 0 1px 0 #c2570a; }
+  #lvl { background: linear-gradient(135deg, #f5b700, #ff8c42); color: #fff; font-weight: 800; border-radius: 999px; padding: 2px 9px; font-size: 13px; white-space: nowrap; }
+  .bar { height: 7px; background: rgba(127,127,127,.25); border-radius: 99px; overflow: hidden; }
+  .bar > i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #f5b700, #ff8c42); transition: width .4s; }
+  .bar.g > i { background: linear-gradient(90deg, #2e86de, #27ae60); }
+  .bar.p > i { background: linear-gradient(90deg, #8e44ad, #e84393); }
+  .lbl { font-size: 11px; color: var(--muted); display: flex; justify-content: space-between; margin-bottom: 2px; }
+  .lbl b { color: var(--text); }
+  #stats { cursor: pointer; display: grid; gap: 5px; }
+  .fila-botones { display: flex; gap: 6px; }
+  .fila-botones button { font: inherit; font-weight: 700; border: 0; border-radius: 10px; padding: 6px 8px; cursor: pointer; background: rgba(127,127,127,.15); color: var(--text); flex: 1; }
+  .fila-botones button.off { opacity: .45; }
+  #btnRandom { flex: 2; background: var(--accent); color: #fff; white-space: nowrap; }
+  #clock { left: 50%; top: 10px; transform: translateX(-50%); padding: 5px 12px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+  #mission { right: 10px; top: 10px; padding: 9px 13px; width: min(360px, calc(100vw - 20px)); cursor: pointer; }
+  #mission .top { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); display: flex; justify-content: space-between; gap: 6px; }
+  #mission .en { font-size: 16px; font-weight: 800; margin-top: 2px; }
+  #mission .es { color: var(--muted); font-size: 13px; }
+  #mission .bar { margin-top: 6px; }
+  #mission.done { outline: 3px solid var(--gold); }
+  #lesson { left: 50%; bottom: 12px; transform: translateX(-50%); padding: 11px 15px; width: min(580px, calc(100vw - 20px)); cursor: pointer; transition: opacity .25s; }
+  #lesson.hidden, #quiz.hidden { opacity: 0; pointer-events: none; }
+  #lesson .top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .chip { font-size: 10.5px; font-weight: 800; color: #fff; padding: 3px 9px; border-radius: 999px; text-transform: uppercase; letter-spacing: .04em; }
+  #lNuevo { background: #f5b700; }
+  #lNuevo.hidden { display: none; }
+  #lWord { font-size: 23px; font-weight: 800; }
+  #lWordEs { color: var(--muted); font-size: 15px; }
+  #lesson .spk { margin-left: auto; font-size: 20px; }
+  #lEn { font-size: 17px; margin-top: 5px; }
+  #lEn mark { background: none; color: inherit; border-bottom: 3px solid var(--mark, #f1c40f); font-weight: 800; }
+  #lEs { color: var(--muted); margin-top: 2px; }
+  #lExtra { font-size: 12px; color: var(--muted); margin-top: 4px; font-family: ui-monospace, Menlo, Consolas, monospace; }
+  #quiz { left: 50%; bottom: 12px; transform: translateX(-50%); padding: 13px 15px; width: min(560px, calc(100vw - 20px)); transition: opacity .25s; z-index: 5; }
+  #quiz .q { font-size: 18px; font-weight: 800; margin: 4px 0 2px; }
+  #quiz .qes { color: var(--muted); font-size: 13px; margin-bottom: 8px; }
+  #qOpts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  #qOpts button { font: inherit; font-size: 16px; font-weight: 700; padding: 12px 8px; border-radius: 12px; cursor: pointer; border: 2px solid var(--border); background: rgba(127,127,127,.08); color: var(--text); min-height: 50px; }
+  #qOpts button.ok { background: #27ae60; color: #fff; border-color: #27ae60; }
+  #qOpts button.bad { background: #e74c3c; color: #fff; border-color: #e74c3c; }
+  #quiz .qtop { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--muted); }
+  #where { position: absolute; left: 12px; bottom: 14px; max-width: min(330px, calc(100vw - 660px)); font-size: 13px; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.85); cursor: pointer; }
+  #banner { position: absolute; left: 50%; top: 32%; transform: translate(-50%, -50%) scale(.6); opacity: 0; pointer-events: none;
+    background: linear-gradient(135deg, #f5b700, #ff6b6b); color: #fff; font-weight: 900; font-size: 26px; padding: 14px 26px; border-radius: 18px;
+    box-shadow: var(--shadow); text-align: center; transition: all .35s cubic-bezier(.2, 1.6, .5, 1); text-shadow: 0 2px 4px rgba(0,0,0,.25); z-index: 8; }
+  #banner small { display: block; font-size: 15px; font-weight: 700; }
+  #banner.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  .overlay { position: absolute; inset: 0; background: rgba(10, 16, 14, 0.6); display: flex; align-items: center; justify-content: center; padding: 14px; z-index: 10; }
+  .overlay.hidden { display: none; }
+  .box { background: var(--panel); color: var(--text); border-radius: 18px; box-shadow: var(--shadow); padding: 20px 22px; width: min(680px, 100%); max-height: calc(100dvh - 28px); overflow: auto; user-select: text; }
+  .box h2 { font-size: 21px; margin-bottom: 8px; }
+  .box h3 { font-size: 14px; margin: 14px 0 6px; }
+  .box p, .box li { color: var(--muted); }
+  .box ul { padding-left: 18px; display: grid; gap: 3px; }
+  .box kbd { background: rgba(127,127,127,.18); border-radius: 5px; padding: 1px 6px; font: 12px ui-monospace, Menlo, Consolas, monospace; color: var(--text); }
+  .cats { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+  .big { display: block; width: 100%; margin-top: 14px; font: inherit; font-size: 17px; font-weight: 800; border: 0; border-radius: 12px; padding: 13px; background: var(--accent); color: #fff; cursor: pointer; text-align: center; text-decoration: none; }
+  .big.alt { background: rgba(127,127,127,.2); color: var(--text); }
+  .big.nar { background: var(--naranja); }
+  .theme { margin: 10px 0; }
+  .theme .th { display: flex; justify-content: space-between; font-weight: 700; margin-bottom: 4px; }
+  .words { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+  .words span { font-size: 12.5px; padding: 3px 8px; border-radius: 999px; background: rgba(127,127,127,.14); cursor: pointer; }
+  .words span.lock { color: var(--muted); cursor: default; opacity: .6; }
+  .words span.m { background: rgba(39, 174, 96, .22); }
+  .badges { display: flex; flex-wrap: wrap; gap: 8px; }
+  .badges div { font-size: 12px; padding: 6px 10px; border-radius: 10px; background: rgba(127,127,127,.12); }
+  .badges div.on { background: linear-gradient(135deg, #ffe08a, #ffc37a); color: #3b2a00; font-weight: 700; }
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin: 10px 0; }
+  .stat-grid div { background: rgba(127,127,127,.12); border-radius: 12px; padding: 10px; text-align: center; }
+  .stat-grid b { display: block; font-size: 22px; }
+  #toast { position: absolute; top: 58px; left: 50%; transform: translateX(-50%); background: rgba(20,24,22,.9); color: #fff; padding: 7px 13px; border-radius: 9px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 20; text-align: center; }
+  #toast.show { opacity: 1; }
+  #loading { position: absolute; inset: 0; display: flex; flex-direction: column; gap: 14px; align-items: center; justify-content: center; background: #2f7d4f; color: #fff; font-size: 20px; font-weight: 800; z-index: 30; text-align: center; padding: 20px; }
+  #loading small { font-size: 13px; font-weight: 600; opacity: .8; }
+  @media (max-width: 760px) {
+    #panel { width: 176px; padding: 7px 9px; gap: 5px; }
+    #panel h1 { display: none; }
+    #panel .row1 { justify-content: space-between; }
+    #btnBack { font-size: 11px; padding: 4px 7px; }
+    .fila-botones button { padding: 4px 6px; font-size: 12px; }
+    #clock { left: auto; right: 10px; transform: none; top: 10px; font-size: 12px; padding: 4px 9px; }
+    #mission { top: 46px; width: calc(100vw - 206px); min-width: 160px; padding: 7px 10px; }
+    #mission .en { font-size: 13.5px; }
+    #mission .es { font-size: 11.5px; }
+    #lesson, #quiz { bottom: 8px; padding: 9px 11px; }
+    #lWord { font-size: 19px; }
+    #lEn { font-size: 15px; }
+    #quiz .q { font-size: 16px; }
+    #qOpts button { font-size: 15px; padding: 10px 6px; }
+    #where { display: none; }
+    #banner { font-size: 20px; }
+  }
+  @media (max-width: 420px) {
+    #mission { left: 10px; right: 10px; width: auto; top: 170px; }
+  }
+</style>
+</head>
+<body>
+<canvas id="c" tabindex="0" aria-label="English Town: usa las flechas o arrastra para moverte"></canvas>
+<div id="loading"><span id="loadingTxt">🔑 Abriendo tu cuenta…</span><small>Tu avance se guarda en tu cuenta de Abulingo</small></div>
+
+<div id="panel" class="card">
+  <div class="row1"><a id="btnBack" href="abulingo.html" title="Volver a Abulingo">← Abulingo</a><h1 id="title">🌎 English Town</h1><span id="lvl">Lv 1</span></div>
+  <div id="stats" title="Álbum de palabras y logros (V)">
+    <div><div class="lbl"><span>XP</span><b id="xpTxt"></b></div><div class="bar"><i id="xpBar"></i></div></div>
+    <div><div class="lbl"><span>📘 Words</span><b id="wTxt"></b></div><div class="bar g"><i id="wBar"></i></div></div>
+    <div><div class="lbl"><span>🎯 Missions</span><b id="mTxt"></b></div><div class="bar p"><i id="mBar"></i></div></div>
+  </div>
+  <div class="fila-botones">
+    <button id="btnRandom" title="Crear un pueblo nuevo">🎲 Pueblo nuevo</button>
+    <button id="btnTags" title="Ver u ocultar el nombre de lo que ya descubriste (N)">🏷️</button>
+    <button id="btnMute" title="Sonido (M)">🔊</button>
+    <button id="btnHelp" title="Ayuda (H)">❓</button>
+  </div>
+</div>
+
+<div id="clock" class="card" title="Toca para escuchar la hora"></div>
+
+<div id="mission" class="card" title="Toca para escuchar la misión">
+  <div class="top"><span id="mNum"></span><span id="mChap"></span></div>
+  <div class="en" id="mEn"></div>
+  <div class="es" id="mEs"></div>
+  <div class="bar p"><i id="mProg"></i></div>
+</div>
+
+<div id="lesson" class="card hidden" title="Toca para escuchar otra vez">
+  <div class="top">
+    <span class="chip" id="lChip"></span>
+    <span class="chip hidden" id="lNuevo">✨ New word!</span>
+    <span id="lWord"></span>
+    <span id="lWordEs"></span>
+    <span class="spk">🔊</span>
+  </div>
+  <div id="lEn"></div>
+  <div id="lEs"></div>
+  <div id="lExtra"></div>
+</div>
+
+<div id="quiz" class="card hidden">
+  <div class="qtop"><span id="qTitle">❓ Quiz</span><span id="qCount"></span></div>
+  <div class="q" id="qText"></div>
+  <div class="qes" id="qEs"></div>
+  <div id="qOpts"></div>
+</div>
+
+<div id="where" title="Toca para escuchar"></div>
+<div id="banner"></div>
+
+<div id="help" class="overlay">
+  <div class="box">
+    <h2>🌎 English Town</h2>
+    <p>Aprende <b>1000 palabras</b> de inglés explorando un pueblo lleno de cosas, lugares y personas. Toca una ensalada, un león, una cama o a una persona que cocina y oirás su palabra en una frase. Las palabras que no son cosas (como <i>than</i>, <i>happy</i> o <i>always</i>) flotan en burbujas: tócalas cuando quieras, no desaparecen. Completa las <b>300 misiones</b> —ninguna se repite— para terminar el juego. Tu profesor 🎓 te acompaña y te lo dice todo en voz alta.</p>
+    <div class="cats" id="helpCats"></div>
+    <h3>🎮 Cómo jugar</h3>
+    <ul>
+      <li><b>PC:</b> <kbd>←</kbd><kbd>→</kbd><kbd>↑</kbd><kbd>↓</kbd> o <kbd>WASD</kbd> para moverte, <kbd>Shift</kbd> para correr, <kbd>E</kbd> para hablar, preguntar o tocar el timbre. En los quizzes puedes usar <kbd>1</kbd>–<kbd>4</kbd>.</li>
+      <li><b>Celular:</b> arrastra el dedo en cualquier parte (aparece un joystick; más lejos = correr). Toca una cosa, una persona o una burbuja para aprender su palabra. Toca el suelo para caminar hasta ahí.</li>
+      <li>Toca la tarjeta o pulsa <kbd>R</kbd>/<kbd>Espacio</kbd> para escuchar otra vez. <kbd>C</kbd> o toca el reloj: la hora en inglés. <kbd>L</kbd>: voz lenta. <kbd>M</kbd>: silenciar. <kbd>N</kbd>: etiquetas. <kbd>V</kbd>: álbum. <kbd>+</kbd>/<kbd>−</kbd>: zoom.</li>
+    </ul>
+    <h3>⭐ Cómo avanzar</h3>
+    <ul>
+      <li>Cada palabra nueva que descubres da <b>XP</b>. Descubre varias seguidas para hacer <b>combos</b> ×2, ×3…</li>
+      <li>Las personas hacen acciones (cocinar, trepar, pintar, pagar…): tócalas para aprender verbos y tiempos verbales.</li>
+      <li>El tiempo pasa: mañana, tarde y noche, con sol, nubes, lluvia o viento. Hay playa al sur y montañas, tren y cielo al norte.</li>
+      <li>Tu progreso se guarda en tu cuenta de Abulingo: puedes seguir desde cualquier dispositivo.</li>
+    </ul>
+    <button class="big" id="btnStart">▶ Jugar</button>
+    <a class="big alt" href="abulingo.html">← Volver a Abulingo</a>
+  </div>
+</div>
+
+<div id="album" class="overlay hidden">
+  <div class="box">
+    <h2>📘 Álbum</h2>
+    <div class="stat-grid" id="albStats"></div>
+    <h3>🏅 Logros</h3>
+    <div class="badges" id="albBadges"></div>
+    <h3>📚 Palabras por tema <small>(toca una palabra para escucharla · verde = acertada en un quiz)</small></h3>
+    <div id="albThemes"></div>
+    <button class="big alt" id="btnAlbumClose">Cerrar</button>
+  </div>
+</div>
+
+<div id="ending" class="overlay hidden">
+  <div class="box" style="text-align:center">
+    <div style="font-size:64px">🏆</div>
+    <h2>You completed the game!</h2>
+    <p style="font-size:17px"><b>¡Completaste el juego!</b> Terminaste las 300 misiones de English Town.</p>
+    <div class="stat-grid" id="endStats"></div>
+    <p>Sigue practicando: explora, repasa tu álbum y responde quizzes para dominar las 1000 palabras.</p>
+    <button class="big" id="btnKeep">Seguir jugando</button>
+    <a class="big nar" href="abulingo.html">← Volver a Abulingo</a>
+    <button class="big alt" id="btnRestart">Empezar de nuevo (borrar progreso del juego)</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.1/dist/umd/supabase.min.js"></script>
+<script src="abu-progreso.js"></script>
+<script src="juego/comun.js"></script>
+<script src="juego/rostro.js"></script>
+<script src="juego/carro.js"></script>
+<script src="juego/casa.js"></script>
+<script src="juego/humano.js"></script>
+<script src="juego/ingles_datos.js"></script>
+<script src="juego/ingles_palabras.js"></script>
+<script src="juego/objetos.js"></script>
+<script src="juego/animales.js"></script>
+<script src="juego/estructuras.js"></script>
+<script src="juego/mundo_datos.js"></script>
+<script src="juego/motor_base.js"></script>
+<script src="juego/motor_mundo.js"></script>
+<script src="juego/motor_misiones.js"></script>
+<script src="juego/motor_juego.js"></script>
+</body>
+</html>

@@ -140,8 +140,8 @@
         <button data-tool="pronunciacion" class="tool-btn flex flex-col items-center justify-center px-2 py-1 rounded-lg text-slate-500 hover:bg-slate-100">
           <i class="fas fa-microphone-lines text-base"></i><span class="hidden md:block text-[10px] font-bold leading-tight mt-0.5">Pronunciación</span>
         </button>
-        <button data-tool="club" class="tool-btn flex flex-col items-center justify-center px-2 py-1 rounded-lg text-slate-500 hover:bg-slate-100">
-          <i class="fas fa-users text-base"></i><span class="hidden md:block text-[10px] font-bold leading-tight mt-0.5">Club</span>
+        <button data-tool="listening" class="tool-btn flex flex-col items-center justify-center px-2 py-1 rounded-lg text-slate-500 hover:bg-slate-100">
+          <i class="fas fa-headphones text-base"></i><span class="hidden md:block text-[10px] font-bold leading-tight mt-0.5">Listening</span>
         </button>
         <button data-tool="traductor" class="tool-btn flex flex-col items-center justify-center px-2 py-1 rounded-lg text-slate-500 hover:bg-slate-100">
           <i class="fas fa-language text-base"></i><span class="hidden md:block text-[10px] font-bold leading-tight mt-0.5">Traductor</span>
@@ -178,6 +178,9 @@
           </div>
           <div class="py-2 max-h-80 overflow-y-auto">
             <div class="flex items-center px-4 py-2 text-slate-700"><i class="fas fa-coins w-6 text-yellow-600"></i><span><span id="user-lingots" class="font-bold">0</span> Lingots</span></div>
+            <button data-menu="juego" class="w-full text-left flex items-center px-4 py-2 text-slate-700 hover:bg-orange-50"><i class="fas fa-gamepad fa-fw w-6 text-[#FF7A00]"></i><span>Juego</span><span class="ml-auto text-[10px] font-black text-[#FF7A00]">English Town</span></button>
+            <button data-menu="fonetica" class="w-full text-left flex items-center px-4 py-2 text-slate-700 hover:bg-orange-50"><i class="fas fa-spell-check fa-fw w-6 text-[#0D47A1]"></i><span>Fonética</span><span class="ml-auto text-[10px] font-black text-[#0D47A1]">/ə/</span></button>
+            <button data-menu="club" class="w-full text-left flex items-center px-4 py-2 text-slate-700 hover:bg-orange-50"><i class="fas fa-users fa-fw w-6 text-[#FF7A00]"></i><span>Club</span><span class="ml-auto text-[10px] font-black text-slate-400">conversación</span></button>
             <button data-menu="palabras" class="w-full text-left flex items-center px-4 py-2 text-slate-700 hover:bg-slate-100"><i class="fas fa-graduation-cap fa-fw w-6 text-[#FF7A00]"></i><span>Mis palabras</span></button>
             <button data-menu="ranking-global" class="w-full text-left flex items-center px-4 py-2 text-slate-700 hover:bg-slate-100"><i class="fas fa-globe fa-fw w-6 text-slate-500"></i><span>Ranking Global</span></button>
             <button data-menu="ranking-equipo" class="w-full text-left flex items-center px-4 py-2 text-slate-700 hover:bg-slate-100"><i class="fas fa-users fa-fw w-6 text-slate-500"></i><span>Ranking Equipo</span></button>
@@ -1181,6 +1184,7 @@
       const tool = btn.dataset.tool;
       if (tool === 'gramatica') { stopSpeaking(); gramQuiz = null; openGramatica(); return; }
       if (tool === 'pronunciacion') { window.location.href = 'pronunciacion.html'; return; }
+      if (tool === 'listening') { window.location.href = 'listening.html'; return; }
       if (tool === 'traductor') { openTraductor(); return; }
       if (tool === 'ia') { abrirTutorAbu(); return; }   // se abre aquí mismo
       window.location.href = `abulingo.html?tool=${encodeURIComponent(tool)}`;
