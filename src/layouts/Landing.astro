@@ -2,6 +2,12 @@
 // Estructura común de la landing: <head> (SEO, JSON-LD, favicon) y <body>.
 // Los <script>/<style> van con is:inline para que Astro los publique tal cual,
 // sin empaquetarlos: así el JS de registro, login por PIN y planes no cambia.
+import { readFileSync } from 'node:fs';
+
+// app.css (Tailwind, ~9 KB) se incrusta en el HTML al compilar: evita una
+// petición que bloqueaba el primer pintado. Las demás páginas lo siguen
+// cargando como archivo.
+const appCss = readFileSync('app.css', 'utf-8');
 ---
 <!DOCTYPE html>
 <html lang="es">
@@ -181,7 +187,7 @@
     }
     </script>
   <!-- Tailwind precompilado (npm run build:css). Al final del head, como el CDN, para que las utilidades ganen. -->
-  <link rel="stylesheet" href="app.css">
+  <style is:inline set:html={appCss}></style>
 </head>
 <body class="overflow-x-hidden">
 <slot />

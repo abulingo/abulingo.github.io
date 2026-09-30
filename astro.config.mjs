@@ -6,6 +6,6 @@ export default defineConfig({
   site: 'https://abulingo.github.io',
   output: 'static',
   build: { format: 'file' },
-  // Mantiene el HTML y los scripts inline tal cual estaban en index.html
-  compressHTML: false,
+  // Quita espacios sobrantes del HTML (no toca el contenido de los <script>)
+  compressHTML: true,
 });
