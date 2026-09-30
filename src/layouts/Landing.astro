@@ -1,0 +1,189 @@
+---
+// Estructura común de la landing: <head> (SEO, JSON-LD, favicon) y <body>.
+// Los <script>/<style> van con is:inline para que Astro los publique tal cual,
+// sin empaquetarlos: así el JS de registro, login por PIN y planes no cambia.
+---
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- ============================================================
+         SEO
+         El título y la descripción son lo que se ve en Google. Antes el
+         título empezaba por la marca ("Abulingo - ..."), que casi nadie
+         busca todavía; ahora empieza por lo que la gente SÍ escribe
+         ("aprender inglés online desde cero") y la marca va al final,
+         que es donde Google la muestra igual.
+    ============================================================ -->
+    <title>Aprender Inglés Online Desde Cero | Curso con IA y Pronunciación · Abulingo</title>
+    <meta name="description" content="Aprende inglés online desde cero con Abulingo: vocabulario con repetición espaciada, gramática de A1 a B2, práctica de pronunciación con IA y club de conversación. Empieza gratis.">
+    <meta name="author" content="Abulingo">
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">
+    <meta name="theme-color" content="#FF7A00">
+    <link rel="canonical" href="https://abulingo.github.io/">
+
+    <!-- El sitio está en español y va dirigido a hispanohablantes -->
+    <meta property="og:locale" content="es_ES">
+    <link rel="alternate" hreflang="es" href="https://abulingo.github.io/">
+    <link rel="alternate" hreflang="x-default" href="https://abulingo.github.io/">
+
+    <!-- Cómo se ve al compartir el enlace en WhatsApp, Facebook, X… -->
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Abulingo">
+    <meta property="og:url" content="https://abulingo.github.io/">
+    <meta property="og:title" content="Aprender Inglés Online Desde Cero | Abulingo">
+    <meta property="og:description" content="Vocabulario con repetición espaciada, gramática de A1 a B2, pronunciación con IA y club de conversación. Empieza gratis.">
+    <meta property="og:image" content="https://abulingo.github.io/og-abulingo.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="Abulingo, plataforma para aprender inglés online">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Aprender Inglés Online Desde Cero | Abulingo">
+    <meta name="twitter:description" content="Vocabulario con repetición espaciada, gramática de A1 a B2, pronunciación con IA y club de conversación. Empieza gratis.">
+    <meta name="twitter:image" content="https://abulingo.github.io/og-abulingo.png">
+
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+    <script is:inline defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.1/dist/umd/supabase.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Work+Sans:wght@400;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'; this.onload=null;">
+    <noscript><link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Work+Sans:wght@400;600&display=swap" rel="stylesheet"></noscript>
+    <link rel="icon" href="/favicon.ico" sizes="48x48">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="icon" href="/favicon-96x96.png" type="image/png" sizes="96x96">
+    <link rel="icon" href="/favicon-192x192.png" type="image/png" sizes="192x192">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    <style is:inline>
+        body { font-family: 'Work Sans', sans-serif; background-color: #E6F0FF; color: #212121; scroll-behavior: smooth; }
+        .font-heading { font-family: 'Space Grotesk', sans-serif; color: #0D47A1; }
+        .btn-primary { background-color: #FF7A00; color: #FFFFFF; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(255, 122, 0, 0.3); }
+        .btn-primary:hover { transform: translateY(-3px); box-shadow: 0 6px 20px rgba(255, 122, 0, 0.4); }
+        .card-style { background: #FFFFFF; border: 1px solid #dbeafe; transition: all 0.3s ease; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05); }
+        .card-style:hover { transform: translateY(-5px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.07), 0 4px 6px -4px rgba(0, 0, 0, 0.07); }
+        .wave-divider { position: absolute; bottom: -1px; left: 0; width: 100%; overflow: hidden; line-height: 0; transform: rotate(180deg); }
+        .wave-divider svg { position: relative; display: block; width: calc(100% + 1.3px); height: 150px; }
+        .wave-divider .shape-fill { fill: #E6F0FF; }
+        .animate-on-scroll { transform: translateY(20px); opacity: 0; transition: opacity 0.6s ease-out, transform 0.6s ease-out; }
+        .animate-on-scroll.is-visible { transform: translateY(0); opacity: 1; }
+        .highlight-yellow { background-color: #FFEB3B; padding: 0 0.25rem; border-radius: 0.2rem; color: #333; }
+        .text-feedback-success { color: #4CAF50; }
+        .text-feedback-error { color: #D32F2F; }
+        .input-field { background-color: #F8FAFC; border: 1px solid #CFD8DC; border-radius: 0.5rem; padding: 0.75rem; color: #374151; }
+        .input-field:focus { outline: none; border-color: #FF7A00; box-shadow: 0 0 0 2px rgba(255, 122, 0, 0.2); }
+        .pin-field { letter-spacing: 0.5em; text-align: center; font-size: 1.25rem; }
+        .faq-answer { max-height: 0; overflow: hidden; transition: max-height 0.3s ease-in-out; }
+    </style>
+
+    <!-- ============================================================
+         DATOS ESTRUCTURADOS (JSON-LD)
+         Es lo que le dice a Google qué es esto: una organización que se
+         llama Abulingo, un sitio buscable, un curso de inglés con sus
+         niveles y precios, y unas preguntas frecuentes. De aquí salen
+         los resultados enriquecidos (estrellas, precios, el acordeón de
+         preguntas dentro del resultado de búsqueda).
+    ============================================================ -->
+    <script is:inline type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://abulingo.github.io/#organization",
+          "name": "Abulingo",
+          "alternateName": ["Abulingo Inglés", "Abulingo App", "Abu Lingo"],
+          "url": "https://abulingo.github.io/",
+          "logo": "https://abulingo.github.io/logo_abulingo.png",
+          "description": "Plataforma para aprender inglés online con repetición espaciada, gramática guiada, práctica de pronunciación con inteligencia artificial y club de conversación.",
+          "sameAs": []
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://abulingo.github.io/#website",
+          "url": "https://abulingo.github.io/",
+          "name": "Abulingo",
+          "inLanguage": "es",
+          "publisher": { "@id": "https://abulingo.github.io/#organization" }
+        },
+        {
+          "@type": "SoftwareApplication",
+          "@id": "https://abulingo.github.io/#app",
+          "name": "Abulingo",
+          "applicationCategory": "EducationalApplication",
+          "operatingSystem": "Web",
+          "inLanguage": "es",
+          "url": "https://abulingo.github.io/",
+          "description": "App web para aprender inglés online desde cero: vocabulario con repetición espaciada, gramática de A1 a B2 y práctica de pronunciación con IA.",
+          "publisher": { "@id": "https://abulingo.github.io/#organization" },
+          "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+        },
+        {
+          "@type": "Course",
+          "@id": "https://abulingo.github.io/#curso",
+          "name": "Curso de inglés online desde cero (A1 a B2)",
+          "description": "Curso de inglés americano para hispanohablantes. Vocabulario con repetición espaciada, gramática de nivel A1 a B2, práctica de pronunciación con IA, conversaciones guiadas y club de conversación en vivo.",
+          "url": "https://abulingo.github.io/",
+          "inLanguage": "es",
+          "teaches": ["Inglés americano", "Vocabulario en inglés", "Gramática inglesa", "Pronunciación en inglés", "Conversación en inglés"],
+          "educationalLevel": ["A1", "A2", "B1", "B2"],
+          "provider": { "@id": "https://abulingo.github.io/#organization" },
+          "isAccessibleForFree": true,
+          "offers": [
+            { "@type": "Offer", "name": "Gratis",    "price": "0",  "priceCurrency": "USD", "category": "Free",         "availability": "https://schema.org/InStock" },
+            { "@type": "Offer", "name": "Plus",      "price": "1", "priceCurrency": "USD", "category": "Subscription", "availability": "https://schema.org/InStock" },
+            { "@type": "Offer", "name": "Pro",       "price": "2", "priceCurrency": "USD", "category": "Subscription", "availability": "https://schema.org/InStock" },
+            { "@type": "Offer", "name": "Super Pro", "price": "5", "priceCurrency": "USD", "category": "Subscription", "availability": "https://schema.org/InStock" }
+          ],
+          "hasCourseInstance": {
+            "@type": "CourseInstance",
+            "courseMode": "online",
+            "courseWorkload": "PT20M",
+            "inLanguage": "es"
+          }
+        },
+        {
+          "@type": "FAQPage",
+          "@id": "https://abulingo.github.io/#faq",
+          "mainEntity": [
+            {
+              "@type": "Question",
+              "name": "¿Puedo aprender inglés desde cero en Abulingo?",
+              "acceptedAnswer": { "@type": "Answer", "text": "Sí. El nivel A1 empieza desde el abecedario y las primeras frases, sin ningún conocimiento previo, y avanza hasta B2 con gramática, vocabulario, pronunciación y conversación." }
+            },
+            {
+              "@type": "Question",
+              "name": "¿Abulingo es gratis?",
+              "acceptedAnswer": { "@type": "Answer", "text": "Hay un plan gratuito con lecciones para principiantes, 100 palabras para memorizar y dos flujos de estudio. Los planes de pago añaden gramática completa, pronunciación con IA, club de conversación, traductor y mazo personal." }
+            },
+            {
+              "@type": "Question",
+              "name": "¿Por qué se memoriza más rápido el vocabulario en inglés con Abulingo?",
+              "acceptedAnswer": { "@type": "Answer", "text": "Por la repetición espaciada: cada palabra reaparece justo antes de que la olvides, y el recuerdo activo te obliga a recuperarla de memoria en lugar de reconocerla. Esas dos técnicas fijan el vocabulario a largo plazo con menos horas de estudio." }
+            },
+            {
+              "@type": "Question",
+              "name": "¿Cómo practico la pronunciación en inglés?",
+              "acceptedAnswer": { "@type": "Answer", "text": "El módulo de pronunciación te deja escuchar la palabra o frase con voz nativa, grabarte, comparar lo que dijiste con el modelo y recibir consejos de un profesor con inteligencia artificial sobre qué sonidos corregir." }
+            },
+            {
+              "@type": "Question",
+              "name": "¿Qué niveles de inglés cubre Abulingo?",
+              "acceptedAnswer": { "@type": "Answer", "text": "Los niveles A1, A2, B1 y B2 del Marco Común Europeo, con temario de gramática, listas de vocabulario, frases típicas y conversaciones para cada nivel." }
+            },
+            {
+              "@type": "Question",
+              "name": "¿Qué es el Club de Conversación?",
+              "acceptedAnswer": { "@type": "Answer", "text": "Son videollamadas grupales moderadas por los propios estudiantes para practicar inglés hablado en un ambiente relajado con otras personas de tu mismo nivel." }
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+  <!-- Tailwind precompilado (npm run build:css). Al final del head, como el CDN, para que las utilidades ganen. -->
+  <link rel="stylesheet" href="app.css">
+</head>
+<body class="overflow-x-hidden">
+<slot />
+</body>
+</html>
