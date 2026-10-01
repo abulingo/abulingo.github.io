@@ -52,6 +52,13 @@
     .wa-float:active { transform: scale(0.92); }
 
     #login-pin { letter-spacing: 0.35em; }
+
+    .tab-btn { padding: 12px 14px; font-weight: 700; font-size: 0.85rem; color: #64748b; border-bottom: 3px solid transparent; white-space: nowrap; }
+    .tab-btn.activo { color: #FF7A00; border-bottom-color: #FF7A00; }
+    .plan-gratis { background: #f1f5f9; color: #475569; }
+    .plan-plus { background: #dbeafe; color: #1d4ed8; }
+    .plan-pro { background: #ffedd5; color: #c2410c; }
+    .plan-super_pro { background: #f3e8ff; color: #7e22ce; }
   </style>
   <!-- Tailwind precompilado (npm run build:css). Al final del head, como el CDN, para que las utilidades ganen. -->
   <link rel="stylesheet" href="app.css">
@@ -98,8 +105,64 @@
       </div>
     </header>
 
+    <nav class="bg-white border-b border-slate-200">
+      <div id="tabs" class="max-w-6xl mx-auto px-4 flex gap-1 overflow-x-auto">
+        <button data-tab="analitica" class="tab-btn"><i class="fas fa-chart-pie mr-1"></i>Analíticas</button>
+        <button data-tab="usuarios" class="tab-btn"><i class="fas fa-users mr-1"></i>Usuarios</button>
+        <button data-tab="pro" class="tab-btn"><i class="fas fa-crown mr-1"></i>Interesados en pagar</button>
+        <button data-tab="soporte" class="tab-btn"><i class="fas fa-life-ring mr-1"></i>Soporte <span id="soporte-badge" class="hidden ml-1 bg-red-500 text-white text-[10px] font-black px-1.5 rounded-full"></span></button>
+        <button data-tab="historial" class="tab-btn"><i class="fas fa-clock-rotate-left mr-1"></i>Historial</button>
+      </div>
+    </nav>
+
     <main class="max-w-6xl w-full mx-auto px-4 py-6 flex-1">
 
+      <!-- ===== ANALÍTICAS ===== -->
+      <div id="tab-analitica" class="tab-panel hidden">
+        <div class="flex flex-wrap items-center gap-2 mb-4">
+          <h2 class="font-heading font-bold text-slate-800 text-lg flex-1">Analíticas de la web</h2>
+          <select id="analitica-dias" class="bg-white border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-600">
+            <option value="1">Últimas 24 h</option>
+            <option value="7">Últimos 7 días</option>
+            <option value="30" selected>Últimos 30 días</option>
+            <option value="90">Últimos 90 días</option>
+            <option value="365">Último año</option>
+          </select>
+          <button id="analitica-recargar" class="btn-juice bg-slate-800 text-white font-bold text-xs px-3 py-2 rounded-xl"><i class="fas fa-rotate mr-1"></i>Actualizar</button>
+        </div>
+        <div id="analitica-body"><p class="text-center text-slate-400 py-10">Cargando...</p></div>
+      </div>
+
+      <!-- ===== INTERESADOS EN PAGAR ===== -->
+      <div id="tab-pro" class="tab-panel hidden">
+        <section class="card-3d p-4 sm:p-5">
+          <div class="flex items-center gap-2 mb-1">
+            <h2 class="font-heading font-bold text-slate-800 text-lg flex-1">Interesados en pagar</h2>
+            <button id="pro-csv" class="btn-juice bg-slate-100 text-slate-600 font-bold text-xs px-3 py-2 rounded-xl"><i class="fas fa-file-csv mr-1"></i>CSV</button>
+          </div>
+          <p class="text-[11px] text-slate-400 mb-3">Alumnos que pulsaron un botón para mejorar su plan (últimos 90 días). Contáctalos y, cuando paguen, súbeles el plan desde aquí.</p>
+          <div id="pro-body" class="overflow-x-auto"></div>
+        </section>
+      </div>
+
+      <!-- ===== SOPORTE ===== -->
+      <div id="tab-soporte" class="tab-panel hidden">
+        <section class="card-3d p-4 sm:p-5">
+          <h2 class="font-heading font-bold text-slate-800 text-lg mb-3">Mensajes de soporte</h2>
+          <div id="soporte-body" class="space-y-3"></div>
+        </section>
+      </div>
+
+      <!-- ===== HISTORIAL ===== -->
+      <div id="tab-historial" class="tab-panel hidden">
+        <section class="card-3d p-4 sm:p-5">
+          <h2 class="font-heading font-bold text-slate-800 text-lg mb-1">Historial de cambios</h2>
+          <p class="text-[11px] text-slate-400 mb-3">Cada cambio de plan, rol o datos hecho desde este panel.</p>
+          <div id="historial-body" class="overflow-x-auto"></div>
+        </section>
+      </div>
+
+      <div id="tab-usuarios" class="tab-panel hidden">
       <!-- Grupos -->
       <section class="card-3d p-4 sm:p-5 mb-5">
         <div class="flex items-center justify-between mb-1">
@@ -115,11 +178,14 @@
         <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mb-4">
           <div class="relative flex-1">
             <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-300"></i>
-            <input id="buscador" type="text" placeholder="Buscar por nombre..."
+            <input id="buscador" type="text" placeholder="Buscar por nombre, correo o teléfono..."
               class="w-full bg-white border-2 border-slate-200 rounded-xl pl-9 pr-3 py-2.5 focus:outline-none focus:border-[#FF7A00] text-slate-700 font-medium">
           </div>
           <button id="btn-calcular-avance" class="btn-juice bg-slate-800 text-white font-bold text-xs px-3 py-2 rounded-xl shrink-0" title="Calcula el % global de cada alumno visible">
             <i class="fas fa-chart-line mr-1"></i>Calcular avance
+          </button>
+          <button id="btn-usuarios-csv" class="btn-juice bg-slate-100 text-slate-600 font-bold text-xs px-3 py-2 rounded-xl shrink-0">
+            <i class="fas fa-file-csv mr-1"></i>CSV
           </button>
           <span id="contador-usuarios" class="text-xs font-bold text-slate-400 shrink-0 self-center sm:self-auto"></span>
         </div>
@@ -131,6 +197,8 @@
                 <tr class="text-[10px] font-black text-slate-400 uppercase">
                   <th>Nombre</th>
                   <th>Correo</th>
+                  <th>Plan</th>
+                  <th>Rol</th>
                   <th>Grupo</th>
                   <th>Nivel</th>
                   <th>Puntos</th>
@@ -148,6 +216,7 @@
         </div>
         <p id="usuarios-vacio" class="hidden text-center text-slate-400 py-8">No se encontraron usuarios.</p>
       </section>
+      </div>
     </main>
   </div>
 
@@ -281,6 +350,244 @@
       : 'Solo ves los grupos que tú creaste y sus usuarios.';
     cargarGrupos();
     cargarUsuarios();
+    cargarSoporte();
+    let tab = 'analitica';
+    try { tab = localStorage.getItem('abu_admin_tab') || tab; } catch (e) {}
+    abrirTab(tab);
+  }
+
+  /* ============================================================
+     PESTAÑAS
+  ============================================================ */
+  const cargadas = {};
+  function abrirTab(tab) {
+    if (!document.getElementById('tab-' + tab)) tab = 'analitica';
+    document.querySelectorAll('.tab-panel').forEach(el => el.classList.toggle('hidden', el.id !== 'tab-' + tab));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('activo', b.dataset.tab === tab));
+    try { localStorage.setItem('abu_admin_tab', tab); } catch (e) {}
+    if (!cargadas[tab]) {
+      cargadas[tab] = true;
+      if (tab === 'analitica') cargarAnalitica();
+      if (tab === 'pro') cargarInteresados();
+      if (tab === 'historial') cargarHistorial();
+    }
+    if (tab === 'soporte') pintarSoporte();
+  }
+  document.querySelectorAll('.tab-btn').forEach(b => { b.onclick = () => abrirTab(b.dataset.tab); });
+
+  /* ---------- utilidades comunes ---------- */
+  const PLANES = [
+    { v: 'gratis', label: 'Gratis' }, { v: 'plus', label: 'Plus' },
+    { v: 'pro', label: 'Pro' }, { v: 'super_pro', label: 'Super Pro' }
+  ];
+  const ROLES = [
+    { v: 'user', label: 'Alumno' }, { v: 'admin', label: 'Admin' }, { v: 'super_admin', label: 'Super Admin' }
+  ];
+  const nombrePlan = (v) => (PLANES.find(p => p.v === v) || PLANES[0]).label;
+  const fecha = (d) => d ? new Date(d).toLocaleString('es', { dateStyle: 'short', timeStyle: 'short' }) : '—';
+  const esSuperAdmin = () => currentProfile?.role === 'super_admin';
+
+  function descargarCSV(nombre, filas) {
+    if (!filas.length) return showToast('No hay datos para exportar.');
+    const cols = Object.keys(filas[0]);
+    const celda = (v) => {
+      const t = v === null || v === undefined ? '' : (typeof v === 'object' ? JSON.stringify(v) : String(v));
+      return /[",\n;]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t;
+    };
+    const csv = '\ufeff' + [cols.join(','), ...filas.map(f => cols.map(c => celda(f[c])).join(','))].join('\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    a.download = `${nombre}-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+
+  /* ============================================================
+     ANALÍTICAS — todo lo calcula admin_analitica() en Postgres
+     (ver sql/admin-panel.sql) a partir de page_visits,
+     button_clicks, auth.users, profiles y pro_clicks.
+  ============================================================ */
+  document.getElementById('analitica-recargar').onclick = cargarAnalitica;
+  document.getElementById('analitica-dias').onchange = cargarAnalitica;
+
+  async function cargarAnalitica() {
+    const el = document.getElementById('analitica-body');
+    el.innerHTML = '<p class="text-center text-slate-400 py-10"><i class="fas fa-circle-notch fa-spin mr-1"></i>Cargando...</p>';
+    const dias = parseInt(document.getElementById('analitica-dias').value, 10);
+    const { data: a, error } = await dbClient.rpc('admin_analitica', { p_dias: dias });
+    if (error) {
+      el.innerHTML = `<p class="text-center text-red-500 py-10">No se pudieron cargar las analíticas.<br><span class="text-xs text-slate-400">${escapeHTML(error.message)}</span></p>`;
+      return;
+    }
+    const r = a.resumen || {};
+    const u = a.usuarios || {};
+    const kpi = (icono, valor, label, color = '#0D47A1') => `
+      <div class="card-3d p-4">
+        <p class="text-[10px] font-black uppercase tracking-wide text-slate-400">${icono} ${label}</p>
+        <p class="font-heading font-black text-3xl leading-tight" style="color:${color}">${valor ?? 0}</p>
+      </div>`;
+    const ranking = (titulo, lista, color = '#FF7A00') => {
+      const max = Math.max(1, ...(lista || []).map(x => x.n));
+      return `
+        <section class="card-3d p-4">
+          <h3 class="font-heading font-bold text-slate-700 text-sm mb-3">${titulo}</h3>
+          ${(lista || []).length ? lista.map(x => `
+            <div class="mb-2">
+              <div class="flex justify-between text-xs mb-0.5"><span class="font-bold text-slate-600 truncate pr-2">${escapeHTML(x.nombre)}</span><span class="font-black text-slate-700">${x.n}</span></div>
+              ${barra(Math.round(x.n / max * 100), color)}
+            </div>`).join('') : '<p class="text-xs text-slate-400">Sin datos en este periodo.</p>'}
+        </section>`;
+    };
+    const columnas = (titulo, lista, campo, color) => {
+      const max = Math.max(1, ...(lista || []).map(x => x[campo]));
+      return `
+        <section class="card-3d p-4 mb-4">
+          <h3 class="font-heading font-bold text-slate-700 text-sm mb-3">${titulo}</h3>
+          ${(lista || []).length ? `
+          <div class="flex items-end gap-1 h-40 overflow-x-auto">
+            ${lista.map(x => `
+              <div class="flex-1 min-w-[10px] flex flex-col items-center justify-end h-full" title="${escapeHTML(x.dia)}: ${x[campo]}">
+                <span class="text-[9px] font-bold text-slate-400">${x[campo]}</span>
+                <div class="w-full rounded-t" style="height:${Math.max(2, x[campo] / max * 100)}%; background:${color}"></div>
+              </div>`).join('')}
+          </div>
+          <div class="flex justify-between text-[10px] text-slate-400 mt-1"><span>${escapeHTML(lista[0].dia)}</span><span>${escapeHTML(lista[lista.length - 1].dia)}</span></div>`
+          : '<p class="text-xs text-slate-400">Sin datos en este periodo.</p>'}
+        </section>`;
+    };
+    const planes = a.planes || {};
+    el.innerHTML = `
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+        ${kpi('👀', r.visitas, 'Visitas')}
+        ${kpi('🧑', r.visitantes, 'Visitantes únicos')}
+        ${kpi('⏱️', (r.duracion_media_s ?? 0) + ' s', 'Tiempo medio')}
+        ${kpi('↩️', (r.rebote_pct ?? 0) + '%', 'Rebote', '#64748b')}
+        ${kpi('🎓', u.total, 'Usuarios registrados', '#FF7A00')}
+        ${kpi('🆕', u.nuevos, 'Registros nuevos', '#22c55e')}
+        ${kpi('🔥', u.activos, 'Usuarios activos', '#ef4444')}
+        ${kpi('👑', a.interesados_pro, 'Clics en mejorar plan', '#7e22ce')}
+      </div>
+      <section class="card-3d p-4 mb-4">
+        <h3 class="font-heading font-bold text-slate-700 text-sm mb-3">Usuarios por plan (total)</h3>
+        <div class="flex flex-wrap gap-2">
+          ${PLANES.map(p => `<span class="plan-${p.v} font-black text-sm px-3 py-1.5 rounded-xl">${p.label}: ${planes[p.v] || 0}</span>`).join('')}
+        </div>
+      </section>
+      ${columnas('Visitas por día', a.por_dia, 'visitas', '#0D47A1')}
+      ${columnas('Registros por día', a.registros_por_dia, 'n', '#22c55e')}
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        ${ranking('🌎 Países (visitantes)', a.paises, '#0D47A1')}
+        ${ranking('🏙️ Ciudades (visitantes)', a.ciudades, '#0ea5e9')}
+        ${ranking('📄 Páginas más vistas', a.paginas)}
+        ${ranking('🔗 De dónde llegan (sesiones)', a.origen, '#22c55e')}
+        ${ranking('📱 Dispositivos (visitantes)', a.dispositivos, '#a855f7')}
+        ${ranking('🧭 Navegador / sistema', a.navegadores, '#64748b')}
+        ${ranking('🖱️ Botones más pulsados', a.botones, '#ef4444')}
+      </div>
+      <p class="text-[11px] text-slate-400 mt-3">Se excluyen los bots detectados. "Visitantes únicos" cuenta navegadores distintos, no personas.</p>`;
+  }
+
+  /* ============================================================
+     INTERESADOS EN PAGAR
+  ============================================================ */
+  let interesados = [];
+  async function cargarInteresados() {
+    const el = document.getElementById('pro-body');
+    el.innerHTML = '<p class="text-center text-slate-400 py-6">Cargando...</p>';
+    const { data, error } = await dbClient.rpc('admin_interesados_pro', { p_dias: 90 });
+    if (error) { el.innerHTML = `<p class="text-red-500 text-sm">${escapeHTML(error.message)}</p>`; return; }
+    interesados = data || [];
+    if (!interesados.length) { el.innerHTML = '<p class="text-center text-slate-400 py-6">Nadie ha pulsado todavía para mejorar su plan.</p>'; return; }
+    el.innerHTML = `
+      <table class="admin-table text-sm">
+        <thead><tr class="text-[10px] font-black text-slate-400 uppercase">
+          <th>Fecha</th><th>Alumno</th><th>Correo</th><th>Teléfono</th><th>Desde</th><th>Pidió</th><th>Plan actual</th><th></th>
+        </tr></thead>
+        <tbody>${interesados.map(i => `
+          <tr>
+            <td class="text-slate-500">${fecha(i.created_at)}</td>
+            <td class="font-bold text-slate-700">${escapeHTML(i.nombre || '—')}</td>
+            <td class="text-slate-500">${escapeHTML(i.email || '—')}</td>
+            <td>${i.phone ? `<a class="text-green-600 font-bold" target="_blank" rel="noopener" href="https://wa.me/${escapeHTML(i.phone.replace(/\D/g, ''))}"><i class="fab fa-whatsapp mr-1"></i>${escapeHTML(i.phone)}</a>` : '—'}</td>
+            <td class="text-slate-500">${escapeHTML(i.origen || '—')}</td>
+            <td>${i.plan_pedido ? `<span class="plan-${escapeHTML(i.plan_pedido)} text-[10px] font-black px-2 py-1 rounded-full">${escapeHTML(nombrePlan(i.plan_pedido))}</span>` : '—'}</td>
+            <td><span class="plan-${escapeHTML(i.plan_actual)} text-[10px] font-black px-2 py-1 rounded-full">${escapeHTML(nombrePlan(i.plan_actual))}</span></td>
+            <td>${i.user_id ? `<button class="pro-editar btn-juice bg-slate-100 text-slate-600 font-bold text-xs px-3 py-1.5 rounded-lg" data-id="${i.user_id}">Cambiar plan</button>` : ''}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>`;
+    el.querySelectorAll('.pro-editar').forEach(b => { b.onclick = () => editarUsuario(b.dataset.id); });
+  }
+  document.getElementById('pro-csv').onclick = () => descargarCSV('interesados-abulingo', interesados);
+
+  /* ============================================================
+     SOPORTE
+  ============================================================ */
+  let mensajesSoporte = [];
+  async function cargarSoporte() {
+    const { data, error } = await dbClient.rpc('admin_soporte_listar');
+    if (error) { console.warn('[soporte]', error.message); return; }
+    mensajesSoporte = data || [];
+    const abiertos = mensajesSoporte.filter(m => m.estado === 'abierto').length;
+    const badge = document.getElementById('soporte-badge');
+    badge.textContent = abiertos;
+    badge.classList.toggle('hidden', !abiertos);
+    pintarSoporte();
+  }
+  function pintarSoporte() {
+    const el = document.getElementById('soporte-body');
+    if (!mensajesSoporte.length) { el.innerHTML = '<p class="text-center text-slate-400 py-6">No hay mensajes de soporte.</p>'; return; }
+    el.innerHTML = mensajesSoporte.map(m => `
+      <div class="border-2 ${m.estado === 'abierto' ? 'border-orange-200 bg-orange-50/40' : 'border-slate-100'} rounded-2xl p-3.5">
+        <div class="flex flex-wrap items-center gap-2 mb-1">
+          <span class="font-bold text-slate-700">${escapeHTML(m.nombre || m.email || 'Anónimo')}</span>
+          <span class="text-xs text-slate-400">${escapeHTML(m.email || '')} · ${fecha(m.created_at)}</span>
+          <span class="flex-1"></span>
+          <span class="text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${m.estado === 'abierto' ? 'bg-orange-100 text-[#FF7A00]' : 'bg-green-100 text-green-700'}">${escapeHTML(m.estado || '')}</span>
+        </div>
+        <p class="text-sm text-slate-600 whitespace-pre-wrap">${escapeHTML(m.mensaje)}</p>
+        <div class="flex flex-wrap gap-2 mt-2">
+          ${m.email ? `<a class="btn-juice bg-slate-100 text-slate-600 font-bold text-xs px-3 py-1.5 rounded-lg" href="mailto:${escapeHTML(m.email)}?subject=${encodeURIComponent('Soporte Abulingo')}"><i class="fas fa-envelope mr-1"></i>Responder</a>` : ''}
+          <button class="soporte-estado btn-juice ${m.estado === 'abierto' ? 'bg-green-500 text-white' : 'bg-slate-100 text-slate-500'} font-bold text-xs px-3 py-1.5 rounded-lg" data-id="${m.id}" data-estado="${m.estado === 'abierto' ? 'resuelto' : 'abierto'}">
+            ${m.estado === 'abierto' ? '✔ Marcar resuelto' : 'Reabrir'}
+          </button>
+        </div>
+      </div>`).join('');
+    el.querySelectorAll('.soporte-estado').forEach(b => {
+      b.onclick = async () => {
+        const { error } = await dbClient.rpc('admin_soporte_estado', { p_id: Number(b.dataset.id), p_estado: b.dataset.estado });
+        if (error) return showToast('⚠️ ' + error.message);
+        showToast('✅ Mensaje actualizado.');
+        cargarSoporte();
+      };
+    });
+  }
+
+  /* ============================================================
+     HISTORIAL DE CAMBIOS
+  ============================================================ */
+  async function cargarHistorial() {
+    const el = document.getElementById('historial-body');
+    el.innerHTML = '<p class="text-center text-slate-400 py-6">Cargando...</p>';
+    const { data, error } = await dbClient.rpc('admin_auditoria_listar');
+    if (error) { el.innerHTML = `<p class="text-red-500 text-sm">${escapeHTML(error.message)}</p>`; return; }
+    const filas = data || [];
+    if (!filas.length) { el.innerHTML = '<p class="text-center text-slate-400 py-6">Todavía no hay cambios registrados.</p>'; return; }
+    const val = (v) => escapeHTML(typeof v === 'string' ? v : JSON.stringify(v ?? '—'));
+    el.innerHTML = `
+      <table class="admin-table text-sm">
+        <thead><tr class="text-[10px] font-black text-slate-400 uppercase"><th>Fecha</th><th>Admin</th><th>Alumno</th><th>Cambio</th><th>Antes</th><th>Después</th></tr></thead>
+        <tbody>${filas.map(f => `
+          <tr>
+            <td class="text-slate-500">${fecha(f.created_at)}</td>
+            <td class="font-bold text-slate-700">${escapeHTML(f.admin || '—')}</td>
+            <td class="text-slate-600">${escapeHTML(f.usuario || '—')}</td>
+            <td><span class="bg-slate-100 text-slate-600 text-[10px] font-black px-2 py-1 rounded-full uppercase">${escapeHTML(f.accion)}</span></td>
+            <td class="text-slate-400 text-xs max-w-[220px] truncate" title="${val(f.antes)}">${val(f.antes)}</td>
+            <td class="text-slate-700 text-xs max-w-[220px] truncate" title="${val(f.despues)}">${val(f.despues)}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>`;
   }
 
   /* ============================================================
@@ -343,11 +650,11 @@
   ============================================================ */
   async function cargarUsuarios(busqueda = '') {
     const tbody = document.getElementById('usuarios-tbody');
-    tbody.innerHTML = `<tr><td colspan="11" class="text-center text-slate-400 py-8">Cargando...</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="13" class="text-center text-slate-400 py-8">Cargando...</td></tr>`;
     const { data, error } = await dbClient.rpc('admin_listar_usuarios', { busqueda: busqueda || null });
     if (error) {
       console.error('[admin_listar_usuarios]', error.message);
-      tbody.innerHTML = `<tr><td colspan="11" class="text-center text-red-500 py-8">No se pudo cargar la lista de usuarios.<br><span class="text-xs text-slate-400">${escapeHTML(error.message)} — revisa que ejecutaste migracion_admin.sql</span></td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="13" class="text-center text-red-500 py-8">No se pudo cargar la lista de usuarios.<br><span class="text-xs text-slate-400">${escapeHTML(error.message)} — revisa que ejecutaste migracion_admin.sql</span></td></tr>`;
       return;
     }
     usuarios = data || [];
@@ -369,6 +676,18 @@
         <td class="font-bold text-slate-700">${escapeHTML(u.full_name || '(sin nombre)')}</td>
         <td class="text-slate-500">${escapeHTML(u.email || '—')}</td>
         <td>
+          <select data-id="${u.id}" class="plan-select plan-${escapeHTML(u.plan)} border-0 rounded-lg px-2 py-1 text-xs font-black">
+            ${PLANES.map(p => `<option value="${p.v}" ${u.plan === p.v ? 'selected' : ''}>${p.label}</option>`).join('')}
+          </select>
+        </td>
+        <td>
+          ${esSuperAdmin() && u.id !== currentUser.id
+            ? `<select data-id="${u.id}" class="rol-select bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-600">
+                 ${ROLES.map(r => `<option value="${r.v}" ${u.role === r.v ? 'selected' : ''}>${r.label}</option>`).join('')}
+               </select>`
+            : `<span class="text-xs font-bold text-slate-500">${escapeHTML((ROLES.find(r => r.v === u.role) || ROLES[0]).label)}</span>`}
+        </td>
+        <td>
           <select data-id="${u.id}" class="grupo-select bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-600">
             <option value="">Sin grupo</option>
             ${grupos.map(g => `<option value="${escapeHTML(g.nombre)}" ${u.english_group === g.nombre ? 'selected' : ''}>${escapeHTML(g.nombre)}</option>`).join('')}
@@ -379,8 +698,12 @@
         <td class="font-bold text-slate-700"><i class="fas fa-coins text-yellow-600 mr-1"></i>${u.lingots || 0}</td>
         <td class="font-bold text-orange-500"><i class="fas fa-fire mr-1"></i>${u.racha_dias || 0}</td>
         <td class="font-bold text-green-600">${u.palabras_dominadas || 0} 🏅</td>
+        <td class="font-bold text-blue-600">${u.palabras_estudiadas || 0}</td>
         <td class="avance-celda" data-id="${u.id}">${avanceHTML(u.id)}</td>
-        <td><button class="ver-detalle btn-juice bg-slate-100 text-slate-600 font-bold text-xs px-3 py-1.5 rounded-lg" data-id="${u.id}" data-nombre="${escapeHTML(u.full_name || u.email || '')}">Ver</button></td>
+        <td class="space-x-1">
+          <button class="ver-detalle btn-juice bg-slate-100 text-slate-600 font-bold text-xs px-3 py-1.5 rounded-lg" data-id="${u.id}" data-nombre="${escapeHTML(u.full_name || u.email || '')}">Progreso</button>
+          <button class="editar-usuario btn-juice bg-[#0D47A1] text-white font-bold text-xs px-3 py-1.5 rounded-lg" data-id="${u.id}">Editar</button>
+        </td>
       </tr>`).join('');
 
     tbody.querySelectorAll('.grupo-select').forEach(sel => {
@@ -389,7 +712,114 @@
     tbody.querySelectorAll('.ver-detalle').forEach(b => {
       b.onclick = () => verDetalleUsuario(b.dataset.id, b.dataset.nombre);
     });
+    tbody.querySelectorAll('.editar-usuario').forEach(b => {
+      b.onclick = () => editarUsuario(b.dataset.id);
+    });
+    tbody.querySelectorAll('.plan-select').forEach(sel => {
+      sel.onchange = () => cambiarPlan(sel.dataset.id, sel.value);
+    });
+    tbody.querySelectorAll('.rol-select').forEach(sel => {
+      sel.onchange = () => cambiarRol(sel.dataset.id, sel.value);
+    });
   }
+
+  async function cambiarPlan(userId, plan) {
+    const { error } = await dbClient.rpc('admin_cambiar_plan', { p_user_id: userId, p_plan: plan });
+    if (error) { showToast('⚠️ ' + error.message); pintarTabla(); return; }
+    const u = usuarios.find(x => x.id === userId);
+    if (u) u.plan = plan;
+    pintarTabla();
+    cargadas.analitica = cargadas.historial = false;
+    showToast(`✅ Plan cambiado a ${nombrePlan(plan)}.`);
+  }
+
+  async function cambiarRol(userId, role) {
+    const u = usuarios.find(x => x.id === userId);
+    const etiqueta = (ROLES.find(r => r.v === role) || {}).label;
+    if (!confirm(`¿Cambiar el rol de ${u?.full_name || u?.email || 'este usuario'} a ${etiqueta}?`)) { pintarTabla(); return; }
+    const { error } = await dbClient.rpc('admin_cambiar_rol', { p_user_id: userId, p_role: role });
+    if (error) { showToast('⚠️ ' + error.message); pintarTabla(); return; }
+    if (u) u.role = role;
+    pintarTabla();
+    cargadas.historial = false;
+    showToast(`✅ Rol cambiado a ${etiqueta}.`);
+  }
+
+  /* ---------- Editar alumno: datos, plan y puntos ---------- */
+  function editarUsuario(userId) {
+    const u = usuarios.find(x => x.id === userId);
+    if (!u) return showToast('Ese alumno no está en tu lista (o no tienes permiso sobre él).');
+    const campo = (id, label, valor, tipo = 'text') => `
+      <label class="block text-[11px] font-black text-slate-400 uppercase mt-3">${label}</label>
+      <input id="${id}" type="${tipo}" value="${escapeHTML(valor ?? '')}" class="w-full mt-1 bg-white border-2 border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:border-[#FF7A00] text-slate-700 font-medium">`;
+    showModal({
+      icon: '✏️', title: escapeHTML(u.full_name || u.email), size: 'lg',
+      body: `
+        <div class="text-left pb-2">
+          <div class="bg-slate-50 rounded-xl p-3 text-xs text-slate-500 space-y-0.5">
+            <p><b>Correo:</b> ${escapeHTML(u.email || '—')}</p>
+            <p><b>Registro:</b> ${fecha(u.creado)} · <b>Último acceso:</b> ${fecha(u.ultimo_acceso)}</p>
+            <p><b>Acepta contacto:</b> ${u.consiente_contacto ? 'Sí' : 'No'} · <b>Racha:</b> ${u.racha_dias || 0} días · <b>Palabras:</b> ${u.palabras_dominadas || 0}/${u.palabras_estudiadas || 0}</p>
+          </div>
+          <label class="block text-[11px] font-black text-slate-400 uppercase mt-3">Plan</label>
+          <div id="edit-planes" class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-1">
+            ${PLANES.map(p => `<button type="button" data-plan="${p.v}" class="edit-plan btn-juice plan-${p.v} font-black text-sm py-2 rounded-xl ${u.plan === p.v ? 'ring-4 ring-[#FF7A00]' : ''}">${p.label}</button>`).join('')}
+          </div>
+          ${campo('edit-nombre', 'Nombre', u.full_name)}
+          ${campo('edit-telefono', 'Teléfono', u.phone, 'tel')}
+          <label class="block text-[11px] font-black text-slate-400 uppercase mt-3">Nivel</label>
+          <select id="edit-nivel" class="w-full mt-1 bg-white border-2 border-slate-200 rounded-xl px-3 py-2 text-slate-700 font-medium">
+            ${NIVELES.map(n => `<option ${u.nivel === n ? 'selected' : ''}>${n}</option>`).join('')}
+          </select>
+          <div class="grid grid-cols-2 gap-3">
+            <div>${campo('edit-puntos', 'Puntos', u.points || 0, 'number')}</div>
+            <div>${campo('edit-lingots', 'Lingots', u.lingots || 0, 'number')}</div>
+          </div>
+          ${u.phone ? `<a class="inline-block mt-3 text-green-600 font-bold text-sm" target="_blank" rel="noopener" href="https://wa.me/${escapeHTML(u.phone.replace(/\D/g, ''))}"><i class="fab fa-whatsapp mr-1"></i>Escribir por WhatsApp</a>` : ''}
+        </div>`,
+      actions: [
+        { label: 'Guardar datos', onClick: () => guardarUsuario(u) },
+        { label: 'Cancelar', style: 'bg-slate-100 text-slate-500', onClick: closeModal }
+      ]
+    });
+    modalRoot.querySelectorAll('.edit-plan').forEach(b => {
+      b.onclick = async () => {
+        await cambiarPlan(u.id, b.dataset.plan);
+        modalRoot.querySelectorAll('.edit-plan').forEach(x => x.classList.toggle('ring-4', x === b));
+        modalRoot.querySelectorAll('.edit-plan').forEach(x => x.classList.toggle('ring-[#FF7A00]', x === b));
+        if (cargadas.pro) cargarInteresados();
+      };
+    });
+  }
+
+  async function guardarUsuario(u) {
+    const val = (id) => document.getElementById(id).value.trim();
+    const datos = {
+      p_user_id: u.id,
+      p_full_name: val('edit-nombre') || null,
+      p_phone: val('edit-telefono') || null,
+      p_nivel: val('edit-nivel'),
+      p_points: parseInt(val('edit-puntos'), 10) || 0,
+      p_lingots: parseFloat(val('edit-lingots')) || 0
+    };
+    const { error } = await dbClient.rpc('admin_editar_usuario', datos);
+    if (error) return showToast('⚠️ ' + error.message);
+    Object.assign(u, { full_name: datos.p_full_name, phone: datos.p_phone, nivel: datos.p_nivel, points: datos.p_points, lingots: datos.p_lingots });
+    closeModal();
+    pintarTabla();
+    cargadas.historial = false;
+    showToast('✅ Datos guardados.');
+  }
+
+  document.getElementById('btn-usuarios-csv').onclick = () => {
+    const lista = filtroGrupo ? usuarios.filter(u => u.english_group === filtroGrupo) : usuarios;
+    descargarCSV('usuarios-abulingo', lista.map(u => ({
+      nombre: u.full_name, correo: u.email, telefono: u.phone, plan: nombrePlan(u.plan), rol: u.role,
+      grupo: u.english_group, nivel: u.nivel, puntos: u.points, lingots: u.lingots, racha: u.racha_dias,
+      dominadas: u.palabras_dominadas, estudiadas: u.palabras_estudiadas,
+      registro: u.creado, ultimo_acceso: u.ultimo_acceso, acepta_contacto: u.consiente_contacto
+    })));
+  };
 
   async function asignarGrupo(userId, nombreGrupo) {
     const { error } = await dbClient.from('profiles').update({ english_group: nombreGrupo }).eq('id', userId);
