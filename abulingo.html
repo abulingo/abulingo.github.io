@@ -973,6 +973,18 @@ function openAbuChat() {
   ============================================================ */
   const modalRoot = document.getElementById('modal-root');
 
+  /* Modo incrustado (?embed=1): listening.html abre el Traductor y el Tutor Abu
+     en un iframe sobre su propia pantalla, para no perder lo que lleva. Solo se
+     ve el modal; al cerrarse (modal-root vacío) se avisa a la página padre. */
+  if (new URLSearchParams(location.search).get('embed') === '1') {
+    const st = document.createElement('style');
+    st.textContent = 'html,body{background:transparent!important}body>*:not(#modal-root):not(script):not(style){display:none!important}';
+    document.head.appendChild(st);
+    new MutationObserver(() => {
+      if (!modalRoot.children.length) parent.postMessage({ abuEmbed: 'cerrar' }, '*');
+    }).observe(modalRoot, { childList: true });
+  }
+
   function closeModal() { modalRoot.innerHTML = ''; stopSpeaking(); marcarHerramientaActiva(null); }
 
   // actions: [{ label, onClick, style }]
@@ -3327,6 +3339,7 @@ function openAbuChat() {
   // estudiante las tiene que repetir; un emoji no se pronuncia.
   const sinEmojis = (t) => String(t || '')
     .replace(/<\/?[a-z][^>]*>/gi, '')
+    .replace(/\*+/g, '')
     .replace(/[\u{1F000}-\u{1FAFF}\u{2190}-\u{2BFF}\u{2600}-\u{27BF}\u{FE00}-\u{FE0F}\u{200D}]/gu, '')
     .replace(/\s{2,}/g, ' ')
     .trim();
@@ -3357,6 +3370,9 @@ function openAbuChat() {
         console.warn(`[${funcion}]`, payload?.error || `HTTP ${resp.status}`);
         return null;
       }
+      // El modelo a veces marca palabras con **negrita** markdown: aquí se muestra texto plano.
+      const limpiar = (t) => typeof t === 'string' ? t.replace(/\*+/g, '') : t;
+      payload.mensajes.forEach(m => { if (m && typeof m === 'object') { m.en = limpiar(m.en); m.es = limpiar(m.es); } });
       return payload;
     } catch (err) {
       console.warn(`[${funcion}]`, err?.name === 'AbortError' ? 'tardó demasiado' : (err?.message || err));
@@ -6990,7 +7006,7 @@ function openAbuChat() {
     const q = new URLSearchParams(window.location.search);
     const tool = q.get('tool'), menu = q.get('menu');
     if (!tool && !menu) return;
-    history.replaceState(null, '', window.location.pathname);
+    history.replaceState(null, '', window.location.pathname + (q.get('embed') === '1' ? '?embed=1' : ''));
     if (tool === 'ia') return openAbuChat();
     if (tool === 'traductor') return openTraductor();
     // El Club ahora vive en el menú de perfil (?menu=club); ?tool=club se
