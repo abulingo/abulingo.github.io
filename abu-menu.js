@@ -689,6 +689,7 @@
     palabras: 'abulingo.html',
     club: 'abulingo.html?menu=club',
     juego: 'mundo_ingles.html',
+    juego2: 'juego2.html',
     fonetica: 'fonetica.html'
   };
 
