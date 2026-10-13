@@ -2544,7 +2544,14 @@ function openAbuChat() {
     // (frases/videos/conversaciones, sección 14 más abajo). pract2.done
     // se marca al elegir "Vocabulario".
     if (!g.pract2 || !g.pract2.done) return mostrarEleccionVocabularioODominar(nivel, group);
-    if (!g.chat || !g.chat.done) return chatPracticeIntro(nivel, group); // 💬 hablar con Abu
+    // Ya no hay charla con Abu al final del vocabulario (la de Dominar se conserva):
+    // al llegar aquí el grupo se da por completado y se avanza.
+    if (!g.completed) {
+      g.chat = { done: true, count: CHAT_GOAL };
+      g.completed = true;
+      flujo.stats.sessionsCompleted = (flujo.stats.sessionsCompleted || 0) + 1;
+      return updateUserFlow().then(() => advanceGroup(nivel, group));
+    }
     return advanceGroup(nivel, group);
   }
 
@@ -3634,7 +3641,27 @@ function openAbuChat() {
     };
     if (!puedeIA()) { await marcarHecho(); return runFlow(); }
 
+    // Antes de pedir el guion a la IA se pregunta: generarlo o saltarlo.
     updateProgressBar(65);
+    appContainer.innerHTML = `
+      <div class="card-3d p-5 animate-pop mt-1 text-center">
+        <span class="bg-teal-100 text-teal-600 px-3 py-1 rounded-full text-xs font-bold uppercase mb-3 inline-block">🎭 Diálogo con tus palabras</span>
+        <h3 class="font-heading font-bold text-slate-800 text-lg mb-1">¿Practicas un diálogo?</h3>
+        <p class="text-sm text-slate-500 mb-4">Abu puede escribir una conversación corta con las palabras que acabas de estudiar para que la practiques hablando o escribiendo.</p>
+        <div class="flex flex-col gap-2">
+          <button id="dg-generar" class="btn-juice bg-[#FF7A00] text-white font-bold py-3 rounded-xl">✨ Generar diálogo</button>
+          <button id="dg-saltar" class="btn-juice bg-slate-100 text-slate-500 font-bold py-3 rounded-xl">Saltar ⏭️</button>
+        </div>
+      </div>`;
+    document.getElementById('dg-saltar').onclick = async (e) => {
+      e.currentTarget.disabled = true;
+      await marcarHecho();
+      runFlow();
+    };
+    document.getElementById('dg-generar').onclick = () => generarDialogoGrupo(nivel, group, words, marcarHecho);
+  }
+
+  async function generarDialogoGrupo(nivel, group, words, marcarHecho) {
     appContainer.innerHTML = `<div class="text-center animate-pulse mt-10"><i class="fas fa-circle-notch fa-spin text-4xl text-[#FF7A00]"></i><p class="text-slate-400 font-bold mt-3">Generando un diálogo con tus palabras...</p></div>`;
 
     const palabras = (words || []).map(w => w.ingles).filter(Boolean).slice(0, 10);
