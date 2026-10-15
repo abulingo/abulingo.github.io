@@ -5629,14 +5629,15 @@ function openAbuChat() {
             ? `Dominaste las <b class="text-green-600">${d.total}</b> palabras del nivel. ¡Tu certificado te espera! 🎉`
             : `Dominadas <b class="text-slate-700">${d.dominadas}</b> de <b class="text-slate-700">${d.total}</b> · <b class="text-[#FF7A00]">te faltan ${d.faltan} palabra${d.faltan === 1 ? '' : 's'}</b> por dominar.`}
         </p>
-        ${d.listo
-          ? `<button class="cert-ask btn-juice bg-green-500 text-white font-bold py-2.5 rounded-xl w-full mt-3" data-nivel="${escapeHTML(d.nivel)}">Pedir certificado 📜</button>`
-          : `<button class="cert-lock w-full mt-3 py-2.5 rounded-xl font-bold bg-slate-100 text-slate-400 cursor-not-allowed" disabled>🔒 Pedir certificado</button>`}
+        ${d.dominadas
+          ? `<button class="cert-prueba btn-juice ${d.listo ? 'bg-green-500' : 'bg-[#FF7A00]'} text-white font-bold py-2.5 rounded-xl w-full mt-3" data-nivel="${escapeHTML(d.nivel)}">📝 Presentar prueba para mi certificado</button>`
+          : `<button class="cert-lock w-full mt-3 py-2.5 rounded-xl font-bold bg-slate-100 text-slate-400 cursor-not-allowed" disabled>🔒 Aún no tienes palabras dominadas</button>`}
       </div>`).join('');
 
     el.innerHTML = `
       <p class="text-slate-500 text-sm text-center mb-4">
         Cuando tengas <b>todas las palabras de un nivel dominadas</b> 🏅 recibes tu <b>certificado de Abulingo</b> de ese nivel.
+        Presenta la prueba para comprobar que de verdad las dominas: te mostramos cada palabra en español y la escribes en inglés.
       </p>
       ${tarjetas}
       <p class="text-[11px] text-slate-400 text-center mt-3">
@@ -5644,12 +5645,186 @@ function openAbuChat() {
         Puedes seguir repasando palabras de niveles anteriores sin cambiar de nivel. 🔁
       </p>`;
 
-    el.querySelectorAll('.cert-ask').forEach(b => {
-      b.onclick = () => {
-        triggerConfetti();
-        window.open(certWhatsAppURL(b.dataset.nivel), '_blank', 'noopener');
-      };
+    el.querySelectorAll('.cert-prueba').forEach(b => {
+      b.onclick = () => iniciarPruebaCert(b.dataset.nivel);
     });
+  }
+
+  /* ---------- Prueba del certificado ----------
+     Toma SOLO las palabras dominadas del nivel y las pregunta una por
+     una: se ve el español (con 🔊 para oír el inglés) y se escribe la
+     palabra en inglés. Si falla, la palabra vuelve a repaso; si acierta,
+     la persona decide si de verdad la domina o prefiere repasarla.
+     Al final se ve la lista de las que domina y las que no.          */
+  let certPrueba = null; // { nivel, palabras, idx, resultados: [{ word, escrito, ok, domina }] }
+
+  // Saca una palabra de "dominadas" y la deja lista para repaso hoy mismo.
+  function desmarcarDominada(wordId) {
+    const s = flujo.srs[String(wordId)];
+    if (!s) return;
+    s.learned = false;
+    s.difficult = true;
+    s.okStreak = 0;
+    s.level = Math.max(0, Math.min(s.level || 0, GRADUATED_LEVEL) - 2);
+    s.due = new Date().toISOString();
+  }
+
+  async function iniciarPruebaCert(nivel) {
+    const el = document.getElementById('cert-body');
+    if (!el) return;
+    el.innerHTML = spinnerHTML();
+
+    let { data } = await dbClient.from('palabras').select('id').eq('nivel', nivel).range(0, 9999);
+    if (!(data || []).length) ({ data } = await dbClient.from('palabras').select('id').ilike('nivel', nivel).range(0, 9999));
+    const ids = (data || []).map(r => r.id).filter(id => flujo.srs[String(id)]?.learned);
+
+    // En tandas para no armar una URL gigante con .in()
+    const palabras = [];
+    for (let i = 0; i < ids.length; i += 150) {
+      const { data: filas, error } = await dbClient.from('palabras').select('*').in('id', ids.slice(i, i + 150));
+      if (error) { console.warn('[Cert] no se pudieron leer las palabras:', error.message); break; }
+      palabras.push(...(filas || []).filter(w => w.ingles));
+    }
+    if (!palabras.length) {
+      el.innerHTML = `<p class="text-slate-400 text-center py-4">No encontramos palabras dominadas del nivel <b>${escapeHTML(nivel)}</b>. 📭</p>
+        <button id="cert-volver" class="btn-juice bg-slate-100 text-slate-500 font-bold py-2.5 rounded-xl w-full mt-2">Volver</button>`;
+      document.getElementById('cert-volver').onclick = renderCertificados;
+      return;
+    }
+    for (let i = palabras.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [palabras[i], palabras[j]] = [palabras[j], palabras[i]]; }
+
+    certPrueba = { nivel, palabras, idx: 0, resultados: [] };
+    renderPreguntaCert();
+  }
+
+  function renderPreguntaCert() {
+    const el = document.getElementById('cert-body');
+    const p = certPrueba;
+    if (!el || !p) return;
+    if (p.idx >= p.palabras.length) return renderResultadoCert();
+
+    const word = p.palabras[p.idx];
+    const pct = Math.round((p.idx / p.palabras.length) * 100);
+    el.innerHTML = `
+      <div class="flex justify-between text-[11px] font-bold text-slate-400 mb-1">
+        <span>📝 Prueba · Nivel ${escapeHTML(p.nivel)}</span><span>${p.idx + 1} / ${p.palabras.length}</span>
+      </div>
+      <div class="progress-track mb-4"><div class="progress-fill" style="width:${pct}%"></div></div>
+      <div class="rounded-2xl border-2 border-slate-200 bg-white p-5 text-center">
+        <p class="text-[11px] font-bold text-slate-400 uppercase mb-1">¿Cómo se dice en inglés?</p>
+        <div class="flex items-center justify-center gap-3 mb-4">
+          <h3 class="font-heading font-black text-2xl text-slate-800">${escapeHTML(word.espanol || '')}</h3>
+          <button id="cert-oir" title="Escuchar en inglés" class="w-11 h-11 shrink-0 rounded-full bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-500 flex items-center justify-center"><i class="fas fa-volume-up"></i></button>
+        </div>
+        <input id="cert-input" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Escribe la palabra en inglés"
+          class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-3 text-center text-lg font-bold focus:outline-none focus:border-[#FF7A00]">
+        <div id="cert-feedback" class="mt-3"></div>
+        <div id="cert-acciones" class="mt-3">
+          <button id="cert-comprobar" class="btn-juice bg-[#FF7A00] text-white font-bold py-3 rounded-xl w-full">Comprobar</button>
+        </div>
+      </div>
+      <button id="cert-terminar" class="w-full text-center text-xs font-bold text-slate-400 hover:text-slate-600 mt-3 py-2">Terminar prueba y ver resultados</button>`;
+
+    const input = document.getElementById('cert-input');
+    document.getElementById('cert-oir').onclick = () => playWordAudio(word);
+    document.getElementById('cert-terminar').onclick = () => renderResultadoCert();
+    const comprobar = () => {
+      if (!input.value.trim()) { input.focus(); return; }
+      responderCert(word, input.value);
+    };
+    document.getElementById('cert-comprobar').onclick = comprobar;
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !input.disabled) comprobar(); });
+    setTimeout(() => input.focus(), 50);
+  }
+
+  function responderCert(word, escrito) {
+    const p = certPrueba;
+    const ok = norm(escrito) === norm(word.ingles);
+    const input = document.getElementById('cert-input');
+    input.disabled = true;
+    input.classList.add(ok ? 'border-green-400' : 'border-red-400', ok ? 'bg-green-50' : 'bg-red-50');
+    playSound(ok ? 'correct' : 'wrong');
+    playWordAudio(word);
+
+    document.getElementById('cert-feedback').innerHTML = ok
+      ? `<p class="text-green-600 font-bold">✅ ¡Correcto! <span class="text-slate-700">${escapeHTML(word.ingles)}</span></p>
+         <p class="text-xs text-slate-500 mt-1">Escúchala otra vez si quieres 🔊 y decide: ¿de verdad la dominas?</p>`
+      : `<p class="text-red-500 font-bold">❌ Era: <span class="text-slate-700">${escapeHTML(word.ingles)}</span></p>
+         <p class="text-xs text-slate-500 mt-1">Esta palabra vuelve a <b>repaso</b> para que la refuerces. 🔁</p>`;
+
+    const acciones = document.getElementById('cert-acciones');
+    const decidir = (domina) => {
+      p.resultados.push({ word, escrito, ok, domina });
+      if (!domina) { desmarcarDominada(word.id); updateUserFlow(); }
+      p.idx++;
+      renderPreguntaCert();
+    };
+    if (ok) {
+      acciones.innerHTML = `
+        <div class="grid grid-cols-2 gap-2">
+          <button id="cert-domino" class="btn-juice bg-green-500 text-white font-bold py-3 rounded-xl">✅ La domino</button>
+          <button id="cert-repasar" class="btn-juice bg-orange-100 text-[#FF7A00] font-bold py-3 rounded-xl">🔁 Repasarla</button>
+        </div>`;
+      document.getElementById('cert-domino').onclick = () => decidir(true);
+      document.getElementById('cert-repasar').onclick = () => decidir(false);
+    } else {
+      acciones.innerHTML = `<button id="cert-siguiente" class="btn-juice bg-[#FF7A00] text-white font-bold py-3 rounded-xl w-full">Siguiente 👉</button>`;
+      const sig = document.getElementById('cert-siguiente');
+      sig.onclick = () => decidir(false);
+      setTimeout(() => sig.focus(), 50);
+    }
+  }
+
+  async function renderResultadoCert() {
+    const el = document.getElementById('cert-body');
+    const p = certPrueba;
+    if (!el || !p) return;
+    certPrueba = null;
+    stopSpeaking();
+
+    const domina = p.resultados.filter(r => r.domina);
+    const repasar = p.resultados.filter(r => !r.domina);
+    const sinResponder = p.palabras.length - p.resultados.length;
+    const cert = await getCertProgreso(p.nivel);
+    const aprobada = cert.listo && !repasar.length && !sinResponder;
+    if (aprobada) { playSound('complete'); triggerConfetti(); }
+
+    const fila = (r) => `
+      <li class="flex items-center gap-2 py-1.5 border-b border-slate-100 last:border-0">
+        <button class="cert-res-oir w-8 h-8 shrink-0 rounded-full bg-slate-100 text-slate-500 text-xs" data-id="${r.word.id}"><i class="fas fa-volume-up"></i></button>
+        <span class="font-bold text-slate-700">${escapeHTML(r.word.ingles)}</span>
+        <span class="text-slate-400 text-sm">· ${escapeHTML(r.word.espanol || '')}</span>
+        ${!r.ok ? `<span class="ml-auto text-[11px] text-red-400 line-through">${escapeHTML(r.escrito)}</span>` : ''}
+      </li>`;
+
+    el.innerHTML = `
+      <div class="text-center mb-4">
+        <div class="text-4xl mb-1">${aprobada ? '🎓' : '📋'}</div>
+        <h3 class="font-heading font-black text-xl text-slate-800">${aprobada ? '¡Prueba aprobada!' : 'Resultados de la prueba'}</h3>
+        <p class="text-sm text-slate-500">Nivel ${escapeHTML(p.nivel)} · respondiste ${p.resultados.length} de ${p.palabras.length} palabras</p>
+      </div>
+      <div class="grid grid-cols-2 gap-2 mb-4">
+        <div class="bg-green-50 rounded-xl p-3 text-center"><div class="text-2xl font-black text-green-600">${domina.length}</div><div class="text-[10px] font-bold text-slate-400 uppercase">Las dominas 🏅</div></div>
+        <div class="bg-orange-50 rounded-xl p-3 text-center"><div class="text-2xl font-black text-[#FF7A00]">${repasar.length}</div><div class="text-[10px] font-bold text-slate-400 uppercase">Vuelven a repaso 🔁</div></div>
+      </div>
+      ${repasar.length ? `
+        <p class="text-xs font-black text-[#FF7A00] uppercase mb-1">🔁 Te faltan por dominar</p>
+        <ul class="bg-orange-50/50 rounded-xl px-3 mb-4">${repasar.map(fila).join('')}</ul>` : ''}
+      ${domina.length ? `
+        <p class="text-xs font-black text-green-600 uppercase mb-1">✅ Ya las dominas</p>
+        <ul class="bg-green-50/50 rounded-xl px-3 mb-4">${domina.map(fila).join('')}</ul>` : ''}
+      ${sinResponder ? `<p class="text-xs text-slate-400 text-center mb-3">Quedaron ${sinResponder} palabra${sinResponder === 1 ? '' : 's'} sin responder: siguen como dominadas.</p>` : ''}
+      ${aprobada
+        ? `<button id="cert-pedir" class="btn-juice bg-green-500 text-white font-bold py-3 rounded-xl w-full mb-2">Pedir mi certificado 📜</button>`
+        : `<p class="text-xs text-slate-500 text-center mb-3">Para pedir el certificado necesitas tener todas las palabras del nivel dominadas y aprobar la prueba completa. 💪</p>`}
+      <button id="cert-volver" class="btn-juice bg-slate-100 text-slate-500 font-bold py-2.5 rounded-xl w-full">Volver a certificados</button>`;
+
+    const porId = new Map(p.resultados.map(r => [String(r.word.id), r.word]));
+    el.querySelectorAll('.cert-res-oir').forEach(b => { b.onclick = () => playWordAudio(porId.get(b.dataset.id)); });
+    document.getElementById('cert-volver').onclick = renderCertificados;
+    const pedir = document.getElementById('cert-pedir');
+    if (pedir) pedir.onclick = () => { triggerConfetti(); window.open(certWhatsAppURL(p.nivel), '_blank', 'noopener'); };
+    if (repasar.length) await updateUserFlow();
   }
 
   function actualizarBadgeCertificados() {
