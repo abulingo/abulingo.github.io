@@ -7,14 +7,16 @@
 
 /* ---------- Tiempo: hora, día/noche y clima ---------- */
 const hourNow = () => Math.floor(clockMin / 60) % 24;
+// De noche solo se tiñe un poco de azul: antes llegaba a 0.55 y no se veía casi nada.
+const NOCHE_MAX = 0.18;
 function darkness() {
   const h = (clockMin / 60) % 24;
   if (h >= 7 && h < 18) return 0;
-  if (h >= 18 && h < 20.5) return (h - 18) / 2.5 * 0.55;
-  if (h >= 5 && h < 7) return (7 - h) / 2 * 0.55;
-  return 0.55;
+  if (h >= 18 && h < 20.5) return (h - 18) / 2.5 * NOCHE_MAX;
+  if (h >= 5 && h < 7) return (7 - h) / 2 * NOCHE_MAX;
+  return NOCHE_MAX;
 }
-const isDark = () => darkness() > 0.25;
+const isDark = () => darkness() > NOCHE_MAX * 0.45;
 const phaseName = () => I.greeting(hourNow())[2];
 function skyColors() {
   const h = (clockMin / 60) % 24;
@@ -23,7 +25,7 @@ function skyColors() {
   if (h >= 5.5 && h < 7) return SKIES.evening;
   return SKIES.day;
 }
-const grassColor = () => Gen.mix('#7cb461', '#27402c', darkness() / 0.55 * 0.7);
+const grassColor = () => Gen.mix('#7cb461', '#27402c', darkness() / NOCHE_MAX * 0.25);
 function clockText() {
   const h = hourNow(), m = Math.floor(clockMin % 60);
   return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`;

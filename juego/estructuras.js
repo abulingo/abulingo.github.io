@@ -751,7 +751,7 @@
   });
   def('moon', 80, 80, (g, t, s) => {
     g.globalAlpha = s && s.noche ? 1 : 0.55;
-    circle(g, 0, -40, 28, '#fffde7'); circle(g, 12, -46, 25, s && s.noche ? '#0b1320' : '#9ecae9');
+    circle(g, 0, -40, 28, '#fffde7'); circle(g, 12, -46, 25, s && s.noche ? '#3b4f8c' : '#9ecae9');
     circle(g, -8, -34, 4, 'rgba(0,0,0,.08)'); g.globalAlpha = 1;
   });
   def('star', 40, 40, (g, t, s) => {

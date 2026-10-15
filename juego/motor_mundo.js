@@ -87,7 +87,7 @@ const conPalabra = (lec, en) => Object.assign(lec, { wordId: palabraId(en) });
 /* ============================================================================
    GENERACIÓN
 ============================================================================ */
-const SKIES = { day: { top: '#5fa8d3', bottom: '#cfe8f5' }, evening: { top: '#6a4c93', bottom: '#f6a55c' }, night: { top: '#0b1320', bottom: '#243b55' } };
+const SKIES = { day: { top: '#5fa8d3', bottom: '#cfe8f5' }, evening: { top: '#6a4c93', bottom: '#f6a55c' }, night: { top: '#3b4f8c', bottom: '#7d94c4' } };
 
 function genWorld(seed) {
   const R = Gen.makeRand(seed);

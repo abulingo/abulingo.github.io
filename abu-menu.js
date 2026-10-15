@@ -690,6 +690,7 @@
     club: 'abulingo.html?menu=club',
     juego: 'mundo_ingles.html',
     juego2: 'juego2.html',
+    juego3: 'juego3.html',
     fonetica: 'fonetica.html'
   };
 
