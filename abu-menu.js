@@ -36,7 +36,7 @@
     ABULINGO_URL: 'https://abulingo.github.io/',
     CERT_WHATSAPP_URL: 'https://wa.me/573163748711',
     WHATSAPP_COMUNIDAD_URL: 'https://chat.whatsapp.com/FItyG5Nyj0FJmjtk9Fjpvx',
-    NIVELES_FIJOS: ['A1', 'A2', 'B1', 'B2'],
+    NIVELES_FIJOS: ['A1', 'A2', 'B1', 'B2', 'C1'],
     MISION_PALABRAS_DIA: 30,
     MISION_FRASES_DIA: 5,
     MISION_RECOMPENSA_LINGOTS: 2,
