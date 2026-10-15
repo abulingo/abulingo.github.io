@@ -6026,8 +6026,15 @@ function openAbuChat() {
 
       ${huerfanas.length ? `<p class="text-[11px] text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5 mb-3">${huerfanas.length} palabra(s) de tu mazo no están en la base de datos y no se pueden practicar: ${escapeHTML(huerfanas.slice(0, 4).map(f => f.ingles).join(', '))}${huerfanas.length > 4 ? '…' : ''}</p>` : ''}
 
+      <div class="bg-blue-50 border-2 border-blue-100 rounded-xl p-3 mb-3">
+        <p class="font-bold text-slate-700 text-sm mb-1">🎯 Añadir las palabras que aún no dominas</p>
+        <p class="text-[11px] text-slate-500 mb-2">Elige un nivel y pasa a tu mazo las palabras que todavía no tienes dominadas.</p>
+        <div id="mz-niveles" class="flex flex-wrap gap-1.5">${spinnerHTML()}</div>
+        <div id="mz-nivel-info" class="mt-2"></div>
+      </div>
+
       <div class="bg-slate-50 rounded-xl p-3 mb-3 text-sm text-slate-500 space-y-1">
-        <p class="font-bold text-slate-700 mb-1">📋 ${tiene ? 'Añadir más palabras' : 'Crea tu mazo en 3 pasos'}</p>
+        <p class="font-bold text-slate-700 mb-1">📋 ${tiene ? 'Añadir más palabras desde Excel' : 'O crea tu mazo con un Excel'}</p>
         <p>1️⃣ Un Excel con una columna llamada <b class="text-slate-700">ingles</b>.</p>
         <p>2️⃣ Una palabra en inglés por fila (ej: <i>dog, house, water...</i>).</p>
         <p>3️⃣ Cárgalo: las palabras quedan <b>guardadas</b> y el Excel ya no hace falta nunca más. ✨</p>
@@ -6072,6 +6079,77 @@ function openAbuChat() {
 
     const fileInput = document.getElementById('mz-file');
     if (fileInput) fileInput.onchange = (e) => procesarExcelMazo(e.target.files[0]);
+
+    renderNivelesMazo(filas);
+  }
+
+  /* ---------- Añadir al mazo las no dominadas de un nivel ----------
+     "Estudiadas" = ya tienen registro SRS pero no están dominadas.
+     "Todas" incluye además las que aún no has visto.                 */
+  async function renderNivelesMazo(filas) {
+    const cont = document.getElementById('mz-niveles');
+    if (!cont) return;
+    const conContenido = await getNiveles();
+    const niveles = sortNiveles([...new Set([...NIVELES_FIJOS, ...conContenido])]).filter(n => conContenido.includes(n));
+    if (!document.getElementById('mz-niveles')) return;
+    cont.innerHTML = niveles.length
+      ? niveles.map(n => `<button class="mz-nivel btn-juice bg-white border border-blue-200 text-blue-600 font-black text-sm px-4 py-2 rounded-xl" data-nivel="${escapeHTML(n)}">${escapeHTML(n)}</button>`).join('')
+      : `<p class="text-xs text-slate-400">No hay niveles con palabras.</p>`;
+    cont.querySelectorAll('.mz-nivel').forEach(b => {
+      b.onclick = () => {
+        cont.querySelectorAll('.mz-nivel').forEach(x => x.classList.remove('bg-blue-500', 'text-white'));
+        b.classList.add('bg-blue-500', 'text-white');
+        mostrarNoDominadasNivel(b.dataset.nivel, filas);
+      };
+    });
+  }
+
+  async function mostrarNoDominadasNivel(nivel, filas) {
+    const info = document.getElementById('mz-nivel-info');
+    if (!info) return;
+    info.innerHTML = spinnerHTML();
+
+    let { data } = await dbClient.from('palabras').select('id, ingles, espanol').eq('nivel', nivel).order('id', { ascending: true }).range(0, 9999);
+    if (!(data || []).length) ({ data } = await dbClient.from('palabras').select('id, ingles, espanol').ilike('nivel', nivel).order('id', { ascending: true }).range(0, 9999));
+    const enMazo = new Set((filas || []).map(f => (f.ingles || '').toLowerCase()));
+    const noDominadas = (data || []).filter(w => w.ingles && !flujo.srs[String(w.id)]?.learned && !enMazo.has(w.ingles.toLowerCase()));
+    const estudiadas = noDominadas.filter(w => flujo.srs[String(w.id)]);
+
+    if (!noDominadas.length) {
+      info.innerHTML = `<p class="text-xs font-bold text-green-600 text-center">🏅 No te quedan palabras sin dominar del nivel ${escapeHTML(nivel)} fuera de tu mazo.</p>`;
+      return;
+    }
+    info.innerHTML = `
+      <div class="flex flex-col gap-2">
+        ${estudiadas.length ? `<button id="mz-add-est" class="btn-juice bg-blue-500 text-white font-bold py-2.5 rounded-xl text-sm">➕ Añadir las ${estudiadas.length} que ya estudié pero no domino</button>` : ''}
+        <button id="mz-add-todas" class="btn-juice ${estudiadas.length ? 'bg-white border border-blue-200 text-blue-600' : 'bg-blue-500 text-white'} font-bold py-2.5 rounded-xl text-sm">➕ Añadir todas las no dominadas (${noDominadas.length})</button>
+      </div>
+      <p id="mz-add-st" class="text-xs text-slate-500 font-bold mt-2 text-center"></p>`;
+
+    const anadir = async (lista, btn) => {
+      btn.disabled = true;
+      const st = document.getElementById('mz-add-st');
+      if (st) st.textContent = `⏳ Añadiendo ${lista.length} palabra(s)...`;
+      for (let i = 0; i < lista.length; i += 200) {
+        const { error } = await dbClient.from('mazo').insert(
+          lista.slice(i, i + 200).map(w => ({ user_id: currentUser.id, ingles: w.ingles, espanol: w.espanol, word_id: w.id }))
+        );
+        if (error) {
+          console.error('[mazo] insert nivel:', error);
+          if (st) st.textContent = '❌ No se pudo guardar: ' + error.message;
+          btn.disabled = false;
+          return;
+        }
+      }
+      await limpiarMazoFlujo(); // el mazo cambió: la práctica a medias ya no cuadra
+      await refreshMazoBadge();
+      showToast(`🃏 ${lista.length} palabra(s) del nivel ${nivel} añadidas a tu mazo`);
+      openMazo();
+    };
+    const bEst = document.getElementById('mz-add-est');
+    if (bEst) bEst.onclick = () => anadir(estudiadas, bEst);
+    const bTodas = document.getElementById('mz-add-todas');
+    bTodas.onclick = () => anadir(noDominadas, bTodas);
   }
 
   /* Carga bajo demanda de SheetJS. Devuelve true si quedó disponible.
