@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#2bb3e6">
+<title>Abulingo - Abu Island (Juego 5)</title>
+<meta name="description" content="Juego 5 de Abulingo: construye tu propia isla mientras aprendes inglés. Edificios que producen monedas, vecinos que hablan inglés, pedidos, ruleta diaria y mucho más.">
+<link rel="icon" href="icono.png" type="image/x-icon">
+<link rel="preconnect" href="https://eylwewhqeaaqkgcxhgyv.supabase.co" crossorigin>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<style>
+  :root { --naranja: #FF7A00; --oro: #ffc61a; --verde: #22c55e; --azul: #0ea5e9; --morado: #8b5cf6; --texto: #1f2937; --panel: #fffdf7; }
+  * { box-sizing: border-box; margin: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; overflow: hidden; background: #2bb3e6; overscroll-behavior: none; }
+  body { font: 15px/1.35 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--texto); user-select: none; -webkit-user-select: none; }
+  canvas { display: block; position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100dvh; touch-action: none; }
+  button { font: inherit; cursor: pointer; border: 0; color: inherit; }
+  .oculto { display: none !important; }
+
+  /* HUD */
+  #hud { position: fixed; left: 0; right: 0; top: 0; padding: calc(env(safe-area-inset-top) + 8px) 8px 0; display: flex; gap: 6px; align-items: center; z-index: 5; pointer-events: none; flex-wrap: wrap; }
+  #hud > * { pointer-events: auto; }
+  .pill { display: inline-flex; align-items: center; gap: 5px; background: rgba(255,255,255,.95); border-radius: 99px; padding: 5px 11px 5px 6px; font-weight: 900; box-shadow: 0 3px 0 rgba(0,0,0,.15); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .pill i { font-style: normal; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-size: 15px; }
+  #pNivel { position: relative; padding-right: 12px; }
+  #pNivel i { background: linear-gradient(135deg, #a78bfa, #7c3aed); color: #fff; font-size: 13px; }
+  .xp { width: 64px; height: 8px; border-radius: 99px; background: #e5e7eb; overflow: hidden; }
+  .xp b { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #a78bfa, #ec4899); transition: width .5s; }
+  #pMonedas i { background: #fff3c4; }
+  #pGemas i { background: #e0f2fe; }
+  #btnVolver { margin-left: auto; background: var(--naranja); color: #fff; padding: 7px 12px; text-decoration: none; font-weight: 900; border-radius: 99px; box-shadow: 0 3px 0 #c2570a; }
+  .pop { animation: pop .35s cubic-bezier(.3,1.8,.5,1); }
+  @keyframes pop { 40% { transform: scale(1.25); } }
+
+  /* Barra inferior */
+  #barra { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 10px); transform: translateX(-50%); display: flex; gap: 8px; z-index: 5; }
+  .bb { position: relative; width: 62px; height: 62px; border-radius: 20px; background: #fff; box-shadow: 0 5px 0 rgba(0,0,0,.18); display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 26px; line-height: 1; }
+  .bb small { font-size: 10px; font-weight: 900; margin-top: 3px; color: #475569; }
+  .bb:active { transform: translateY(3px); box-shadow: 0 2px 0 rgba(0,0,0,.18); }
+  .bb.activo { background: #fff3c4; outline: 3px solid var(--oro); }
+  .bb .punto { position: absolute; right: -4px; top: -4px; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 99px; background: #ef4444; color: #fff; font-size: 12px; font-weight: 900; display: grid; place-items: center; animation: late 1s infinite; }
+  @keyframes late { 50% { transform: scale(1.15); } }
+
+  /* Modo construir */
+  #construir { position: fixed; left: 8px; right: 8px; bottom: calc(env(safe-area-inset-bottom) + 84px); z-index: 6; background: rgba(255,255,255,.97); border-radius: 22px; padding: 10px; box-shadow: 0 8px 30px rgba(0,0,0,.25); }
+  #construir h3 { font-size: 13px; font-weight: 900; color: #64748b; display: flex; justify-content: space-between; margin: 0 4px 6px; }
+  #tienda { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 6px; scroll-snap-type: x mandatory; }
+  .prod { flex: none; width: 96px; scroll-snap-align: start; border-radius: 16px; background: #f8fafc; border: 2px solid #e2e8f0; padding: 6px 4px; text-align: center; position: relative; }
+  .prod.sel { border-color: var(--oro); background: #fff8db; box-shadow: 0 0 0 3px rgba(255,198,26,.35); }
+  .prod.bloq { opacity: .45; }
+  .prod .e { font-size: 34px; line-height: 1.1; }
+  .prod b { display: block; font-size: 13px; }
+  .prod span { display: block; font-size: 11px; color: #64748b; }
+  .prod em { display: block; font-style: normal; font-weight: 900; font-size: 12px; margin-top: 2px; }
+  .prod .cand { position: absolute; inset: 0; display: grid; place-items: center; font-size: 11px; font-weight: 900; color: #475569; background: rgba(255,255,255,.6); border-radius: 14px; }
+  #ayudaConstruir { font-size: 12px; color: #64748b; text-align: center; margin-top: 2px; }
+
+  /* Modales */
+  .velo { position: fixed; inset: 0; z-index: 20; background: rgba(15,23,42,.55); display: grid; place-items: center; padding: 14px; animation: aparece .2s; }
+  @keyframes aparece { from { opacity: 0; } }
+  .modal { width: min(420px, 100%); max-height: 92vh; overflow-y: auto; background: var(--panel); border-radius: 26px; padding: 18px; text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,.35); animation: sube .35s cubic-bezier(.2,1.5,.4,1); }
+  @keyframes sube { from { transform: translateY(40px) scale(.9); opacity: 0; } }
+  .modal h2 { font-size: 22px; font-weight: 1000; margin-bottom: 4px; }
+  .modal p.sub { color: #64748b; font-size: 14px; margin-bottom: 12px; }
+  .grande { font-size: 64px; line-height: 1.1; }
+  .btn { display: block; width: 100%; padding: 13px; border-radius: 16px; font-weight: 900; font-size: 17px; margin-top: 10px; color: #fff; background: var(--verde); box-shadow: 0 5px 0 #15803d; }
+  .btn:active { transform: translateY(3px); box-shadow: 0 2px 0 #15803d; }
+  .btn.naranja { background: var(--naranja); box-shadow: 0 5px 0 #c2570a; }
+  .btn.morado { background: var(--morado); box-shadow: 0 5px 0 #5b21b6; }
+  .btn.gris { background: #e2e8f0; color: #334155; box-shadow: 0 5px 0 #cbd5e1; }
+  .opciones { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+  .op { padding: 14px 6px; border-radius: 16px; background: #fff; border: 2px solid #e2e8f0; font-weight: 900; font-size: 16px; box-shadow: 0 4px 0 #e2e8f0; }
+  .op:active { transform: translateY(2px); }
+  .op.bien { background: #dcfce7; border-color: var(--verde); box-shadow: 0 4px 0 #86efac; }
+  .op.mal { background: #fee2e2; border-color: #ef4444; box-shadow: 0 4px 0 #fca5a5; animation: no .3s; }
+  @keyframes no { 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
+  .pregunta { margin: 6px 0; }
+  .pregunta img { width: 130px; height: 130px; object-fit: cover; border-radius: 20px; background: #fff; box-shadow: 0 4px 14px rgba(0,0,0,.12); }
+  .pregunta .es { font-size: 28px; font-weight: 1000; }
+  .oir { width: 64px; height: 64px; border-radius: 50%; font-size: 28px; background: linear-gradient(135deg, #38bdf8, #2563eb); color: #fff; box-shadow: 0 5px 0 #1e40af; }
+  .chips { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; margin: 6px 0; }
+  .chip { background: #f1f5f9; border-radius: 99px; padding: 4px 10px; font-weight: 900; font-size: 13px; }
+  .barraP { height: 10px; border-radius: 99px; background: #e2e8f0; overflow: hidden; margin: 8px 0; }
+  .barraP b { display: block; height: 100%; background: linear-gradient(90deg, #22c55e, #84cc16); transition: width .3s; }
+
+  /* Pedidos */
+  .pedido { display: flex; gap: 10px; align-items: center; text-align: left; padding: 10px; border-radius: 18px; background: #fff; border: 2px solid #e2e8f0; margin-top: 8px; }
+  .pedido .cara { font-size: 36px; }
+  .pedido div { flex: 1; min-width: 0; }
+  .pedido b { display: block; }
+  .pedido span { font-size: 12.5px; color: #64748b; }
+  .pedido button { padding: 9px 12px; border-radius: 14px; background: var(--verde); color: #fff; font-weight: 900; box-shadow: 0 3px 0 #15803d; }
+  .pedido button:disabled { background: #cbd5e1; box-shadow: 0 3px 0 #94a3b8; }
+
+  /* Ruleta */
+  #ruleta { width: 260px; height: 260px; margin: 6px auto; position: relative; }
+  #ruleta canvas { position: static; width: 260px; height: 260px; transition: transform 4s cubic-bezier(.15,.85,.2,1); }
+  #ruleta::after { content: '▼'; position: absolute; top: -12px; left: 50%; transform: translateX(-50%); font-size: 28px; color: #ef4444; text-shadow: 0 2px 0 #fff; }
+
+  /* Diccionario */
+  .dicc { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 10px; }
+  .dicc button { background: #fff; border: 2px solid #e2e8f0; border-radius: 14px; padding: 6px 2px; }
+  .dicc button.no { opacity: .35; filter: grayscale(1); }
+  .dicc .e { font-size: 28px; }
+  .dicc b { display: block; font-size: 12px; }
+  .dicc span { display: block; font-size: 10.5px; color: #64748b; }
+
+  #toast { position: fixed; left: 50%; top: calc(env(safe-area-inset-top) + 64px); transform: translateX(-50%); background: #1e293b; color: #fff; padding: 9px 16px; border-radius: 99px; font-weight: 800; z-index: 30;
+    opacity: 0; transition: opacity .25s, transform .25s; pointer-events: none; white-space: nowrap; max-width: 92vw; overflow: hidden; text-overflow: ellipsis; }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(4px); }
+  #confeti { position: fixed; inset: 0; pointer-events: none; z-index: 40; }
+</style>
+</head>
+<body>
+<canvas id="mundo"></canvas>
+
+<div id="hud">
+  <span class="pill" id="pNivel"><i id="hNivel">1</i><span class="xp"><b id="hXp"></b></span></span>
+  <span class="pill" id="pMonedas"><i>🪙</i><span id="hMonedas">0</span></span>
+  <span class="pill" id="pGemas"><i>💎</i><span id="hGemas">0</span></span>
+  <a id="btnVolver" href="abulingo.html">← Salir</a>
+</div>
+
+<div id="construir" class="oculto">
+  <h3><span>🔨 Construir · toca un lugar libre de la isla</span><span id="cerrarConstruir" style="cursor:pointer">✕</span></h3>
+  <div id="tienda"></div>
+  <div id="ayudaConstruir">Cada edificio produce monedas 🪙 aunque no estés jugando</div>
+</div>
+
+<div id="barra">
+  <button class="bb" id="bConstruir">🔨<small>Construir</small></button>
+  <button class="bb" id="bPedidos">📜<small>Pedidos</small><span class="punto oculto" id="nPedidos"></span></button>
+  <button class="bb" id="bRuleta">🎡<small>Ruleta</small><span class="punto oculto" id="nRuleta">!</span></button>
+  <button class="bb" id="bDicc">📖<small>Palabras</small></button>
+  <button class="bb" id="bMas">⚙️<small>Más</small></button>
+</div>
+
+<div id="toast"></div>
+<canvas id="confeti"></canvas>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.1/dist/umd/supabase.min.js"></script>
+<script src="abu-progreso.js"></script>
+<script src="juego/isla.js"></script>
+</body>
+</html>
