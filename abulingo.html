@@ -5566,8 +5566,9 @@ function openAbuChat() {
     const ids = (data || []).map(r => String(r.id));
     const total = ids.length;
     const dominadas = ids.filter(id => flujo.srs[id] && flujo.srs[id].learned).length;
+    const aprobadas = ids.filter(id => flujo.srs[id] && flujo.srs[id].learned && flujo.srs[id].cert).length;
     return {
-      nivel, total, dominadas,
+      nivel, total, dominadas, aprobadas,
       faltan: Math.max(0, total - dominadas),
       pct: total ? Math.round((dominadas / total) * 100) : 0,
       listo: total > 0 && dominadas >= total
@@ -5623,7 +5624,9 @@ function openAbuChat() {
             : `Dominadas <b class="text-slate-700">${d.dominadas}</b> de <b class="text-slate-700">${d.total}</b> · <b class="text-[#FF7A00]">te faltan ${d.faltan} palabra${d.faltan === 1 ? '' : 's'}</b> por dominar.`}
         </p>
         ${d.dominadas
-          ? `<button class="cert-prueba btn-juice ${d.listo ? 'bg-green-500' : 'bg-[#FF7A00]'} text-white font-bold py-2.5 rounded-xl w-full mt-3" data-nivel="${escapeHTML(d.nivel)}">📝 Presentar prueba para mi certificado</button>`
+          ? `<button class="cert-prueba btn-juice ${d.listo ? 'bg-green-500' : 'bg-[#FF7A00]'} text-white font-bold py-2.5 rounded-xl w-full mt-3" data-nivel="${escapeHTML(d.nivel)}">${d.aprobadas
+              ? (d.aprobadas >= d.dominadas ? `✅ Prueba al día (${d.aprobadas} aprobadas)` : `📝 Continuar prueba · ${d.aprobadas}/${d.dominadas} aprobadas`)
+              : '📝 Presentar prueba para mi certificado'}</button>`
           : `<button class="cert-lock w-full mt-3 py-2.5 rounded-xl font-bold bg-slate-100 text-slate-400 cursor-not-allowed" disabled>🔒 Aún no tienes palabras dominadas</button>`}
       </div>`).join('');
 
@@ -5648,7 +5651,10 @@ function openAbuChat() {
      una: se ve el español (con 🔊 para oír el inglés) y se escribe la
      palabra en inglés. Si falla, la palabra vuelve a repaso; si acierta,
      la persona decide si de verdad la domina o prefiere repasarla.
-     Al final se ve la lista de las que domina y las que no.          */
+     Al final se ve la lista de las que domina y las que no.
+     El avance se guarda: cada palabra marcada "La domino" queda con
+     srs.cert (fecha) y no vuelve a salir en la prueba. Si luego deja
+     de estar dominada (fallo o "Repasarla"), pierde esa marca.       */
   let certPrueba = null; // { nivel, palabras, idx, resultados: [{ word, escrito, ok, domina }] }
 
   // Saca una palabra de "dominadas" y la deja lista para repaso hoy mismo.
@@ -5656,6 +5662,7 @@ function openAbuChat() {
     const s = flujo.srs[String(wordId)];
     if (!s) return;
     s.learned = false;
+    delete s.cert;
     s.difficult = true;
     s.okStreak = 0;
     s.level = Math.max(0, Math.min(s.level || 0, GRADUATED_LEVEL) - 2);
@@ -5669,7 +5676,31 @@ function openAbuChat() {
 
     let { data } = await dbClient.from('palabras').select('id').eq('nivel', nivel).range(0, 9999);
     if (!(data || []).length) ({ data } = await dbClient.from('palabras').select('id').ilike('nivel', nivel).range(0, 9999));
-    const ids = (data || []).map(r => r.id).filter(id => flujo.srs[String(id)]?.learned);
+    const dominadasNivel = (data || []).map(r => r.id).filter(id => flujo.srs[String(id)]?.learned);
+    const ids = dominadasNivel.filter(id => !flujo.srs[String(id)].cert);
+    const yaAprobadas = dominadasNivel.length - ids.length;
+    if (dominadasNivel.length && !ids.length) {
+      const cert = await getCertProgreso(nivel);
+      el.innerHTML = `<div class="text-center py-2">
+          <div class="text-4xl mb-1">${cert.listo ? '🎓' : '✅'}</div>
+          <h3 class="font-heading font-black text-xl text-slate-800">${cert.listo ? '¡Prueba aprobada!' : '¡Al día con la prueba!'}</h3>
+          <p class="text-sm text-slate-500 mt-1">Ya aprobaste las <b>${yaAprobadas}</b> palabras que tienes dominadas del nivel ${escapeHTML(nivel)}.
+          ${cert.listo ? '' : `Cuando domines las ${cert.faltan} que te faltan, vuelve aquí: solo te preguntaremos esas.`}</p>
+        </div>
+        ${cert.listo ? `<button id="cert-pedir" class="btn-juice bg-green-500 text-white font-bold py-3 rounded-xl w-full mt-3">Pedir mi certificado 📜</button>` : ''}
+        <button id="cert-reiniciar" class="w-full text-center text-xs font-bold text-slate-400 hover:text-slate-600 mt-3 py-2">↺ Empezar la prueba desde cero</button>
+        <button id="cert-volver" class="btn-juice bg-slate-100 text-slate-500 font-bold py-2.5 rounded-xl w-full mt-1">Volver a certificados</button>`;
+      document.getElementById('cert-volver').onclick = renderCertificados;
+      const pedir = document.getElementById('cert-pedir');
+      if (pedir) pedir.onclick = () => { triggerConfetti(); window.open(certWhatsAppURL(nivel), '_blank', 'noopener'); };
+      document.getElementById('cert-reiniciar').onclick = async () => {
+        if (!confirm(`¿Volver a presentar las ${yaAprobadas} palabras del nivel ${nivel}? Se borra el avance de la prueba (no las palabras dominadas).`)) return;
+        dominadasNivel.forEach(id => { delete flujo.srs[String(id)].cert; });
+        await updateUserFlow();
+        iniciarPruebaCert(nivel);
+      };
+      return;
+    }
 
     // En tandas para no armar una URL gigante con .in()
     const palabras = [];
@@ -5686,7 +5717,8 @@ function openAbuChat() {
     }
     for (let i = palabras.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [palabras[i], palabras[j]] = [palabras[j], palabras[i]]; }
 
-    certPrueba = { nivel, palabras, idx: 0, resultados: [] };
+    certPrueba = { nivel, palabras, idx: 0, resultados: [], yaAprobadas };
+    if (yaAprobadas) showToast(`💾 Retomas tu prueba: ya aprobaste ${yaAprobadas}, te quedan ${palabras.length}.`);
     renderPreguntaCert();
   }
 
@@ -5700,7 +5732,7 @@ function openAbuChat() {
     const pct = Math.round((p.idx / p.palabras.length) * 100);
     el.innerHTML = `
       <div class="flex justify-between text-[11px] font-bold text-slate-400 mb-1">
-        <span>📝 Prueba · Nivel ${escapeHTML(p.nivel)}</span><span>${p.idx + 1} / ${p.palabras.length}</span>
+        <span>📝 Prueba · Nivel ${escapeHTML(p.nivel)}${p.yaAprobadas ? ` · ✅ ${p.yaAprobadas} ya aprobadas` : ''}</span><span>${p.idx + 1} / ${p.palabras.length}</span>
       </div>
       <div class="progress-track mb-4"><div class="progress-fill" style="width:${pct}%"></div></div>
       <div class="rounded-2xl border-2 border-slate-200 bg-white p-5 text-center">
@@ -5748,7 +5780,9 @@ function openAbuChat() {
     const acciones = document.getElementById('cert-acciones');
     const decidir = (domina) => {
       p.resultados.push({ word, escrito, ok, domina });
-      if (!domina) { desmarcarDominada(word.id); updateUserFlow(); }
+      if (!domina) desmarcarDominada(word.id);
+      else if (flujo.srs[String(word.id)]) flujo.srs[String(word.id)].cert = new Date().toISOString().slice(0, 10);
+      updateUserFlow();   // se guarda en cada respuesta: si sales, retomas aquí
       p.idx++;
       renderPreguntaCert();
     };
@@ -5779,7 +5813,7 @@ function openAbuChat() {
     const repasar = p.resultados.filter(r => !r.domina);
     const sinResponder = p.palabras.length - p.resultados.length;
     const cert = await getCertProgreso(p.nivel);
-    const aprobada = cert.listo && !repasar.length && !sinResponder;
+    const aprobada = cert.listo && !repasar.length && !sinResponder; // las ya aprobadas antes no se vuelven a preguntar
     if (aprobada) { playSound('complete'); triggerConfetti(); }
 
     const fila = (r) => `
@@ -5806,7 +5840,8 @@ function openAbuChat() {
       ${domina.length ? `
         <p class="text-xs font-black text-green-600 uppercase mb-1">✅ Ya las dominas</p>
         <ul class="bg-green-50/50 rounded-xl px-3 mb-4">${domina.map(fila).join('')}</ul>` : ''}
-      ${sinResponder ? `<p class="text-xs text-slate-400 text-center mb-3">Quedaron ${sinResponder} palabra${sinResponder === 1 ? '' : 's'} sin responder: siguen como dominadas.</p>` : ''}
+      ${p.yaAprobadas ? `<p class="text-xs text-green-600 text-center mb-2">✅ Más ${p.yaAprobadas} que ya habías aprobado antes (no se vuelven a preguntar).</p>` : ''}
+      ${sinResponder ? `<p class="text-xs text-slate-400 text-center mb-3">💾 Quedaron ${sinResponder} palabra${sinResponder === 1 ? '' : 's'} sin responder: tu avance está guardado y la próxima vez sigues con esas.</p>` : ''}
       ${aprobada
         ? `<button id="cert-pedir" class="btn-juice bg-green-500 text-white font-bold py-3 rounded-xl w-full mb-2">Pedir mi certificado 📜</button>`
         : `<p class="text-xs text-slate-500 text-center mb-3">Para pedir el certificado necesitas tener todas las palabras del nivel dominadas y aprobar la prueba completa. 💪</p>`}
