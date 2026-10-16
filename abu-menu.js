@@ -691,6 +691,7 @@
     juego: 'mundo_ingles.html',
     juego2: 'juego2.html',
     juego3: 'juego3.html',
+    juego4: 'juego4.html',
     fonetica: 'fonetica.html'
   };
 

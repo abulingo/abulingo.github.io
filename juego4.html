@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0b0620">
+<title>Abulingo - Word Blaster (Juego 4)</title>
+<meta name="description" content="Juego 4 de Abulingo: un arcade espacial de neón donde disparas a las palabras en inglés correctas. Combos, jefes, cofres y naves para desbloquear.">
+<link rel="icon" href="icono.png" type="image/x-icon">
+<link rel="preconnect" href="https://eylwewhqeaaqkgcxhgyv.supabase.co" crossorigin>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<style>
+  :root { --neon: #00e5ff; --rosa: #ff2bd6; --oro: #ffd23f; --verde: #39ff88; --rojo: #ff4d6d; --fondo: #0b0620; --panel: rgba(20, 12, 48, .92); }
+  * { box-sizing: border-box; margin: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; overflow: hidden; background: var(--fondo); overscroll-behavior: none; }
+  body { font: 15px/1.35 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #fff; user-select: none; -webkit-user-select: none; }
+  canvas { display: block; position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100dvh; touch-action: none; }
+  button { font: inherit; cursor: pointer; border: 0; color: inherit; }
+  .oculto { display: none !important; }
+
+  /* ---------- HUD ---------- */
+  #hud { position: fixed; left: 0; right: 0; top: 0; padding: calc(env(safe-area-inset-top) + 8px) 10px 0; display: flex; gap: 8px; align-items: center; pointer-events: none; z-index: 5; }
+  #hud > * { pointer-events: auto; }
+  .chip { background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.14); backdrop-filter: blur(6px); border-radius: 99px; padding: 5px 11px; font-weight: 900; white-space: nowrap; font-size: 14px; }
+  #hVidas { letter-spacing: 1px; }
+  #hPuntos { margin-left: auto; font-size: 18px; color: var(--oro); text-shadow: 0 0 12px rgba(255,210,63,.6); font-variant-numeric: tabular-nums; }
+  #btnPausa { width: 36px; height: 36px; padding: 0; display: grid; place-items: center; }
+  #hOla { color: var(--neon); }
+
+  /* ---------- Pista (lo que hay que encontrar) ---------- */
+  #pista { position: fixed; left: 50%; top: calc(env(safe-area-inset-top) + 54px); transform: translateX(-50%); z-index: 4; min-width: 220px; max-width: min(92vw, 520px);
+    background: var(--panel); border: 2px solid var(--neon); border-radius: 18px; padding: 8px 14px; display: flex; align-items: center; gap: 12px;
+    box-shadow: 0 0 22px rgba(0,229,255,.45), inset 0 0 18px rgba(0,229,255,.12); pointer-events: auto; transition: border-color .2s, box-shadow .2s; }
+  #pista.fever { border-color: var(--rosa); box-shadow: 0 0 30px rgba(255,43,214,.7), inset 0 0 18px rgba(255,43,214,.2); }
+  #pista img { width: 64px; height: 64px; object-fit: cover; border-radius: 12px; background: #fff; flex: none; }
+  #pTxt { flex: 1; min-width: 0; }
+  #pTxt small { display: block; font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--neon); opacity: .85; }
+  #pTxt b { display: block; font-size: 21px; font-weight: 900; line-height: 1.15; }
+  #pTxt span { display: block; font-size: 12px; opacity: .7; }
+  #pAudio { width: 44px; height: 44px; border-radius: 50%; background: linear-gradient(135deg, var(--neon), #2979ff); font-size: 20px; flex: none; box-shadow: 0 0 14px rgba(0,229,255,.6); }
+  #pAudio:active { transform: scale(.92); }
+
+  /* ---------- Combo ---------- */
+  #combo { position: fixed; left: 50%; top: calc(env(safe-area-inset-top) + 140px); transform: translate(-50%, 0) scale(.6); z-index: 4; pointer-events: none; text-align: center;
+    font-weight: 1000; font-size: 26px; opacity: 0; transition: transform .18s cubic-bezier(.3,1.8,.5,1), opacity .2s; text-shadow: 0 0 16px currentColor; }
+  #combo.show { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  #combo.pop { transform: translate(-50%, 0) scale(1.35); }
+  #fever { position: fixed; inset: 0; pointer-events: none; z-index: 3; opacity: 0; transition: opacity .4s;
+    box-shadow: inset 0 0 90px 20px rgba(255,43,214,.55); animation: latido .5s ease-in-out infinite alternate; }
+  #fever.on { opacity: 1; }
+  @keyframes latido { from { box-shadow: inset 0 0 60px 10px rgba(255,43,214,.45); } to { box-shadow: inset 0 0 110px 30px rgba(0,229,255,.5); } }
+  #banner { position: fixed; left: 50%; top: 42%; transform: translate(-50%, -50%) scale(.4); z-index: 6; pointer-events: none; text-align: center; opacity: 0;
+    font-weight: 1000; font-size: clamp(34px, 9vw, 64px); letter-spacing: .02em; white-space: nowrap; transition: transform .35s cubic-bezier(.2,1.6,.4,1), opacity .25s;
+    background: linear-gradient(90deg, var(--oro), var(--rosa), var(--neon)); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 0 18px rgba(255,43,214,.6)); }
+  #banner small { display: block; font-size: .32em; letter-spacing: .1em; color: #fff; -webkit-text-fill-color: #fff; }
+  #banner.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+
+  /* ---------- Barra de poderes ---------- */
+  #poderes { position: fixed; right: 8px; bottom: calc(env(safe-area-inset-bottom) + 96px); display: flex; flex-direction: column; gap: 8px; z-index: 4; }
+  .poder { position: relative; width: 48px; height: 48px; border-radius: 16px; background: var(--panel); border: 2px solid rgba(255,255,255,.2); font-size: 24px; display: grid; place-items: center; }
+  .poder b { position: absolute; right: -5px; top: -5px; min-width: 20px; height: 20px; border-radius: 99px; background: var(--rosa); font-size: 12px; display: grid; place-items: center; padding: 0 5px; }
+  .poder:disabled { opacity: .35; filter: grayscale(1); }
+  .poder:not(:disabled) { border-color: var(--oro); box-shadow: 0 0 12px rgba(255,210,63,.45); }
+  .poder:active:not(:disabled) { transform: scale(.9); }
+
+  /* ---------- Pantallas ---------- */
+  .pantalla { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; padding: 16px; overflow-y: auto;
+    background: radial-gradient(ellipse at 50% 20%, rgba(80, 30, 160, .55), rgba(11, 6, 32, .94) 70%); }
+  .caja { width: min(440px, 100%); text-align: center; }
+  .logo { font-size: clamp(40px, 12vw, 64px); font-weight: 1000; line-height: .95; letter-spacing: -.02em;
+    background: linear-gradient(180deg, #fff 10%, var(--neon) 55%, var(--rosa)); -webkit-background-clip: text; background-clip: text; color: transparent;
+    filter: drop-shadow(0 0 22px rgba(0,229,255,.55)); animation: flota 3s ease-in-out infinite; }
+  @keyframes flota { 50% { transform: translateY(-6px); } }
+  .sub { opacity: .75; margin: 8px 0 16px; font-weight: 700; }
+  .fila-stats { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-bottom: 14px; }
+  .btn { display: block; width: 100%; padding: 15px; border-radius: 18px; font-weight: 1000; font-size: 20px; letter-spacing: .03em; margin-top: 10px;
+    background: linear-gradient(135deg, var(--rosa), #7c4dff); box-shadow: 0 6px 0 #5a1a8c, 0 0 26px rgba(255,43,214,.5); transition: transform .08s; }
+  .btn:active { transform: translateY(4px); box-shadow: 0 2px 0 #5a1a8c, 0 0 16px rgba(255,43,214,.4); }
+  .btn.sec { font-size: 16px; padding: 12px; background: rgba(255,255,255,.1); box-shadow: 0 4px 0 rgba(0,0,0,.35); }
+  .btn.oro { background: linear-gradient(135deg, #ffb300, #ff6d00); box-shadow: 0 6px 0 #a64500, 0 0 26px rgba(255,179,0,.5); }
+  .btn.pulso { animation: pulso 1.1s ease-in-out infinite; }
+  @keyframes pulso { 50% { transform: scale(1.04); filter: brightness(1.15); } }
+  .niveles { display: flex; gap: 6px; justify-content: center; margin: 4px 0 6px; }
+  .niveles button { flex: 1; padding: 9px 0; border-radius: 12px; background: rgba(255,255,255,.08); font-weight: 900; border: 2px solid transparent; }
+  .niveles button.sel { border-color: var(--neon); background: rgba(0,229,255,.18); box-shadow: 0 0 12px rgba(0,229,255,.4); }
+  .enlaces { display: flex; gap: 8px; margin-top: 10px; }
+  .enlaces .btn { margin-top: 0; }
+  a.volver { display: inline-block; margin-top: 14px; color: #fff; opacity: .7; font-weight: 800; text-decoration: none; }
+  .mision { margin: 10px 0 0; padding: 10px 12px; border-radius: 14px; background: rgba(255,210,63,.1); border: 1px dashed rgba(255,210,63,.5); font-weight: 800; font-size: 14px; text-align: left; }
+  .mision .barra { height: 7px; border-radius: 99px; background: rgba(255,255,255,.12); margin-top: 6px; overflow: hidden; }
+  .mision .barra i { display: block; height: 100%; background: linear-gradient(90deg, var(--oro), var(--rosa)); }
+
+  /* Cartas de mejora */
+  .cartas { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 16px; }
+  .carta { border-radius: 18px; padding: 14px 8px; background: var(--panel); border: 2px solid var(--c, var(--neon)); box-shadow: 0 0 18px color-mix(in srgb, var(--c, var(--neon)) 50%, transparent);
+    display: flex; flex-direction: column; align-items: center; gap: 6px; animation: entra .45s cubic-bezier(.2,1.5,.4,1) backwards; }
+  .carta:nth-child(2) { animation-delay: .08s; } .carta:nth-child(3) { animation-delay: .16s; }
+  @keyframes entra { from { transform: translateY(40px) rotate(-6deg) scale(.6); opacity: 0; } }
+  .carta i { font-style: normal; font-size: 34px; }
+  .carta b { font-size: 14px; }
+  .carta small { font-size: 11.5px; opacity: .8; }
+  .carta em { font-style: normal; font-size: 10px; font-weight: 900; letter-spacing: .1em; color: var(--c, var(--neon)); }
+  .carta:active { transform: scale(.95); }
+
+  /* Resumen */
+  .grande { font-size: 46px; font-weight: 1000; color: var(--oro); text-shadow: 0 0 20px rgba(255,210,63,.6); font-variant-numeric: tabular-nums; }
+  .record { display: inline-block; margin-top: 4px; padding: 3px 12px; border-radius: 99px; font-weight: 1000; background: linear-gradient(90deg, var(--oro), var(--rosa)); color: #1b0f3a; animation: pulso 1s infinite; }
+  .lista { margin-top: 12px; text-align: left; max-height: 34vh; overflow-y: auto; border-radius: 14px; background: rgba(255,255,255,.05); padding: 6px; }
+  .lista h4 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; opacity: .7; margin: 6px 6px 4px; }
+  .item { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 10px; }
+  .item:nth-child(odd) { background: rgba(255,255,255,.04); }
+  .item img { width: 36px; height: 36px; border-radius: 8px; object-fit: cover; background: #fff; }
+  .item div { flex: 1; min-width: 0; }
+  .item b { display: block; }
+  .item span { font-size: 12.5px; opacity: .75; }
+  .item button { width: 34px; height: 34px; border-radius: 50%; background: rgba(0,229,255,.2); flex: none; }
+  .recompensas { display: flex; gap: 8px; justify-content: center; margin-top: 10px; flex-wrap: wrap; }
+
+  /* Hangar y cofres */
+  .naves { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 12px; }
+  .nave { aspect-ratio: 1; border-radius: 14px; background: rgba(255,255,255,.06); border: 2px solid var(--c, transparent); display: grid; place-items: center; position: relative; padding: 4px; }
+  .nave canvas { position: static; width: 100%; height: 100%; }
+  .nave.bloq { opacity: .35; filter: grayscale(1); }
+  .nave.sel::after { content: '✓'; position: absolute; right: 4px; top: 2px; font-weight: 1000; color: var(--verde); }
+  .nave small { position: absolute; bottom: 2px; left: 0; right: 0; font-size: 9px; font-weight: 900; }
+  #cofreAnim { font-size: 110px; margin: 10px 0; display: inline-block; }
+  #cofreAnim.tiembla { animation: tiembla .12s linear infinite; }
+  @keyframes tiembla { 25% { transform: rotate(-8deg) scale(1.05); } 75% { transform: rotate(8deg) scale(1.05); } }
+  #cofreAnim.abre { animation: abre .5s cubic-bezier(.2,1.8,.4,1); }
+  @keyframes abre { from { transform: scale(.3); } }
+  .rareza { font-weight: 1000; letter-spacing: .12em; font-size: 22px; }
+  #toast { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 76px); transform: translateX(-50%); background: var(--panel); border: 1px solid var(--neon); border-radius: 99px;
+    padding: 8px 16px; font-weight: 800; z-index: 20; opacity: 0; transition: opacity .25s; pointer-events: none; white-space: nowrap; }
+  #toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<canvas id="lienzo"></canvas>
+<div id="fever"></div>
+
+<div id="hud" class="oculto">
+  <button id="btnPausa" class="chip" aria-label="Pausa">⏸</button>
+  <span id="hVidas" class="chip">❤️❤️❤️</span>
+  <span id="hOla" class="chip">Ola 1</span>
+  <span id="hPuntos" class="chip">0</span>
+</div>
+
+<div id="pista" class="oculto">
+  <img id="pImg" alt="" class="oculto">
+  <div id="pTxt"><small id="pModo">Dispara a…</small><b id="pTexto"></b><span id="pExtra"></span></div>
+  <button id="pAudio" aria-label="Escuchar">🔊</button>
+</div>
+<div id="combo"></div>
+<div id="banner"></div>
+
+<div id="poderes" class="oculto">
+  <button class="poder" id="pwLento" title="Cámara lenta">🐢<b>0</b></button>
+  <button class="poder" id="pwBomba" title="Bomba: borra las incorrectas">💣<b>0</b></button>
+  <button class="poder" id="pwEscudo" title="Escudo">🛡️<b>0</b></button>
+</div>
+
+<!-- Inicio -->
+<section id="sInicio" class="pantalla">
+  <div class="caja">
+    <div class="logo">WORD<br>BLASTER</div>
+    <p class="sub">Dispara a la palabra en inglés correcta. ¡No dejes que pase!</p>
+    <div class="fila-stats">
+      <span class="chip">🏆 <span id="iRecord">0</span></span>
+      <span class="chip">🪙 <span id="iMonedas">0</span></span>
+      <span class="chip">⭐ Nv <span id="iNivel">1</span></span>
+      <span class="chip">🔥 <span id="iRacha">0</span> días</span>
+    </div>
+    <div class="niveles" id="iNiveles"></div>
+    <div class="mision" id="iMision"></div>
+    <button class="btn pulso" id="btnJugar">▶ JUGAR</button>
+    <div class="enlaces">
+      <button class="btn sec" id="btnHangar">🚀 Hangar</button>
+      <button class="btn sec oro" id="btnCofre">🎁 Cofre <span id="iCofrePrecio"></span></button>
+    </div>
+    <button class="btn sec" id="btnComo">❓ Cómo se juega</button>
+    <a class="volver" href="abulingo.html">← Volver a Abulingo</a>
+  </div>
+</section>
+
+<!-- Mejora entre oleadas -->
+<section id="sMejora" class="pantalla oculto">
+  <div class="caja">
+    <div class="logo" style="font-size:40px">¡OLA <span id="mOla">1</span> SUPERADA!</div>
+    <p class="sub">Elige una mejora</p>
+    <div class="cartas" id="mCartas"></div>
+  </div>
+</section>
+
+<!-- Pausa -->
+<section id="sPausa" class="pantalla oculto">
+  <div class="caja">
+    <div class="logo" style="font-size:44px">PAUSA</div>
+    <button class="btn" id="btnSeguir">▶ Seguir</button>
+    <button class="btn sec" id="btnSonido">🔊 Sonido: sí</button>
+    <button class="btn sec" id="btnVoz">🗣️ Leer palabras: sí</button>
+    <button class="btn sec" id="btnSalir">🏠 Terminar partida</button>
+  </div>
+</section>
+
+<!-- Fin -->
+<section id="sFin" class="pantalla oculto">
+  <div class="caja">
+    <div class="logo" style="font-size:40px">GAME OVER</div>
+    <div class="grande" id="fPuntos">0</div>
+    <div id="fRecord"></div>
+    <div class="fila-stats" style="margin-top:10px">
+      <span class="chip">🎯 <span id="fAciertos">0</span>/<span id="fTotal">0</span></span>
+      <span class="chip">⚡ Combo x<span id="fCombo">0</span></span>
+      <span class="chip">🌊 Ola <span id="fOla">1</span></span>
+    </div>
+    <div class="recompensas" id="fPremios"></div>
+    <div class="lista" id="fLista"></div>
+    <button class="btn pulso" id="btnOtra">↻ OTRA VEZ</button>
+    <button class="btn sec" id="btnMenu">🏠 Menú</button>
+  </div>
+</section>
+
+<!-- Hangar -->
+<section id="sHangar" class="pantalla oculto">
+  <div class="caja">
+    <div class="logo" style="font-size:40px">HANGAR</div>
+    <p class="sub">Elige tu nave. Las demás salen de los cofres 🎁</p>
+    <div class="naves" id="hNaves"></div>
+    <button class="btn sec" id="btnHangarOk">✓ Listo</button>
+  </div>
+</section>
+
+<!-- Cofre -->
+<section id="sCofre" class="pantalla oculto">
+  <div class="caja">
+    <div id="cofreAnim">🎁</div>
+    <div class="rareza" id="cRareza">Toca para abrir</div>
+    <p class="sub" id="cTexto"></p>
+    <button class="btn" id="btnCofreOk">Genial</button>
+  </div>
+</section>
+
+<!-- Cómo se juega -->
+<section id="sComo" class="pantalla oculto">
+  <div class="caja" style="text-align:left">
+    <div class="logo" style="font-size:36px;text-align:center">CÓMO SE JUEGA</div>
+    <p class="sub">🎯 Arriba ves la pista: el significado en español, una imagen o un audio. <b>Toca el asteroide con la palabra en inglés correcta.</b></p>
+    <p class="sub">⚡ Aciertos seguidos = combo. Con combo x10 entras en <b>FEVER</b>: todo vale doble.</p>
+    <p class="sub">❤️ Si fallas o dejas pasar la palabra correcta, pierdes un corazón.</p>
+    <p class="sub">👾 Cada 4 olas llega un <b>JEFE</b>: deletrea la palabra tocando las letras en orden.</p>
+    <p class="sub">🎁 Junta monedas, abre cofres y desbloquea naves. Las palabras que falles vuelven más seguido hasta que las aprendas.</p>
+    <button class="btn" id="btnComoOk">¡Entendido!</button>
+  </div>
+</section>
+
+<div id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.1/dist/umd/supabase.min.js"></script>
+<script src="abu-progreso.js"></script>
+<script src="juego/blaster.js"></script>
+</body>
+</html>
