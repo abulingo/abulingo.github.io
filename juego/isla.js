@@ -29,8 +29,8 @@
   /* ---------------- Catálogo ----------------
      p = monedas por minuto · cap = minutos que acumula · n = nivel de la isla */
   const CATALOGO = [
-    { id: 'house', e: '🏠', es: 'casa', c: 40, p: 2, cap: 90, n: 1 },
-    { id: 'farm', e: '🌾', es: 'granja', c: 110, p: 4, cap: 90, n: 1 },
+    { id: 'house', e: '🏠', es: 'casa', c: 40, p: 4, cap: 60, n: 1 },
+    { id: 'farm', e: '🌾', es: 'granja', c: 80, p: 7, cap: 60, n: 1 },
     { id: 'tree', e: '🌳', es: 'árbol', c: 15, deco: true, n: 1 },
     { id: 'flower', e: '🌷', es: 'flor', c: 8, deco: true, n: 1 },
     { id: 'bakery', e: '🥖', es: 'panadería', c: 260, p: 7, cap: 120, n: 2 },
@@ -77,9 +77,10 @@
 
   /* ---------------- Estado ---------------- */
   const NUEVO = () => ({
-    v: 1, monedas: 120, gemas: 5, xp: 0, nivel: 1, nivelIngles: 'A1', sonido: true,
-    mapa: { '0,0': { t: 'house', l: 1, u: Date.now() }, '1,0': { t: 'farm', l: 1, u: Date.now() }, '-1,1': { t: 'tree', l: 1 } },
-    ruleta: null, boost: 0, pedidos: [], vistas: {}, frases: {}, construidos: { house: 1, farm: 1, tree: 1 },
+    v: 2, monedas: 60, gemas: 5, xp: 0, nivel: 1, nivelIngles: 'A1', sonido: true,
+    mapa: { '-1,1': { t: 'tree', l: 1 }, '2,-1': { t: 'flower', l: 1 } },
+    ruleta: null, boost: 0, pedidos: [], vistas: {}, frases: {}, construidos: {},
+    mision: 0, base: {}, st: { recogido: 0, bonus: 0, pedidos: 0, cofres: 0, mejoras: 0, deletreos: 0, ruleta: 0, frases: 0 },
     visto: Date.now(), racha: { dia: null, n: 0 }, preguntas: 0, aciertos: 0
   });
   let S = NUEVO();
@@ -253,6 +254,7 @@
     hud();
   }
   function subirNivel() {
+    setTimeout(revisarMision, 800);
     SFX.nivel(); lanzarConfeti(160); S.gemas += 3; hud(); guardar(); centrar();
     const nuevos = CATALOGO.filter((b) => b.n === S.nivel);
     const v = abrirModal(`<div class="grande">🎉</div><h2>¡Nivel ${S.nivel}!</h2><p class="sub">Tu isla creció 🏝️ y ganaste 3 💎</p>
@@ -408,6 +410,7 @@
         }
       }
     }
+    dibujarCofres(c);
     // Polvo de construcción
     for (let i = polvo.length - 1; i >= 0; i--) { const d = polvo[i]; d.v -= 0.016; if (d.v <= 0) { polvo.splice(i, 1); continue; } d.x += d.vx * 0.016; d.y += d.vy * 0.016; c.fillStyle = `rgba(255,255,255,${d.v})`; c.beginPath(); c.arc(d.x, d.y, d.r * (1.4 - d.v * 0.5), 0, 7); c.fill(); }
     // Monedas volando al marcador
@@ -428,13 +431,14 @@
       c.font = '900 13px system-ui'; c.textAlign = 'center'; c.fillStyle = '#fff'; c.strokeStyle = 'rgba(0,0,0,.4)'; c.lineWidth = 4;
       const s = `⚡ Producción x2 · ${Math.ceil((S.boost - Date.now()) / 60000)} min`; c.strokeText(s, W / 2, H - 92); c.fillText(s, W / 2, H - 92);
     }
+    dibujarFlecha(c);
   }
   function redondo(c, x, y, w, h, r) { c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath(); }
 
   let monAnim = 0;
   function bucle(t) {
     const dt = Math.min(0.05, (t - ultimo) / 1000); ultimo = t; tiempo += dt;
-    moverVecinos(dt);
+    moverVecinos(dt); moverCofres(dt);
     dibujar(); pasoConfeti();
     // Contador de monedas animado
     const dif = S.monedas - monedasMostradas;
@@ -480,8 +484,13 @@
         v.globo = { ...f, t: 4.5 };
         voz(f.en); toast(`${v.n}: "${f.en}" = ${f.es}`);
         if (!S.frases[f.en]) { S.frases[f.en] = 1; ganar(5, 4); flotar(p.x, p.y - 40 * cam.z, '+4 XP', '#c4b5fd', 18); }
+        S.st.frases++; revisarMision();
         return;
       }
+    }
+    for (const c of cofres) {
+      const p = aPantalla(c.x, c.y);
+      if (Math.hypot(p.x - px, p.y - 20 * cam.z - py) < 30 * cam.z + 8) { abrirCofre(c); return; }
     }
     const t = aMapa(px, py), k = t.x + ',' + t.y;
     if (!enIsla(t.x, t.y)) { if (seleccion) toast('🌊 Eso es agua: construye dentro de la isla'); return; }
@@ -493,10 +502,19 @@
     if (b) recoger(t.x, t.y);
   }
 
-  function construir(x, y, id) {
+  let construyendo = false;
+  async function construir(x, y, id, sinDeletrear) {
     const cat = CAT[id];
+    if (construyendo) return;
     if (S.nivel < cat.n) { toast(`🔒 Se desbloquea en el nivel ${cat.n}`); return; }
     if (S.monedas < cat.c) { toast(`Te faltan ${fmt(cat.c - S.monedas)} 🪙`); SFX.mal(); return; }
+    if (!sinDeletrear) {
+      construyendo = true;
+      const ok = await deletrear(cat);
+      construyendo = false;
+      if (!ok || S.mapa[x + ',' + y] || S.monedas < cat.c) return;
+      S.st.deletreos++;
+    }
     S.monedas -= cat.c;
     S.mapa[x + ',' + y] = { t: id, l: 1, u: Date.now(), anim: 1 };
     S.construidos[id] = (S.construidos[id] || 0) + 1;
@@ -504,7 +522,43 @@
     nube(p.x, p.y); SFX.construir(); voz(id);
     flotar(p.x, p.y - 60 * cam.z, `${id} = ${cat.es}`, '#fff', 18);
     ganarXP(cat.deco ? 3 : Math.max(8, Math.round(Math.sqrt(cat.c) * 1.2)));
-    ajustarVecinos(); hud(true); pintarTienda(); guardar();
+    ajustarVecinos(); hud(true); pintarTienda(); guardar(); revisarMision();
+  }
+
+  /* Deletrear el nombre del edificio tocando las letras en orden. */
+  function deletrear(cat) {
+    return new Promise((res) => {
+      const pal = cat.id.toUpperCase();
+      const letras = pal.replace(/ /g, '').split('');
+      const extras = barajar('AEIOURSTLNMCDP'.split('').filter((l) => !letras.includes(l))).slice(0, letras.length > 6 ? 3 : 2);
+      const fichas = barajar([...letras, ...extras]).map((l, i) => ({ l, i, usada: false }));
+      let idx = 0, errores = 0;
+      const v = abrirModal(`<div class="grande">${cat.e}</div><h2>¡Deletrea para construir!</h2>
+        <p class="sub">${esc(cat.es)} en inglés es… <button class="oir" data-oir style="width:40px;height:40px;font-size:18px;vertical-align:middle">🔊</button></p>
+        <div class="huecos" id="huecos"></div><div class="letras" id="letras"></div>
+        <button class="btn gris" data-cancel style="margin-top:14px">Cancelar</button>`, false);
+      const pintar = () => {
+        let k = 0;
+        v.querySelector('#huecos').innerHTML = pal.split('').map((c) => c === ' ' ? '<i class="esp"></i>' : `<b class="${k < idx ? 'lleno' : ''}">${k++ < idx ? c : ''}</b>`).join('');
+        v.querySelector('#letras').innerHTML = fichas.map((f) => `<button class="letra ${f.usada ? 'usada' : ''} ${errores >= 3 && !f.usada && f.l === letras[idx] ? 'pista' : ''}" data-i="${f.i}">${f.l}</button>`).join('');
+      };
+      pintar(); setTimeout(() => voz(cat.id), 250);
+      v.querySelector('[data-oir]').onclick = () => voz(cat.id);
+      v.querySelector('[data-cancel]').onclick = () => { cerrarModal(v); res(false); };
+      v.querySelector('#letras').addEventListener('click', (e) => {
+        const b = e.target.closest('.letra'); if (!b) return;
+        const f = fichas.find((x) => x.i === +b.dataset.i); if (!f || f.usada || idx >= letras.length) return;
+        if (f.l === letras[idx]) {
+          f.usada = true; idx++; tono(523 * Math.pow(2, [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24][Math.min(idx, 10)] / 12), 0.12, 'triangle', 0.18);
+          pintar();
+          if (idx >= letras.length) {
+            SFX.bien(); voz(cat.id);
+            v.querySelector('h2').textContent = errores ? '¡Bien hecho!' : '¡Perfecto! ✨';
+            setTimeout(() => { cerrarModal(v); res(true); }, 800);
+          }
+        } else { errores++; SFX.mal(); b.classList.add('mal'); setTimeout(() => pintar(), 350); }
+      });
+    });
   }
 
   async function recoger(x, y) {
@@ -516,19 +570,26 @@
       b.anim = 0.4; voz(cat.id); toast(`${cat.e} ${cat.id} (${cat.es}) · listo en ${falta} s · ${fmt(prodMin(b))} 🪙/min`); return;
     }
     b.u = Date.now(); b.anim = 0.8;
-    // Pregunta bonus: ~1 de cada 3 recogidas
-    let mult = 1;
-    if (palabras.length >= 4 && Math.random() < 0.38) {
+    // Combo: recoger seguido suma +15% por edificio
+    const ahora = Date.now();
+    comboRec = ahora - ultimoRec < 3000 ? comboRec + 1 : 1; ultimoRec = ahora;
+    // Pregunta bonus: ~1 de cada 3 recogidas (más si la misión la pide)
+    let mult = 1 + (comboRec - 1) * 0.15;
+    if (comboRec > 1) { flotar(p.x, p.y - 110 * cam.z, `COMBO x${comboRec}`, comboRec >= 5 ? '#f472b6' : '#a78bfa', 22 + Math.min(comboRec, 8) * 2); tono(500 + comboRec * 60, 0.1, 'triangle', 0.12); }
+    const pideBonus = misionActual().tipo === 'bonus';
+    if (palabras.length >= 4 && Math.random() < (pideBonus ? 0.75 : 0.33)) {
       const ok = await preguntar('⭐ ¡Pregunta bonus!', `Acierta y recoges x3 (${fmt(a * 3)} 🪙)`);
-      mult = ok ? 3 : 1;
-      if (ok) { ganarXP(12); flotar(p.x, p.y - 90 * cam.z, '¡x3!', '#ffc61a', 30); }
+      mult *= ok ? 3 : 1;
+      if (ok) { S.st.bonus++; ganarXP(12); flotar(p.x, p.y - 90 * cam.z, '¡x3!', '#ffc61a', 30); }
+      comboRec = 0;
     }
     a = Math.floor(a * mult);
     lluviaMonedas(p.x, p.y - 40 * cam.z, a);
     flotar(p.x, p.y - 60 * cam.z, '+' + fmt(a), '#ffe066', 24);
-    S.monedas += a; ganarXP(Math.max(1, Math.round(Math.sqrt(a) / 2)));
-    hud(true); guardar();
+    S.monedas += a; S.st.recogido += a; ganarXP(Math.max(1, Math.round(Math.sqrt(a) / 2)));
+    hud(true); guardar(); revisarMision();
   }
+  let comboRec = 0, ultimoRec = 0;
 
   function abrirEdificio(x, y) {
     const k = x + ',' + y, b = S.mapa[k], cat = CAT[b.t];
@@ -546,21 +607,181 @@
     if (bm) bm.onclick = () => {
       if (S.monedas < mej || (b.l || 1) >= 6) return;
       const listo = acumulado(b); S.monedas += Math.floor(listo); b.u = Date.now();
-      S.monedas -= mej; b.l = (b.l || 1) + 1; b.anim = 1; SFX.nivel(); ganarXP(Math.round(Math.sqrt(mej)));
+      S.monedas -= mej; b.l = (b.l || 1) + 1; b.anim = 1; S.st.mejoras++; setTimeout(revisarMision, 300); SFX.nivel(); ganarXP(Math.round(Math.sqrt(mej)));
       const p = aPantalla(x, y); nube(p.x, p.y); flotar(p.x, p.y - 70 * cam.z, '⬆️ ¡Mejorado!', '#c4b5fd', 22);
       cerrarModal(v); hud(true); guardar();
     };
   }
 
+  /* ---------------- Misiones (historia guiada por Abu 🦜) ----------------
+     Secuencia fija por capítulos; al terminarla, misiones infinitas.
+     Las de estadística cuentan desde que empieza la misión (S.base). */
+  const CAPITULOS = ['Llegada a la isla', 'El pueblo crece', 'Escuela y cultura', 'La gran ciudad', 'La isla de las maravillas'];
+  const M = (cap, tipo, obj, n, t, abu, m, g = 0) => ({ cap, tipo, obj, n, t, abu, m, g });
+  const HISTORIA = [
+    M(0, 'construir', 'house', 1, 'Construye una casa (house)', '¡Hola! Soy Abu 🦜. Esta isla es tuya. Empecemos con una casa: toca 🔨 Construir.', 40, 1),
+    M(0, 'recoger', null, 15, 'Recoge 15 monedas', 'Tu casa produce monedas 🪙. Cuando veas la moneda encima, ¡tócala!', 30),
+    M(0, 'construir', 'farm', 1, 'Construye una granja (farm)', 'Una granja da más monedas. ¡Deletréala para construirla!', 60),
+    M(0, 'frases', null, 2, 'Habla con 2 vecinos', 'Tus vecinos hablan inglés. Tócalos para escucharlos.', 40, 1),
+    M(0, 'bonus', null, 1, 'Acierta 1 pregunta bonus', 'Al recoger, a veces sale una pregunta. ¡Si aciertas, x3!', 80),
+    M(0, 'construir', 'tree', 2, 'Planta 2 árboles (tree)', 'Las decoraciones suben la producción +3% cada una.', 50),
+    M(0, 'cofres', null, 1, 'Abre un cofre 🎁', '¡Mira! A veces aparecen cofres en la isla. Tócalos.', 60, 2),
+    M(0, 'nivel', null, 2, 'Llega al nivel 2', 'Recoge y construye para ganar XP ⭐.', 100, 2),
+    M(1, 'construir', 'bakery', 1, 'Construye una panadería (bakery)', '¡Capítulo 2! Los vecinos quieren pan 🥖.', 150),
+    M(1, 'pedidos', null, 1, 'Completa 1 pedido 📜', 'Ayuda a un vecino con sus palabras. Pagan muy bien.', 150, 2),
+    M(1, 'construir', 'house', 3, 'Ten 3 casas', 'Más casas = más vecinos en tu isla.', 150),
+    M(1, 'construir', 'store', 1, 'Construye una tienda (store)', 'Una tienda para el pueblo 🏪.', 250),
+    M(1, 'recoger', null, 800, 'Recoge 800 monedas', 'Tip: recoge varios edificios seguidos para hacer COMBO.', 250),
+    M(1, 'mejoras', null, 1, 'Mejora un edificio ⬆️', 'En 🔨 Construir, toca un edificio tuyo para mejorarlo.', 300, 2),
+    M(1, 'ruleta', null, 1, 'Gira la ruleta 🎡', 'Cada día tienes un giro gratis.', 150),
+    M(1, 'nivel', null, 3, 'Llega al nivel 3', '¡Ya casi tienes un pueblo de verdad!', 300, 3),
+    M(2, 'construir', 'school', 1, 'Construye una escuela (school)', '¡Capítulo 3! Los niños necesitan una escuela 🏫.', 500),
+    M(2, 'bonus', null, 5, 'Acierta 5 preguntas bonus', 'Cada palabra que aciertas te hace más fuerte en inglés 💪.', 500),
+    M(2, 'construir', 'fountain', 1, 'Construye una fuente (fountain)', 'Una fuente en la plaza ⛲.', 300),
+    M(2, 'pedidos', null, 3, 'Completa 3 pedidos', 'Los vecinos confían en ti.', 600, 3),
+    M(2, 'construir', 'library', 1, 'Construye una biblioteca (library)', 'Para leer en inglés 📚.', 800),
+    M(2, 'cofres', null, 4, 'Abre 4 cofres', '¡Busca los cofres en la isla!', 600, 3),
+    M(2, 'nivel', null, 5, 'Llega al nivel 5', 'Tu isla está creciendo mucho 🏝️.', 1000, 5),
+    M(3, 'construir', 'hospital', 1, 'Construye un hospital', '¡Capítulo 4! Una ciudad necesita un hospital 🏥.', 1200),
+    M(3, 'construir', 'bank', 1, 'Construye un banco (bank)', 'Para guardar tanto dinero 🏦.', 1600),
+    M(3, 'mejoras', null, 4, 'Haz 4 mejoras', 'Los edificios mejorados producen x1.6.', 2000, 3),
+    M(3, 'construir', 'hotel', 1, 'Construye un hotel', 'Llegan turistas a la isla 🏨.', 2500),
+    M(3, 'pedidos', null, 6, 'Completa 6 pedidos', '¡Eres el héroe de la isla!', 3000, 5),
+    M(3, 'nivel', null, 7, 'Llega al nivel 7', 'Se vienen edificios increíbles…', 4000, 5),
+    M(4, 'construir', 'ferris wheel', 1, 'Construye una rueda de la fortuna (ferris wheel)', '¡Capítulo 5! Hora de divertirse 🎡.', 5000),
+    M(4, 'construir', 'circus', 1, 'Construye un circo (circus)', '¡Llegó el circo! 🎪', 7000),
+    M(4, 'construir', 'castle', 1, 'Construye un castillo (castle)', 'Tu propio castillo 🏰.', 12000, 8),
+    M(4, 'construir', 'stadium', 1, 'Construye un estadio (stadium)', '¡Partido de fútbol esta noche! 🏟️', 18000),
+    M(4, 'construir', 'tower', 1, 'Construye una torre (tower)', 'La isla se ve desde lejos 🗼.', 25000),
+    M(4, 'construir', 'rocket', 1, 'Construye un cohete (rocket)', '¡La meta final: viajar al espacio! 🚀', 60000, 20)
+  ];
+  function misionActual() {
+    if (S.mision < HISTORIA.length) return HISTORIA[S.mision];
+    // Infinitas: rotan entre varios tipos, cada vez más grandes
+    const k = S.mision - HISTORIA.length, tipos = ['recoger', 'pedidos', 'bonus', 'cofres', 'mejoras'];
+    const tipo = tipos[k % tipos.length], esc_ = 1 + Math.floor(k / tipos.length);
+    const n = { recoger: 20000 * esc_, pedidos: 2 + esc_, bonus: 4 + esc_ * 2, cofres: 3 + esc_, mejoras: 2 + esc_ }[tipo];
+    const t = { recoger: `Recoge ${fmt(n)} monedas`, pedidos: `Completa ${n} pedidos`, bonus: `Acierta ${n} preguntas bonus`, cofres: `Abre ${n} cofres`, mejoras: `Haz ${n} mejoras` }[tipo];
+    return M(5, tipo, null, n, t, '¡Eres un maestro de la isla! Sigue así 🌟', 5000 * esc_, 3 + esc_);
+  }
+  function progresoMision(m) {
+    if (m.tipo === 'construir') return Object.values(S.mapa).filter((b) => b.t === m.obj).length;
+    if (m.tipo === 'nivel') return S.nivel;
+    const k = clave(m.tipo);
+    return (S.st[k] || 0) - (S.base[k] || 0);
+  }
+  const clave = (tipo) => (tipo === 'recoger' ? 'recogido' : tipo);
+  function iniciarMision() { const m = misionActual(); if (m.tipo !== 'construir' && m.tipo !== 'nivel') { const k = clave(m.tipo); S.base[k] = S.st[k] || 0; } }
+  let avisadaLista = -1;
+  function revisarMision() {
+    const m = misionActual(), prog = Math.max(0, Math.min(m.n, progresoMision(m))), lista = prog >= m.n;
+    const cap = m.cap < CAPITULOS.length ? `Capítulo ${m.cap + 1}: ${CAPITULOS[m.cap]}` : 'Misiones de maestro';
+    const enCap = HISTORIA.filter((h) => h.cap === m.cap), pos = enCap.indexOf(m) + 1;
+    $('mCap').textContent = cap + (pos ? ` · ${pos}/${enCap.length}` : '');
+    $('mTxt').textContent = m.t;
+    $('mBar').style.width = (prog / m.n) * 100 + '%';
+    $('mNum').textContent = `${fmt(prog)}/${fmt(m.n)}`;
+    $('mPremio').textContent = `Premio: 🪙 ${fmt(m.m)}${m.g ? ` · 💎 ${m.g}` : ''}`;
+    $('mision').classList.toggle('lista', lista);
+    $('mReclamar').classList.toggle('oculto', !lista);
+    if (lista && avisadaLista !== S.mision) { avisadaLista = S.mision; SFX.pop(); tono(880, 0.15, 'triangle', 0.15, 0, 0.1); }
+  }
+  function reclamarMision() {
+    const m = misionActual(); if (progresoMision(m) < m.n) return;
+    S.mision++; iniciarMision();
+    const finCap = misionActual().cap !== m.cap;
+    ganar(m.m, 20 + m.cap * 15, m.g + (finCap ? 5 : 0));
+    lanzarConfeti(140); SFX.nivel();
+    const r = $('mision').getBoundingClientRect(); lluviaMonedas(r.left + r.width / 2, r.top + r.height / 2, m.m);
+    const sig = misionActual();
+    const v = abrirModal(`<div class="grande">${finCap ? '🏆' : '✅'}</div><h2>${finCap ? `¡Capítulo ${m.cap + 1} completado!` : '¡Misión cumplida!'}</h2>
+      <div class="chips"><span class="chip">🪙 +${fmt(m.m)}</span>${m.g || finCap ? `<span class="chip">💎 +${m.g + (finCap ? 5 : 0)}</span>` : ''}</div>
+      <div class="abu"><span>🦜</span><p>${esc(sig.abu)}</p></div>
+      <p class="sub" style="margin-top:8px">Siguiente: <b>${esc(sig.t)}</b></p><button class="btn">¡Vamos!</button>`);
+    v.querySelector('.btn').onclick = () => { cerrarModal(v); revisarMision(); };
+    if (finCap) setTimeout(() => lanzarConfeti(200), 400);
+    guardar(); revisarMision();
+  }
+  $('mReclamar').onclick = (e) => { e.stopPropagation(); reclamarMision(); };
+  $('mision').onclick = () => {
+    const m = misionActual();
+    if (progresoMision(m) >= m.n) { reclamarMision(); return; }
+    const v = abrirModal(`<div class="abu"><span>🦜</span><p>${esc(m.abu)}</p></div><h2 style="margin-top:10px">${esc(m.t)}</h2>
+      <p class="sub">Progreso: ${fmt(Math.max(0, Math.min(m.n, progresoMision(m))))}/${fmt(m.n)} · premio 🪙 ${fmt(m.m)}${m.g ? ` y 💎 ${m.g}` : ''}</p><button class="btn">¡Entendido!</button>`);
+    v.querySelector('.btn').onclick = () => cerrarModal(v);
+  };
+
+  /* Flecha guía: señala qué tocar según la misión */
+  function objetivoFlecha() {
+    if (document.querySelector('.velo')) return null;
+    const m = misionActual();
+    if (progresoMision(m) >= m.n) return null; // la tarjeta ya parpadea en verde
+    if (m.tipo === 'construir') {
+      if (!seleccion) return { el: $('bConstruir') };
+      if (seleccion !== m.obj) { const b = document.querySelector(`.prod[data-id="${m.obj}"]`); return b ? { el: b } : null; }
+      return null;
+    }
+    if (m.tipo === 'pedidos') return { el: $('bPedidos') };
+    if (m.tipo === 'ruleta') return { el: $('bRuleta') };
+    if (m.tipo === 'cofres' && cofres.length) { const p = aPantalla(cofres[0].x, cofres[0].y); return { x: p.x, y: p.y - 46 * cam.z }; }
+    if (m.tipo === 'frases' && vecinos.length) { const p = aPantalla(vecinos[0].x, vecinos[0].y); return { x: p.x, y: p.y - 40 * cam.z }; }
+    if (m.tipo === 'recoger' || m.tipo === 'bonus' || m.tipo === 'nivel') {
+      const ahora = Date.now();
+      for (const k in S.mapa) { const b = S.mapa[k]; if (CAT[b.t] && !CAT[b.t].deco && acumulado(b, ahora) >= Math.max(1, prodMin(b))) { const [x, y] = k.split(',').map(Number); const p = aPantalla(x, y); return { x: p.x, y: p.y - 95 * cam.z }; } }
+    }
+    return null;
+  }
+  function dibujarFlecha(c) {
+    const o = objetivoFlecha(); if (!o) return;
+    let x = o.x, y = o.y;
+    if (o.el) { const r = o.el.getBoundingClientRect(); if (!r.width) return; x = r.left + r.width / 2; y = r.top - 6; if (y < 60) y = r.bottom + 46; }
+    const b = Math.sin(tiempo * 7) * 7;
+    c.save(); c.translate(x, y - 18 - b);
+    c.fillStyle = '#ff3d7f'; c.strokeStyle = '#fff'; c.lineWidth = 4;
+    c.beginPath(); c.moveTo(0, 16); c.lineTo(-15, -2); c.lineTo(-6, -2); c.lineTo(-6, -22); c.lineTo(6, -22); c.lineTo(6, -2); c.lineTo(15, -2); c.closePath();
+    c.stroke(); c.fill(); c.restore();
+  }
+
+  /* Cofres sorpresa en la isla */
+  let cofres = [], cofreT = 12;
+  function moverCofres(dt) {
+    cofreT -= dt;
+    if (cofreT <= 0) {
+      cofreT = (misionActual().tipo === 'cofres' ? azar(8, 16) : azar(35, 75));
+      if (cofres.length < 2) { const l = casillasLibres(); if (l.length) { const c = elegir(l); cofres.push({ ...c, t: 0, raro: Math.random() < 0.15 }); tono(1200, 0.2, 'sine', 0.1, 600); } }
+    }
+    cofres.forEach((c) => (c.t += dt));
+  }
+  async function abrirCofre(c) {
+    cofres = cofres.filter((x) => x !== c);
+    const ok = palabras.length >= 4 ? await preguntar(c.raro ? '💜 ¡Cofre raro!' : '🎁 ¡Cofre!', 'Acierta para abrirlo con todo su premio') : true;
+    const base = (40 + S.nivel * 35) * (c.raro ? 4 : 1);
+    const mon = Math.round(base * (ok ? azar(1.5, 3) : 0.4)), gem = ok ? (c.raro ? 3 : Math.random() < 0.35 ? 1 : 0) : 0;
+    const p = aPantalla(c.x, c.y); lluviaMonedas(p.x, p.y - 20, mon); flotar(p.x, p.y - 50 * cam.z, '+' + fmt(mon) + (gem ? ` 💎${gem}` : ''), '#fde047', 24);
+    S.st.cofres++; ganar(mon, ok ? 10 : 2, gem); if (ok) SFX.nivel();
+    revisarMision();
+  }
+  function dibujarCofres(c) {
+    for (const k of cofres) {
+      const p = aPantalla(k.x, k.y), sal = Math.abs(Math.sin(k.t * 3)) * 8 * cam.z, ent = Math.min(1, k.t * 3);
+      c.save(); c.globalAlpha = 0.35 + 0.25 * Math.sin(k.t * 5);
+      c.fillStyle = k.raro ? '#c084fc' : '#fde047'; c.beginPath(); c.ellipse(p.x, p.y, 26 * cam.z, 13 * cam.z, 0, 0, 7); c.fill(); c.restore();
+      c.font = `${36 * cam.z * ent}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`; c.textAlign = 'center'; c.textBaseline = 'alphabetic'; c.fillStyle = '#000';
+      c.fillText(k.raro ? '💎' : '🎁', p.x, p.y - sal);
+      for (let i = 0; i < 3; i++) { const a = k.t * 2 + i * 2.1; c.fillStyle = '#fff'; c.globalAlpha = 0.5 + 0.5 * Math.sin(k.t * 6 + i); c.beginPath(); c.arc(p.x + Math.cos(a) * 22 * cam.z, p.y - 22 * cam.z + Math.sin(a) * 12 * cam.z, 2.2, 0, 7); c.fill(); c.globalAlpha = 1; }
+    }
+  }
+
   /* ---------------- Tienda ---------------- */
   function pintarTienda() {
-    $('tienda').innerHTML = CATALOGO.map((b) => {
+    const mm = misionActual(), objetivo = mm.tipo === 'construir' ? mm.obj : null;
+    $('tienda').innerHTML = [...CATALOGO].sort((a, b) => (b.id === objetivo) - (a.id === objetivo)).map((b) => {
       const bloq = S.nivel < b.n, caro = S.monedas < b.c;
       return `<button class="prod ${seleccion === b.id ? 'sel' : ''} ${bloq ? 'bloq' : ''}" data-id="${esc(b.id)}">
         <div class="e">${b.e}</div><b>${esc(b.id)}</b><span>${esc(b.es)}</span>
         <em style="color:${caro ? '#ef4444' : '#16a34a'}">🪙 ${fmt(b.c)}</em>
         <span>${b.deco ? '+3% producción' : `${fmt(b.p)}/min`}</span>
-        ${bloq ? `<div class="cand">🔒 Nivel ${b.n}</div>` : ''}</button>`;
+        ${bloq ? `<div class="cand">🔒 Nivel ${b.n}</div>` : ''}${b.id === objetivo ? '<div class="obj">🎯 Misión</div>' : ''}</button>`;
     }).join('');
   }
   $('tienda').addEventListener('click', (e) => {
@@ -571,9 +792,11 @@
     toast(`${cat.e} ${cat.id} = ${cat.es} · toca la isla para construir`);
   });
   function modoConstruir(si) {
-    seleccion = si ? (seleccion || 'house') : null; hover = null;
+    const mm = misionActual();
+    seleccion = si ? (seleccion || (mm.tipo === 'construir' && S.nivel >= CAT[mm.obj].n ? mm.obj : 'house')) : null; hover = null;
     $('construir').classList.toggle('oculto', !si); $('bConstruir').classList.toggle('activo', si);
-    if (si) pintarTienda();
+    $('mision').classList.toggle('oculto', si);
+    if (si) { pintarTienda(); $('tienda').scrollLeft = 0; }
   }
   $('bConstruir').onclick = () => modoConstruir(!seleccion);
   $('cerrarConstruir').onclick = () => modoConstruir(false);
@@ -611,6 +834,7 @@
       ganar(mon, Math.round(p.xp * (0.5 + k)), gem);
       if (k === 1) { lanzarConfeti(); SFX.nivel(); }
       S.pedidos[i] = { ...nuevoPedido(), espera: Date.now() + 4 * 60000 };
+      S.st.pedidos++; revisarMision();
       hud(); guardar();
       const r = abrirModal(`<div class="grande">${k === 1 ? '🏆' : k >= 0.6 ? '😊' : '💪'}</div><h2>${k === 1 ? '¡Perfecto!' : '¡Pedido entregado!'}</h2>
         <p class="sub">${bien} de ${p.n} correctas</p><div class="chips"><span class="chip">🪙 +${fmt(mon)}</span>${gem ? `<span class="chip">💎 +${gem}</span>` : ''}</div><button class="btn">Seguir</button>`);
@@ -645,7 +869,7 @@
     v.querySelector('[data-girar]').onclick = (e) => {
       if (girando) return;
       if (S.ruleta === hoy()) { if (S.gemas < 5) { toast('Necesitas 5 💎'); return; } S.gemas -= 5; }
-      S.ruleta = hoy(); girando = true; hud(); guardar();
+      S.ruleta = hoy(); girando = true; S.st.ruleta++; hud(); guardar(); setTimeout(revisarMision, 4300);
       let k = Math.random() * PESOS.reduce((a, b) => a + b), idx = 0;
       for (; idx < n; idx++) { k -= PESOS[idx]; if (k <= 0) break; }
       idx = Math.min(idx, n - 1);
@@ -691,9 +915,19 @@
     v.querySelector('[data-ayuda]').onclick = () => { cerrarModal(v); ayuda(); };
     v.querySelectorAll('[data-n]').forEach((b) => (b.onclick = async () => { S.nivelIngles = b.dataset.n; guardar(); cerrarModal(v); toast('Cargando palabras ' + S.nivelIngles + '…'); await cargarPalabras(); toast('✅ Palabras de nivel ' + S.nivelIngles); }));
   };
+  function introAbu() {
+    const v = abrirModal(`<div class="grande">🏝️</div><h2>¡Bienvenido a tu isla!</h2>
+      <div class="abu"><span>🦜</span><p>Soy <b>Abu</b>. Esta isla está casi vacía… ¡y tú la vas a convertir en una ciudad increíble!
+      Cada edificio se construye <b>deletreando su nombre en inglés</b>. Te iré dando misiones, ¡y cada una tiene premio!</p></div>
+      <button class="btn">¡Empezar la aventura! 🚀</button>`, false);
+    v.querySelector('.btn').onclick = () => { cerrarModal(v); revisarMision(); };
+  }
   function ayuda() {
     const v = abrirModal(`<div class="grande">🏝️</div><h2>Abu Island</h2>
-      <p class="sub" style="text-align:left">🔨 <b>Construye</b> edificios: cada uno tiene su nombre en inglés y produce monedas 🪙, también cuando no estás jugando.<br><br>
+      <p class="sub" style="text-align:left">
+      🦜 Sigue las <b>misiones de Abu</b> (arriba): cada una tiene premio y te lleva al siguiente capítulo.<br><br>
+      🔨 <b>Construye</b> edificios deletreando su nombre en inglés. Producen monedas 🪙, también cuando no estás jugando.<br><br>
+      ⚡ Recoge varios edificios seguidos para hacer <b>COMBO</b>. 🎁 Toca los <b>cofres</b> que aparecen en la isla.<br><br>
       🪙 <b>Toca un edificio</b> para recoger. A veces sale una <b>pregunta bonus</b>: si aciertas, ¡x3!<br><br>
       🧑 <b>Toca a los vecinos</b>: dicen frases en inglés y te muestran qué significan.<br><br>
       📜 <b>Pedidos</b>: responde palabras para ganar muchas monedas y gemas 💎.<br><br>
@@ -756,13 +990,15 @@
         const n = data && data.flujo && data.flujo.currentNivel; if (NIVELES.includes(n)) S.nivelIngles = n;
       }
     } catch (e) { console.warn('[isla] sin sesión', e); }
-    centrar(); ajustarVecinos(); asegurarPedidos(); hud();
+    if (!S.st) S.st = { recogido: 0, bonus: 0, pedidos: 0, cofres: 0, mejoras: 0, deletreos: 0, ruleta: 0, frases: 0 };
+    if (S.mision === undefined) { S.mision = 0; S.base = {}; }
+    centrar(); ajustarVecinos(); asegurarPedidos(); hud(); revisarMision();
     monedasMostradas = S.monedas; $('hMonedas').textContent = fmt(S.monedas);
     await cargarPalabras();
-    if (primeraVez) { ayuda(); guardar(); } else bienvenida();
+    if (primeraVez) { introAbu(); guardar(); } else bienvenida();
     setInterval(hud, 15000);
   })();
   requestAnimationFrame(bucle);
 
-  window.__isla = { get S() { return S; }, recoger, construir, abrirPedidos, abrirRuleta, ganar, aPantalla, get palabras() { return palabras; } };
+  window.__isla = { get S() { return S; }, recoger, construir, reclamarMision, get cofres() { return cofres; }, abrirCofre, abrirPedidos, abrirRuleta, ganar, aPantalla, get palabras() { return palabras; } };
 })();
