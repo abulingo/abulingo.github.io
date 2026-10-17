@@ -465,6 +465,7 @@
   const panel = () => document.getElementById('mode-panel');
 
   const ACTIVIDADES = [
+    { id: 'oido', icon: 'fa-ear-listen', color: 'from-[#FF7A00] to-orange-600', titulo: 'Entrenador de oído', desc: 'Lo más efectivo: frases reales con audio nativo, escríbelas y repásalas justo antes de olvidarlas. Meta: 20 al día.', tiempo: '10 min' },
     { id: 'dictado', icon: 'fa-pen-to-square', color: 'from-[#FF7A00] to-orange-600', titulo: 'Dictado', desc: 'Escribe lo que oyes, frase por frase, y descubre si el error fue de vocabulario o de oído.', tiempo: '10 min' },
     { id: 'conectada', icon: 'fa-link', color: 'from-[#0D47A1] to-blue-500', titulo: 'Habla conectada', desc: 'Formas débiles, enlaces, elisiones y reducciones como gonna o wanna.', tiempo: '5 min' },
     { id: 'vocab', icon: 'fa-ear-listen', color: 'from-emerald-500 to-green-600', titulo: 'Vocabulario por el oído', desc: 'Palabras frecuentes que conoces escritas pero no reconoces al oírlas.', tiempo: '5 min' },
@@ -474,6 +475,7 @@
   ];
 
   function progresoActividad(id) {
+    if (id === 'oido') { const o = oidoP(); return [o.hoy.n, OIDO_META]; }
     if (id === 'dictado') { const l = D.dictados[nivel]; return [l.filter(d => P.dictado[d.id]).length, l.length]; }
     if (id === 'conectada') { const l = D.conectada[nivel]; return [l.filter(c => (P.conectada[c.id]?.mejor || 0) >= 80).length, l.length]; }
     if (id === 'vocab') { const l = D.vocab[nivel], v = P.vocab[nivel] || {}; return [l.filter(w => (v[w[0]]?.ok || 0) > 0).length, l.length]; }
@@ -610,9 +612,216 @@
     });
   }
 
+  /* ============================================================
+     6b. ENTRENADOR DE OÍDO
+     Rondas de 10 frases reales (tabla frases, con audio nativo): oyes,
+     escribes y se corrige palabra por palabra. Las ayudas (lento, pista
+     de letras, ver una palabra) bajan el puntaje. Cada frase vive en
+     una caja tipo Leitner: si la entiendes sola sube de caja y vuelve
+     más tarde; si fallas, vuelve mañana. Primero salen las de repaso.
+  ============================================================ */
+  const OIDO_DIAS = [0, 1, 3, 7, 16, 35];   // días hasta el próximo repaso según la caja
+  const OIDO_META = 20;                       // frases al día
+  let oidoFrases = {}, oido = null;
+  const sumarDias = (n) => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10);
+  function oidoP() {
+    P.oido = Object.assign({ f: {}, hoy: { fecha: null, n: 0 }, racha: 0, ultimo: null, total: 0 }, P.oido || {});
+    if (P.oido.hoy.fecha !== hoy()) P.oido.hoy = { fecha: hoy(), n: 0 };
+    return P.oido;
+  }
+  async function oidoCargar(niv) {
+    const n = NIVELES_FIJOS.includes(niv) && niv !== 'C1' ? niv : 'B2';
+    if (oidoFrases[n]) return oidoFrases[n];
+    const { data, error } = await dbClient.from('frases').select('id,fraseingles,fraseespañol,audio_url').eq('nivel', n).order('id');
+    if (error) throw error;
+    return (oidoFrases[n] = (data || []).filter(f => f.audio_url && tokens(f.fraseingles).length));
+  }
+  function oidoPendientes(lista) {
+    const o = oidoP();
+    return lista.filter(f => o.f[f.id] && o.f[f.id].due <= hoy());
+  }
+  function oidoTocar(f, vel = velocidad) {
+    stopSpeaking();
+    return new Promise(res => {
+      const a = new Audio(f.audio_url);
+      a.preservesPitch = a.webkitPreservesPitch = true;
+      a.playbackRate = vel; a.onplay = () => { a.playbackRate = vel; };
+      audioActual = a;
+      let hecho = false;
+      const fin = () => { if (!hecho) { hecho = true; res(); } };
+      a.onended = fin;
+      a.onerror = () => { if (!hecho) { hecho = true; hablarRespaldo(f.fraseingles, vel).then(res); } };
+      a.play().catch(a.onerror);
+    });
+  }
+  async function iniciarOido() {
+    panel().innerHTML = cabecera('Entrenador de oído', 'Frases reales con audio nativo. Escucha, escribe lo que oyes y repasa justo cuando se te empieza a olvidar.') +
+      '<p class="text-center text-slate-300 text-3xl py-10"><i class="fas fa-circle-notch fa-spin"></i></p>';
+    engancharVolver();
+    let lista;
+    try { lista = await oidoCargar(nivel); } catch { panel().querySelector('.fa-spin').parentElement.innerHTML = '<span class="text-sm text-slate-400">No se pudieron cargar las frases. Revisa la conexión.</span>'; return; }
+    if (!lista.length) { panel().querySelector('.fa-spin').parentElement.innerHTML = '<span class="text-sm text-slate-400">Todavía no hay frases con audio para este nivel.</span>'; return; }
+    const o = oidoP();
+    const rep = barajar(oidoPendientes(lista));
+    const nuevas = lista.filter(f => !o.f[f.id]);
+    const ronda = [...rep, ...nuevas].slice(0, 10);
+    const sinNuevas = !rep.length && !nuevas.length;
+    if (!ronda.length || sinNuevas) {
+      // Todo visto y nada pendiente: repasa las más difíciles (caja más baja).
+      ronda.push(...barajar(lista).sort((a, b) => (o.f[a.id]?.caja || 0) - (o.f[b.id]?.caja || 0)).slice(0, 10));
+    }
+    oido = { ronda, i: 0, puntos: [], repasos: rep.length };
+    pintarOidoInicio(lista);
+  }
+  function pintarOidoInicio(lista) {
+    const o = oidoP();
+    const vistas = lista.filter(f => o.f[f.id]).length;
+    const dominadas = lista.filter(f => (o.f[f.id]?.caja || 0) >= 4).length;
+    const pend = oidoPendientes(lista).length;
+    const meta = Math.min(100, Math.round(o.hoy.n / OIDO_META * 100));
+    panel().innerHTML = cabecera('Entrenador de oído', 'Frases reales con audio nativo. Escucha, escribe lo que oyes y repasa justo cuando se te empieza a olvidar.') + `
+      <div class="card-3d p-5 mb-4 animate-pop">
+        <div class="grid grid-cols-3 gap-2 text-center mb-4">
+          <div><p class="text-2xl font-black text-[#FF7A00]">🔥 ${o.racha}</p><p class="text-[10px] font-black text-slate-400 uppercase">días seguidos</p></div>
+          <div><p class="text-2xl font-black text-emerald-600">${dominadas}</p><p class="text-[10px] font-black text-slate-400 uppercase">entiendes al oído</p></div>
+          <div><p class="text-2xl font-black text-[#0D47A1]">${pend}</p><p class="text-[10px] font-black text-slate-400 uppercase">para repasar hoy</p></div>
+        </div>
+        <div class="flex justify-between text-xs font-bold text-slate-600 mb-1"><span>Meta de hoy</span><span>${o.hoy.n}/${OIDO_META} frases</span></div>
+        <div class="barra mb-1"><i style="width:${meta}%"></i></div>
+        <p class="text-[11px] text-slate-400">Nivel ${nivel === 'C1' ? 'B2 (C1 usa las frases de B2)' : nivel}: ${vistas} de ${lista.length} frases escuchadas.</p>
+        <button id="oido-empezar" style="background:linear-gradient(135deg,#f43f5e,#db2777)" class="w-full btn-juice text-white font-bold py-3.5 rounded-xl mt-4 text-lg">
+          <i class="fas fa-ear-listen mr-2"></i>${oido.repasos ? `Empezar · ${Math.min(oido.repasos, 10)} de repaso` : 'Empezar ronda de 10'}</button>
+      </div>
+      <div class="card-3d p-5 text-sm text-slate-600 space-y-2">
+        <p class="font-black text-slate-800">Cómo sacarle provecho</p>
+        <p>1. Escucha <b>sin mirar nada</b> y escribe todo lo que puedas, aunque sea a medias.</p>
+        <p>2. Usa 🐢 o 💡 solo cuando de verdad no salga: cada ayuda resta puntos, pero es mejor que adivinar.</p>
+        <p>3. Al corregir, <b>vuelve a escuchar</b> mirando el texto. Ese momento («¡ah, era eso!») es donde se entrena el oído.</p>
+        <p>4. Haz tu meta todos los días: 15 minutos diarios valen más que 2 horas el fin de semana.</p>
+      </div>`;
+    engancharVolver();
+    document.getElementById('oido-empezar').onclick = () => pintarOidoFrase();
+  }
+  function oidoPista(f, nivelPista) {
+    // 1: guiones con la primera letra; 2: además, mitad de cada palabra
+    return f.fraseingles.split(/\s+/).map(w => w.replace(/[A-Za-z']+/g, p =>
+      p.length <= 1 ? p : p.slice(0, nivelPista === 1 ? 1 : Math.ceil(p.length / 2)) + '·'.repeat(p.length - (nivelPista === 1 ? 1 : Math.ceil(p.length / 2))))).join('  ');
+  }
+  function pintarOidoFrase() {
+    const f = oido.ronda[oido.i];
+    oido.ayuda = { lento: 0, pista: 0, escuchas: 0 };
+    panel().innerHTML = cabecera('Entrenador de oído', '') + `
+      <div class="flex items-center gap-2 mb-3">
+        <div class="barra flex-1"><i style="width:${oido.i / oido.ronda.length * 100}%"></i></div>
+        <span class="text-xs font-black text-slate-500">${oido.i + 1}/${oido.ronda.length}</span>
+      </div>
+      <div class="card-3d p-5 animate-pop text-center">
+        ${oidoP().f[f.id] ? '<span class="inline-block text-[10px] font-black uppercase bg-blue-50 text-[#0D47A1] rounded-full px-2 py-0.5 mb-2">Repaso</span>' : '<span class="inline-block text-[10px] font-black uppercase rounded-full" style="background:#fff1f2;color:#e11d48 px-2 py-0.5 mb-2">Frase nueva</span>'}
+        <div class="flex justify-center gap-3 mb-4">
+          <button id="oi-oir" style="background:linear-gradient(135deg,#f43f5e,#db2777)" class="btn-juice w-20 h-20 rounded-full text-white text-3xl shadow-lg"><i class="fas fa-volume-high"></i></button>
+          <button id="oi-lento" class="btn-juice w-14 h-14 self-center rounded-full bg-slate-100 text-2xl" title="Más despacio">🐢</button>
+          <button id="oi-pista" class="btn-juice w-14 h-14 self-center rounded-full bg-slate-100 text-2xl" title="Pista de letras">💡</button>
+        </div>
+        <p id="oi-pistatxt" class="font-mono text-slate-500 tracking-wide text-sm mb-3 min-h-[1.25rem]"></p>
+        <textarea id="oi-in" rows="2" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Escribe lo que oíste..." class="w-full border-2 border-slate-200 rounded-xl p-3 text-lg font-bold text-slate-700 outline-none"></textarea>
+        <div class="flex gap-2 mt-3">
+          <button id="oi-nose" style="flex:1" class="btn-juice bg-slate-100 text-slate-500 font-bold py-3 rounded-xl text-sm">No entiendo</button>
+          <button id="oi-ok" style="flex:2" class="btn-juice bg-[#FF7A00] text-white font-bold py-3 rounded-xl">Comprobar</button>
+        </div>
+        <div id="oi-res"></div>
+      </div>`;
+    engancharVolver(() => { stopSpeaking(); iniciarOido(); });
+    const oir = async (vel, btn) => { oido.ayuda.escuchas++; const sonido = oidoTocar(f, vel); btn.classList.add('sonando'); await sonido; btn.classList.remove('sonando'); document.getElementById('oi-in')?.focus(); };
+    document.getElementById('oi-oir').onclick = e => oir(velocidad, e.currentTarget);
+    document.getElementById('oi-lento').onclick = e => { oido.ayuda.lento = 1; oir(Math.min(0.7, velocidad), e.currentTarget); };
+    document.getElementById('oi-pista').onclick = () => {
+      oido.ayuda.pista = Math.min(2, oido.ayuda.pista + 1);
+      document.getElementById('oi-pistatxt').textContent = oidoPista(f, oido.ayuda.pista);
+    };
+    const inp = document.getElementById('oi-in');
+    inp.onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); oidoComprobar(); } };
+    document.getElementById('oi-ok').onclick = () => oidoComprobar();
+    document.getElementById('oi-nose').onclick = () => oidoComprobar(true);
+    setTimeout(() => document.getElementById('oi-oir')?.click(), 350);
+  }
+  function oidoComprobar(rendirse = false) {
+    const f = oido.ronda[oido.i];
+    const inp = document.getElementById('oi-in');
+    if (!inp || inp.disabled) return;
+    const escrito = rendirse ? '' : inp.value.trim();
+    if (!escrito && !rendirse) { showToast('✍️ Escribe lo que oíste (aunque sea una parte), o toca «No entiendo».'); return; }
+    inp.disabled = true;
+    const ops = alinear(tokens(f.fraseingles), tokens(escrito));
+    const total = ops.filter(o => o.tipo !== 'sobra').length;
+    const buenas = ops.filter(o => o.tipo === 'ok').length + ops.filter(o => o.tipo === 'casi').length * 0.75;
+    const sobran = ops.filter(o => o.tipo === 'sobra').length;
+    let pct = Math.max(0, Math.round((buenas - sobran * 0.5) / Math.max(1, total) * 100));
+    const castigo = oido.ayuda.lento * 10 + oido.ayuda.pista * 15;
+    const final = Math.max(0, pct - castigo);
+    oido.puntos.push(final);
+    // Caja Leitner
+    const o = oidoP();
+    const prev = o.f[f.id] || { caja: 0 };
+    const caja = final >= 85 ? Math.min(OIDO_DIAS.length - 1, (prev.caja || 0) + 1) : final >= 60 ? Math.max(1, prev.caja || 0) : 0;
+    o.f[f.id] = { caja, due: sumarDias(OIDO_DIAS[caja] || 1), ult: final };
+    o.hoy.n++; o.total++;
+    if (o.hoy.n === 1) { o.racha = o.ultimo === sumarDias(-1) ? o.racha + 1 : o.ultimo === hoy() ? o.racha : 1; o.ultimo = hoy(); }
+    if (o.hoy.n === OIDO_META) { setTimeout(() => { confeti(140); showToast(`🏆 ¡Meta de hoy cumplida! ${OIDO_META} frases entrenadas.`, 3600); }, 600); }
+    guardar();
+    if (final >= 85) sonidoBien(); else if (final < 50) sonidoMal();
+    const msg = final >= 95 ? '¡Perfecto! Oído de nativo 🎯' : final >= 85 ? '¡Muy bien! 👏' : final >= 60 ? 'Casi. Vuelve a escucharla mirando el texto.' : 'Escúchala varias veces mirando el texto. Volverá mañana.';
+    document.getElementById('oi-res').innerHTML = `
+      <div class="bg-slate-50 rounded-xl p-3 mt-4 text-left animate-pop">
+        <div class="flex justify-between items-center mb-1">
+          <span class="text-xs font-black text-slate-500">${msg}</span>
+          <span class="text-sm font-black ${final >= 85 ? 'text-green-600' : final >= 60 ? 'text-amber-600' : 'text-red-500'}">${final}%${castigo && pct ? ` <small class="text-slate-400">(−${Math.min(pct, castigo)} ayudas)</small>` : ''}</span>
+        </div>
+        <div class="leading-loose">${ops.map(op => {
+          if (op.tipo === 'ok') return `<span class="tok ok">${escapeHTML(op.esp)}</span>`;
+          if (op.tipo === 'casi') return `<span class="tok casi">${escapeHTML(op.esp)}<small>«${escapeHTML(op.escr)}»</small></span>`;
+          if (op.tipo === 'mal') return `<span class="tok mal">${escapeHTML(op.esp)}<small>«${escapeHTML(op.escr)}»</small></span>`;
+          if (op.tipo === 'falta') return `<span class="tok falta">${escapeHTML(op.esp)}</span>`;
+          return `<span class="tok sobra">${escapeHTML(op.escr)}</span>`;
+        }).join(' ')}</div>
+        <p class="text-base font-black text-slate-800 mt-2">${escapeHTML(f.fraseingles)}</p>
+        <p class="text-sm text-slate-500">${escapeHTML(f['fraseespañol'] || '')}</p>
+        <div class="flex items-center gap-2 mt-3">
+          <button class="play-btn" id="oi-re" title="Escuchar otra vez"><i class="fas fa-play text-xs"></i></button>
+          <button class="play-btn lento" id="oi-rel" title="Despacio"><span class="text-sm">🐢</span></button>
+          <span class="text-[11px] text-slate-400 flex-1">Escúchala leyendo 2 o 3 veces</span>
+          <button id="oi-sig" class="btn-juice bg-[#FF7A00] text-white font-bold py-2 px-5 rounded-xl text-sm">${oido.i + 1 < oido.ronda.length ? 'Siguiente' : 'Ver resultado'}</button>
+        </div>
+      </div>`;
+    document.getElementById('oi-re').onclick = () => oidoTocar(f);
+    document.getElementById('oi-rel').onclick = () => oidoTocar(f, 0.7);
+    document.getElementById('oi-sig').onclick = () => { oido.i++; oido.i < oido.ronda.length ? pintarOidoFrase() : pintarOidoFinal(); };
+    document.getElementById('oi-sig').focus();
+    setTimeout(() => oidoTocar(f), 300);
+  }
+  function pintarOidoFinal() {
+    stopSpeaking();
+    const prom = Math.round(oido.puntos.reduce((s, x) => s + x, 0) / Math.max(1, oido.puntos.length));
+    const buenas = oido.puntos.filter(x => x >= 85).length;
+    const o = oidoP();
+    if (prom >= 85) confeti();
+    panel().innerHTML = cabecera('Entrenador de oído', '') + `
+      <div class="card-3d p-6 text-center animate-pop">
+        <div class="text-6xl mb-2">${prom >= 90 ? '🏆' : prom >= 70 ? '👏' : '💪'}</div>
+        <h3 class="font-heading font-black text-2xl text-slate-800">${buenas} de ${oido.ronda.length} entendidas</h3>
+        <p class="text-sm text-slate-500 mt-1">Promedio ${prom}% · Hoy llevas ${o.hoy.n}/${OIDO_META} · 🔥 ${o.racha} ${o.racha === 1 ? 'día' : 'días'}</p>
+        <p class="text-xs text-slate-400 mt-2">Las que fallaste vuelven mañana; las que entendiste, en unos días. Así se fijan.</p>
+        <button id="oi-otra" style="background:linear-gradient(135deg,#f43f5e,#db2777)" class="w-full btn-juice text-white font-bold py-3 rounded-xl mt-5">Otra ronda</button>
+        <button id="oi-ini" class="w-full btn-juice bg-slate-100 text-slate-600 font-bold py-3 rounded-xl mt-2">Volver al inicio</button>
+      </div>`;
+    engancharVolver();
+    document.getElementById('oi-otra').onclick = () => iniciarOido();
+    document.getElementById('oi-ini').onclick = () => renderInicio();
+  }
+
   function abrirActividad(id) {
     stopSpeaking();
     window.scrollTo({ top: 0 });
+    if (id === 'oido') return iniciarOido();
     if (id === 'dictado') return renderDictados();
     if (id === 'conectada') return renderConectadaLista();
     if (id === 'vocab') return iniciarVocab();
