@@ -30,7 +30,7 @@
      p = monedas por minuto · cap = minutos que acumula · n = nivel de la isla */
   const CATALOGO = [
     { id: 'house', e: '🏠', es: 'casa', c: 40, p: 4, cap: 60, n: 1 },
-    { id: 'farm', e: '🌾', es: 'granja', c: 80, p: 7, cap: 60, n: 1 },
+    { id: 'farm', e: '🌾', es: 'granja', c: 80, p: 0, cap: 1, n: 1, granja: true },
     { id: 'tree', e: '🌳', es: 'árbol', c: 15, deco: true, n: 1 },
     { id: 'flower', e: '🌷', es: 'flor', c: 8, deco: true, n: 1 },
     { id: 'bakery', e: '🥖', es: 'panadería', c: 260, p: 7, cap: 120, n: 2 },
@@ -77,10 +77,11 @@
 
   /* ---------------- Estado ---------------- */
   const NUEVO = () => ({
-    v: 2, monedas: 60, gemas: 5, xp: 0, nivel: 1, nivelIngles: 'A1', sonido: true,
+    v: 3, monedas: 60, gemas: 5, xp: 0, nivel: 1, nivelIngles: 'A1', sonido: true,
     mapa: { '-1,1': { t: 'tree', l: 1 }, '2,-1': { t: 'flower', l: 1 } },
     ruleta: null, boost: 0, pedidos: [], vistas: {}, frases: {}, construidos: {},
-    mision: 0, base: {}, st: { recogido: 0, bonus: 0, pedidos: 0, cofres: 0, mejoras: 0, deletreos: 0, ruleta: 0, frases: 0 },
+    mision: 0, base: {}, st: { recogido: 0, bonus: 0, pedidos: 0, cofres: 0, mejoras: 0, deletreos: 0, ruleta: 0, frases: 0, cosechas: 0, entregas: 0 },
+    granero: {}, antojos: {}, amistad: {},
     visto: Date.now(), racha: { dia: null, n: 0 }, preguntas: 0, aciertos: 0
   });
   let S = NUEVO();
@@ -101,10 +102,10 @@
   const decoraciones = () => Object.values(S.mapa).filter((b) => CAT[b.t] && CAT[b.t].deco).length;
   const bonoDeco = () => Math.min(0.6, decoraciones() * 0.03);
   const boostActivo = () => S.boost > Date.now();
-  function prodMin(b) { const c = CAT[b.t]; if (!c || c.deco) return 0; return c.p * Math.pow(1.6, (b.l || 1) - 1) * (1 + bonoDeco()) * (boostActivo() ? 2 : 1); }
+  function prodMin(b) { const c = CAT[b.t]; if (!c || c.deco || c.granja) return 0; return c.p * Math.pow(1.6, (b.l || 1) - 1) * (1 + bonoDeco()) * (boostActivo() ? 2 : 1); }
   function capMin(b) { const c = CAT[b.t]; return c.cap * (1 + ((b.l || 1) - 1) * 0.25); }
   function acumulado(b, ahora = Date.now()) {
-    if (!CAT[b.t] || CAT[b.t].deco) return 0;
+    if (!CAT[b.t] || CAT[b.t].deco || CAT[b.t].granja) return 0;
     const min = Math.min(capMin(b), Math.max(0, (ahora - (b.u || ahora)) / 60000));
     return min * prodMin(b);
   }
@@ -286,6 +287,7 @@
     return l;
   }
   function ajustarVecinos() {
+    setTimeout(revisarAntojos, 0);
     const casas = Object.values(S.mapa).filter((b) => b.t === 'house' || b.t === 'hotel').length;
     const n = Math.min(VECINOS.length, 1 + casas);
     while (vecinos.length < n) {
@@ -305,7 +307,7 @@
       } else { const s = Math.min(d, dt * 0.9); v.x += (v.tx - v.x) / d * s; v.y += (v.ty - v.y) / d * s; }
       v.gT -= dt;
       if (v.globo) { v.globo.t -= dt; if (v.globo.t <= 0) v.globo = null; }
-      else if (v.gT <= 0) { const f = elegir(FRASES); v.globo = { en: f[0], es: f[1], t: 4.5 }; v.gT = azar(7, 16); }
+      else if (v.gT <= 0 && !(S.antojos[v.n] && S.antojos[v.n].c)) { const f = elegir(FRASES); v.globo = { en: f[0], es: f[1], t: 4.5 }; v.gT = azar(7, 16); }
     }
   }
 
@@ -385,8 +387,9 @@
           c.fillStyle = 'rgba(255,255,255,.88)'; redondo(c, p.x - w / 2, p.y + hh * 0.45, w, 15 * cam.z + 3, 7); c.fill();
           c.fillStyle = '#334155'; c.textBaseline = 'middle'; c.fillText(cat.id, p.x, p.y + hh * 0.45 + (15 * cam.z + 3) / 2 + 0.5);
         }
+        if (cat.granja) dibujarCultivo(c, o.b, p, tam);
         // Monedas listas
-        if (!cat.deco) {
+        else if (!cat.deco) {
           const a = acumulado(o.b, ahora), lleno = a >= prodMin(o.b) * capMin(o.b) * 0.999;
           if (a >= Math.max(1, prodMin(o.b))) {
             const by = p.y - tam * 1.05 - 6 + Math.sin(tiempo * 4 + o.x) * 4;
@@ -408,6 +411,7 @@
           c.beginPath(); c.moveTo(p.x - 5, gy + h - 1); c.lineTo(p.x + 5, gy + h - 1); c.lineTo(p.x, gy + h + 7); c.fill();
           c.fillStyle = '#1e293b'; c.textBaseline = 'middle'; c.fillText(v.globo.en, p.x, gy + h / 2 + 0.5); c.globalAlpha = 1;
         }
+        dibujarAntojo(c, v, p, tam);
       }
     }
     dibujarCofres(c);
@@ -480,6 +484,7 @@
     for (const v of vecinos) {
       const p = aPantalla(v.x, v.y);
       if (Math.hypot(p.x - px, p.y - 14 * cam.z - py) < 22 * cam.z + 6) {
+        if (S.antojos[v.n] && S.antojos[v.n].c) { S.st.frases++; atenderVecino(v); revisarMision(); return; }
         const f = v.globo || (() => { const r = elegir(FRASES); return { en: r[0], es: r[1] }; })();
         v.globo = { ...f, t: 4.5 };
         voz(f.en); toast(`${v.n}: "${f.en}" = ${f.es}`);
@@ -499,7 +504,7 @@
       if (b) { abrirEdificio(t.x, t.y); return; }
       construir(t.x, t.y, seleccion); return;
     }
-    if (b) recoger(t.x, t.y);
+    if (b) b.t === 'farm' ? granja(t.x, t.y) : recoger(t.x, t.y);
   }
 
   let construyendo = false;
@@ -596,7 +601,7 @@
     const venta = Math.floor(cat.c * 0.5);
     const mej = cat.deco ? null : costoMejora(b);
     const v = abrirModal(`<div class="grande">${cat.e}</div><h2>${esc(cat.id)} <button class="oir" data-oir style="width:40px;height:40px;font-size:18px;vertical-align:middle">🔊</button></h2>
-      <p class="sub">${esc(cat.es)}${cat.deco ? ' · decoración (+3% producción)' : ` · nivel ${b.l || 1} · ${fmt(prodMin(b))} 🪙/min`}</p>
+      <p class="sub">${esc(cat.es)}${cat.granja ? ` · nivel ${b.l || 1} · cosecha ${cosechaPor(b)} por siembra` : cat.deco ? ' · decoración (+3% producción)' : ` · nivel ${b.l || 1} · ${fmt(prodMin(b))} 🪙/min`}</p>
       ${mej ? `<button class="btn morado" data-mej ${S.monedas < mej || (b.l || 1) >= 6 ? 'disabled style="opacity:.5"' : ''}>⬆️ Mejorar (${(b.l || 1) >= 6 ? 'máximo' : fmt(mej) + ' 🪙'})</button>` : ''}
       <button class="btn gris" data-vender>🗑️ Vender (+${fmt(venta)} 🪙)</button>
       <button class="btn" data-ok>Cerrar</button>`);
@@ -613,6 +618,220 @@
     };
   }
 
+  /* ---------------- Granja: sembrar, cosechar y ayudar a los vecinos ----------------
+     La granja (farm) no da monedas: se siembra un cultivo, crece y se cosecha
+     al granero. Los vecinos piden cosechas (globo ❗): se escucha lo que piden
+     en inglés, se adivina qué y cuánto, y al entregar pagan bien y sube la
+     amistad ❤️ (cada 3 corazones regalan gemas). Sembrar y cosechar actúa en
+     todas las granjas a la vez, para que no sea repetitivo. */
+  const CULTIVOS = [
+    { id: 'wheat', uno: 'a bag of wheat', pl: 'bags of wheat', e: '🌾', es: 'trigo', esPl: 'bolsas de trigo', s: 30, v: 6, n: 1 },
+    { id: 'carrot', uno: 'a carrot', pl: 'carrots', e: '🥕', es: 'zanahoria', esPl: 'zanahorias', s: 60, v: 9, n: 1 },
+    { id: 'tomato', uno: 'a tomato', pl: 'tomatoes', e: '🍅', es: 'tomate', esPl: 'tomates', s: 120, v: 15, n: 2 },
+    { id: 'corn', uno: 'an ear of corn', pl: 'ears of corn', e: '🌽', es: 'maíz', esPl: 'mazorcas de maíz', s: 180, v: 20, n: 2 },
+    { id: 'potato', uno: 'a potato', pl: 'potatoes', e: '🥔', es: 'papa', esPl: 'papas', s: 300, v: 28, n: 3 },
+    { id: 'strawberry', uno: 'a strawberry', pl: 'strawberries', e: '🍓', es: 'fresa', esPl: 'fresas', s: 480, v: 40, n: 4 },
+    { id: 'pumpkin', uno: 'a pumpkin', pl: 'pumpkins', e: '🎃', es: 'calabaza', esPl: 'calabazas', s: 900, v: 65, n: 5 },
+    { id: 'grapes', uno: 'a bunch of grapes', pl: 'bunches of grapes', e: '🍇', es: 'uvas', esPl: 'racimos de uvas', s: 1500, v: 95, n: 6 }
+  ];
+  const CUL = Object.fromEntries(CULTIVOS.map((c) => [c.id, c]));
+  const NUM = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight'];
+  const cultivosAbiertos = () => CULTIVOS.filter((c) => c.n <= S.nivel);
+  const granjas = () => Object.entries(S.mapa).filter(([, b]) => b.t === 'farm');
+  const listo = (b) => b.cr && b.cr.fin <= Date.now();
+  const cosechaPor = (b) => 2 + ((b.l || 1) - 1);
+  const mmss = (s) => (s >= 60 ? `${Math.floor(s / 60)}:${String(Math.ceil(s % 60)).padStart(2, '0')} min` : `${Math.ceil(s)} s`);
+  const queCosa = (c, n) => (n === 1 ? c.uno : `${NUM[n]} ${c.pl}`);
+  const FRASES_ANTOJO = [
+    (c, n) => [`Hi! Can I have ${queCosa(c, n)}, please?`, `¡Hola! ¿Me das ${n} ${n === 1 ? c.es : c.esPl}, por favor?`],
+    (c, n) => [`I'm cooking dinner. I need ${queCosa(c, n)}.`, `Estoy cocinando la cena. Necesito ${n} ${n === 1 ? c.es : c.esPl}.`],
+    (c, n) => [`Could you bring me ${queCosa(c, n)}?`, `¿Me podrías traer ${n} ${n === 1 ? c.es : c.esPl}?`],
+    (c, n) => [`My kids are hungry! I want ${queCosa(c, n)}.`, `¡Mis hijos tienen hambre! Quiero ${n} ${n === 1 ? c.es : c.esPl}.`],
+    (c, n) => [`I'd like ${queCosa(c, n)} for my party.`, `Quisiera ${n} ${n === 1 ? c.es : c.esPl} para mi fiesta.`],
+    (c, n) => [`Do you have ${queCosa(c, n)}? I'll pay you well!`, `¿Tienes ${n} ${n === 1 ? c.es : c.esPl}? ¡Te pago bien!`]
+  ];
+  function nuevoAntojo() {
+    const ab = cultivosAbiertos(), c = elegir(ab.length > 2 ? ab.slice(-4) : ab);
+    const n = Math.max(1, Math.min(8, Math.round(azar(1, 2 + granjas().length * 1.2))));
+    const [en, es] = elegir(FRASES_ANTOJO)(c, n);
+    return { c: c.id, n, en, es, premio: Math.round(c.v * n * (2.5 + S.nivel * 0.4)), xp: 6 + n * 3 };
+  }
+  // Reparte pedidos de cosecha entre los vecinos que están en la isla
+  function revisarAntojos() {
+    if (!granjas().length) return;
+    const ahora = Date.now(), max = 2 + Math.floor(S.nivel / 2);
+    let activos = vecinos.filter((v) => S.antojos[v.n] && S.antojos[v.n].c).length;
+    for (const v of barajar([...vecinos])) {
+      if (activos >= max) break;
+      const a = S.antojos[v.n];
+      if (a && (a.c || (a.espera || 0) > ahora)) continue;
+      S.antojos[v.n] = nuevoAntojo(); activos++;
+    }
+  }
+  function sembrar(id) {
+    const c = CUL[id]; let n = 0;
+    for (const [, b] of granjas()) if (!b.cr) { b.cr = { c: id, fin: Date.now() + c.s * 1000 }; b.anim = 0.6; n++; }
+    voz(c.id); SFX.pop();
+    toast(`🌱 Sembraste ${c.e} ${c.id} (${c.es}) en ${n} ${n === 1 ? 'granja' : 'granjas'} · listo en ${mmss(c.s)}`);
+    for (const [k, b] of granjas()) if (b.cr && b.cr.c === id) { const [x, y] = k.split(',').map(Number); const p = aPantalla(x, y); flotar(p.x, p.y - 50 * cam.z, '🌱', '#bbf7d0', 22); }
+    guardar();
+  }
+  function cosecharTodo() {
+    const total = {};
+    for (const [k, b] of granjas()) {
+      if (!listo(b)) continue;
+      const c = CUL[b.cr.c], q = cosechaPor(b);
+      S.granero[c.id] = (S.granero[c.id] || 0) + q; total[c.id] = (total[c.id] || 0) + q;
+      const [x, y] = k.split(',').map(Number), p = aPantalla(x, y);
+      flotar(p.x, p.y - 60 * cam.z, `+${q} ${c.e}`, '#fff', 24); nube(p.x, p.y);
+      b.cr = null; b.anim = 0.8;
+    }
+    const tipos = Object.keys(total); if (!tipos.length) return 0;
+    const n = tipos.reduce((s, k) => s + total[k], 0);
+    S.st.cosechas = (S.st.cosechas || 0) + n;
+    SFX.bien(); ganarXP(2 + n);
+    const c = CUL[tipos[0]]; voz(total[c.id] === 1 ? c.uno : `${NUM[Math.min(8, total[c.id])] || total[c.id]} ${c.pl}`);
+    toast(`🧺 Cosechaste ${tipos.map((k) => `${total[k]} ${CUL[k].e} ${total[k] === 1 ? CUL[k].id : CUL[k].pl}`).join(' · ')}`);
+    revisarAntojos(); hud(true); guardar(); revisarMision();
+    return n;
+  }
+  function graneroHTML() {
+    const l = CULTIVOS.filter((c) => S.granero[c.id]);
+    return l.length ? `<div class="chips">${l.map((c) => `<span class="chip">${c.e} ${S.granero[c.id]}</span>`).join('')}</div>` : '<p class="sub">Tu granero está vacío</p>';
+  }
+  function pedidosDeCultivo(id) { return vecinos.filter((v) => S.antojos[v.n] && S.antojos[v.n].c === id).map((v) => v.n); }
+  async function granja(x, y) {
+    const b = S.mapa[x + ',' + y];
+    if (granjas().some(([, g]) => listo(g))) { cosecharTodo(); return; }
+    if (b.cr) {
+      const c = CUL[b.cr.c], falta = (b.cr.fin - Date.now()) / 1000;
+      const v = abrirModal(`<div class="grande">${c.e}</div><h2>${esc(c.id)} <button class="oir" data-oir style="width:40px;height:40px;font-size:18px;vertical-align:middle">🔊</button></h2>
+        <p class="sub">${esc(c.es)} · está creciendo, listo en <b>${mmss(falta)}</b></p>
+        <button class="btn morado" data-ya>⚡ ¡Que crezca ya! (acierta una palabra)</button><button class="btn gris" data-ok>Esperar</button>`);
+      v.querySelector('[data-oir]').onclick = () => voz(c.id);
+      v.querySelector('[data-ok]').onclick = () => cerrarModal(v);
+      v.querySelector('[data-ya]').onclick = async () => {
+        cerrarModal(v);
+        if (palabras.length < 4 || await preguntar('⚡ Abono mágico', `Acierta y tus ${c.pl} crecen al instante`)) {
+          for (const [, g] of granjas()) if (g.cr && g.cr.c === c.id) g.cr.fin = Date.now();
+          S.st.bonus++; cosecharTodo();
+        } else toast('🌱 Sigue creciendo… ¡prueba otra vez luego!');
+      };
+      return;
+    }
+    const pedidos = Object.fromEntries(CULTIVOS.map((c) => [c.id, pedidosDeCultivo(c.id)]));
+    const vacias = granjas().filter(([, g]) => !g.cr).length;
+    const v = abrirModal(`<h2>🌱 ¿Qué quieres sembrar?</h2><p class="sub">Se siembra en tus ${vacias} ${vacias === 1 ? 'granja vacía' : 'granjas vacías'}. Cada una da ${cosechaPor(b)}.</p>
+      ${graneroHTML()}
+      <div class="cultivos">${CULTIVOS.map((c) => {
+        const ab = c.n <= S.nivel, p = pedidos[c.id];
+        return `<button class="cultivo ${ab ? '' : 'bloq'}" data-c="${c.id}">${p.length ? '<i>❗</i>' : ''}<span>${ab ? c.e : '🔒'}</span><b>${ab ? esc(c.id) : 'Nivel ' + c.n}</b><small>${ab ? `${esc(c.es)} · ${mmss(c.s)}` : '&nbsp;'}</small></button>`;
+      }).join('')}</div>
+      <button class="btn gris" data-ok>Cerrar</button>`);
+    v.querySelector('[data-ok]').onclick = () => cerrarModal(v);
+    v.querySelectorAll('.cultivo').forEach((bt) => (bt.onclick = () => {
+      const c = CUL[bt.dataset.c];
+      if (c.n > S.nivel) { toast(`🔒 ${c.e} se desbloquea en el nivel ${c.n}`); return; }
+      cerrarModal(v); sembrar(c.id);
+    }));
+  }
+  // Un vecino con globo ❗: escuchar el pedido, adivinarlo y entregarlo.
+  function atenderVecino(v) {
+    const a = S.antojos[v.n], c = CUL[a.c];
+    const tiene = S.granero[c.id] || 0;
+    const amigos = S.amistad[v.n] || 0;
+    const corazones = '❤️'.repeat(amigos % 3) + '🤍'.repeat(3 - (amigos % 3));
+    let ops = null;
+    if (!a.visto) {
+      // Opciones: lo correcto, otra cantidad, otro cultivo y otro cultivo con otra cantidad
+      const otros = barajar(cultivosAbiertos().filter((x) => x.id !== c.id)), n2 = a.n === 1 ? 2 : a.n - 1;
+      const c2 = otros[0] || CULTIVOS[(CULTIVOS.indexOf(c) + 1) % CULTIVOS.length], c3 = otros[1] || c2;
+      ops = barajar([[c, a.n], [c, n2 === a.n ? a.n + 1 : n2], [c2, a.n], [c3, n2 === a.n ? a.n + 1 : a.n + 1]]);
+    }
+    const md = abrirModal(`<div class="grande">${v.e}</div><h2>${esc(v.n)}</h2><p class="sub">Amistad ${corazones} · cada 3 ❤️ te regala 💎</p>
+      <button class="oir" data-oir>🔊</button>
+      <div id="aTxt">${a.visto ? `<p class="frase">“${esc(a.en)}”</p><p class="sub">${esc(a.es)}</p>` : '<p class="sub" style="margin-top:6px"><b>Escucha</b> y elige qué te pide (si aciertas sin leer: premio x1.5)</p>'}</div>
+      ${ops ? `<div class="opciones" id="aOps">${ops.map(([oc, on], i) => `<button class="op" data-i="${i}">${on} ${oc.e} ${esc(on === 1 ? oc.id : oc.pl)}</button>`).join('')}</div>
+        <button class="btn gris" data-leer style="margin-top:8px">👀 No entiendo, ver el texto</button>` : ''}
+      <div id="aEntrega"></div><button class="btn gris" data-ok>Ahora no</button>`);
+    const oir = () => voz(a.en);
+    md.querySelector('[data-oir]').onclick = oir; setTimeout(oir, 250);
+    md.querySelector('[data-ok]').onclick = () => cerrarModal(md);
+    const mostrarEntrega = () => {
+      const ya = S.granero[c.id] || 0, premio = Math.round(a.premio * (a.oido ? 1.5 : 1));
+      md.querySelector('#aEntrega').innerHTML = `<p class="sub" style="margin-top:8px">Necesita <b>${a.n} ${c.e}</b> · tienes <b>${ya} ${c.e}</b></p>` + (ya >= a.n
+        ? `<button class="btn" data-dar>🤝 Entregar · 🪙 ${fmt(premio)}${a.oido ? ' (x1.5 👂)' : ''}</button>`
+        : `<p class="sub">🌱 Siembra <b>${esc(c.id)}</b> (${esc(c.es)}) en tu granja y vuelve.</p>${granjas().length ? '<button class="btn morado" data-ir>🌾 Ir a sembrar</button>' : '<p class="sub">Primero construye una granja (farm) 🔨</p>'}`);
+      const d = md.querySelector('[data-dar]');
+      if (d) d.onclick = () => { cerrarModal(md); entregar(v, premio); };
+      const ir = md.querySelector('[data-ir]');
+      if (ir) ir.onclick = () => {
+        cerrarModal(md);
+        const libre = granjas().find(([, g]) => !g.cr);
+        if (libre) sembrar(c.id); else toast('⏳ Tus granjas están ocupadas: cosecha primero');
+      };
+    };
+    const revelar = () => { a.visto = true; md.querySelector('#aTxt').innerHTML = `<p class="frase">“${esc(a.en)}”</p><p class="sub">${esc(a.es)}</p>`; guardar(); };
+    if (ops) {
+      md.querySelector('[data-leer]').onclick = (e) => { e.target.remove(); md.querySelector('#aOps').remove(); revelar(); mostrarEntrega(); };
+      md.querySelectorAll('#aOps .op').forEach((bt) => (bt.onclick = () => {
+        if (a.visto) return;
+        const [oc, on] = ops[+bt.dataset.i], ok = oc === c && on === a.n;
+        bt.classList.add(ok ? 'bien' : 'mal');
+        if (!ok) md.querySelectorAll('#aOps .op').forEach((x) => { const [xc, xn] = ops[+x.dataset.i]; if (xc === c && xn === a.n) x.classList.add('bien'); });
+        ok ? SFX.bien() : SFX.mal();
+        a.oido = ok; md.querySelector('[data-leer]')?.remove(); revelar();
+        if (ok) flotar(W / 2, H * 0.3, '👂 ¡Lo entendiste! x1.5', '#bbf7d0', 22);
+        mostrarEntrega();
+      }));
+    } else mostrarEntrega();
+  }
+  function entregar(v, premio) {
+    const a = S.antojos[v.n], c = CUL[a.c];
+    S.granero[c.id] -= a.n;
+    S.amistad[v.n] = (S.amistad[v.n] || 0) + 1;
+    const regalo = S.amistad[v.n] % 3 === 0;
+    S.antojos[v.n] = { espera: Date.now() + azar(30, 90) * 1000 };
+    S.st.entregas = (S.st.entregas || 0) + 1;
+    const p = aPantalla(v.x, v.y);
+    lluviaMonedas(p.x, p.y - 30 * cam.z, premio); flotar(p.x, p.y - 60 * cam.z, '❤️ Thank you!', '#fecdd3', 24);
+    v.globo = { en: elegir(['Thank you so much!', 'You are the best!', 'Thanks a lot, friend!', 'Wow, thank you!']), es: '¡Gracias!', t: 3.5 };
+    voz(v.globo.en);
+    ganar(premio, a.xp, regalo ? 3 : 0);
+    if (regalo) { lanzarConfeti(); SFX.nivel(); setTimeout(() => toast(`🎁 ${v.n} es tu gran amigo: ¡te regala 💎 3!`), 700); }
+    revisarAntojos(); guardar(); revisarMision();
+  }
+  function dibujarCultivo(c, b, p, tam) {
+    const hw = (TW / 2) * cam.z, emo = '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
+    c.textAlign = 'center'; c.fillStyle = '#000';
+    if (b.cr) {
+      const cu = CUL[b.cr.c], ok = listo(b), t = ok ? 1 : 1 - Math.max(0, b.cr.fin - Date.now()) / (cu.s * 1000);
+      c.font = `${(ok ? 20 : 12 + t * 6) * cam.z}px ${emo}`; c.textBaseline = 'middle';
+      for (const [dx, dy] of [[-0.42, 0.05], [0, 0.22], [0.42, 0.05], [0, -0.14]]) c.fillText(ok || t > 0.5 ? cu.e : '🌱', p.x + dx * hw, p.y + dy * hw - (ok ? Math.abs(Math.sin(tiempo * 5 + dx * 9)) * 4 : 0));
+      if (!ok) { // barrita de crecimiento
+        const w = 44 * cam.z, y = p.y - tam * 0.95;
+        c.fillStyle = 'rgba(0,0,0,.35)'; redondo(c, p.x - w / 2, y, w, 7 * cam.z + 2, 4); c.fill();
+        c.fillStyle = '#4ade80'; redondo(c, p.x - w / 2, y, Math.max(6, w * t), 7 * cam.z + 2, 4); c.fill();
+      }
+    }
+    if (!b.cr || listo(b)) { // globo: vacía → sembrar, lista → cosechar
+      const by = p.y - tam * 1.05 - 6 + Math.sin(tiempo * 4 + p.x) * 4;
+      c.fillStyle = b.cr ? '#22c55e' : '#fff'; c.beginPath(); c.arc(p.x, by, 15 * cam.z + 5, 0, 7); c.fill();
+      c.strokeStyle = b.cr ? '#14532d' : '#86efac'; c.lineWidth = 2.5; c.stroke();
+      c.font = `${15 * cam.z + 6}px ${emo}`; c.textBaseline = 'middle'; c.fillStyle = '#000'; c.fillText(b.cr ? '🧺' : '🌱', p.x, by + 1);
+    }
+  }
+  function dibujarAntojo(c, v, p, tam) {
+    const a = S.antojos[v.n]; if (!a || !a.c || v.globo) return;
+    const cu = CUL[a.c], r = 15 * cam.z + 7, by = p.y - tam - r - 6 + Math.sin(tiempo * 5 + v.x) * 3;
+    c.fillStyle = '#fff'; c.beginPath(); c.arc(p.x, by, r, 0, 7); c.fill(); c.strokeStyle = '#f59e0b'; c.lineWidth = 3; c.stroke();
+    c.beginPath(); c.moveTo(p.x - 5, by + r - 2); c.lineTo(p.x + 5, by + r - 2); c.lineTo(p.x, by + r + 7); c.fillStyle = '#fff'; c.fill();
+    c.font = `${15 * cam.z + 7}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = '#000';
+    c.fillText(cu.e, p.x, by + 1);
+    c.font = `1000 ${12 * cam.z + 6}px system-ui`; c.fillStyle = '#ef4444'; c.strokeStyle = '#fff'; c.lineWidth = 3;
+    const s = 1 + Math.abs(Math.sin(tiempo * 6)) * 0.25; c.save(); c.translate(p.x + r * 0.9, by - r * 0.8); c.scale(s, s); c.strokeText('!', 0, 0); c.fillText('!', 0, 0); c.restore();
+  }
+
   /* ---------------- Misiones (historia guiada por Abu 🦜) ----------------
      Secuencia fija por capítulos; al terminarla, misiones infinitas.
      Las de estadística cuentan desde que empieza la misión (S.base). */
@@ -621,7 +840,9 @@
   const HISTORIA = [
     M(0, 'construir', 'house', 1, 'Construye una casa (house)', '¡Hola! Soy Abu 🦜. Esta isla es tuya. Empecemos con una casa: toca 🔨 Construir.', 40, 1),
     M(0, 'recoger', null, 15, 'Recoge 15 monedas', 'Tu casa produce monedas 🪙. Cuando veas la moneda encima, ¡tócala!', 30),
-    M(0, 'construir', 'farm', 1, 'Construye una granja (farm)', 'Una granja da más monedas. ¡Deletréala para construirla!', 60),
+    M(0, 'construir', 'farm', 1, 'Construye una granja (farm)', 'En la granja siembras comida 🥕 que tus vecinos te van a pedir. ¡Deletréala para construirla!', 60),
+    M(0, 'cosechas', null, 4, 'Cosecha 4 cultivos 🧺', 'Toca la granja 🌱 y elige qué sembrar. Cuando salga 🧺, ¡tócala para cosechar!', 50),
+    M(0, 'entregas', null, 1, 'Ayuda a un vecino ❗', '¿Ves el globo ❗ sobre un vecino? Tócalo, escucha qué te pide en inglés y entrégaselo.', 80, 2),
     M(0, 'frases', null, 2, 'Habla con 2 vecinos', 'Tus vecinos hablan inglés. Tócalos para escucharlos.', 40, 1),
     M(0, 'bonus', null, 1, 'Acierta 1 pregunta bonus', 'Al recoger, a veces sale una pregunta. ¡Si aciertas, x3!', 80),
     M(0, 'construir', 'tree', 2, 'Planta 2 árboles (tree)', 'Las decoraciones suben la producción +3% cada una.', 50),
@@ -629,6 +850,8 @@
     M(0, 'nivel', null, 2, 'Llega al nivel 2', 'Recoge y construye para ganar XP ⭐.', 100, 2),
     M(1, 'construir', 'bakery', 1, 'Construye una panadería (bakery)', '¡Capítulo 2! Los vecinos quieren pan 🥖.', 150),
     M(1, 'pedidos', null, 1, 'Completa 1 pedido 📜', 'Ayuda a un vecino con sus palabras. Pagan muy bien.', 150, 2),
+    M(1, 'construir', 'farm', 2, 'Ten 2 granjas 🌾', 'Con más granjas cosechas el doble… y los vecinos piden más.', 150),
+    M(1, 'entregas', null, 4, 'Ayuda a 4 vecinos ❗', 'Cada 3 ❤️ de amistad, el vecino te regala 💎.', 250, 2),
     M(1, 'construir', 'house', 3, 'Ten 3 casas', 'Más casas = más vecinos en tu isla.', 150),
     M(1, 'construir', 'store', 1, 'Construye una tienda (store)', 'Una tienda para el pueblo 🏪.', 250),
     M(1, 'recoger', null, 800, 'Recoge 800 monedas', 'Tip: recoge varios edificios seguidos para hacer COMBO.', 250),
@@ -639,6 +862,7 @@
     M(2, 'bonus', null, 5, 'Acierta 5 preguntas bonus', 'Cada palabra que aciertas te hace más fuerte en inglés 💪.', 500),
     M(2, 'construir', 'fountain', 1, 'Construye una fuente (fountain)', 'Una fuente en la plaza ⛲.', 300),
     M(2, 'pedidos', null, 3, 'Completa 3 pedidos', 'Los vecinos confían en ti.', 600, 3),
+    M(2, 'entregas', null, 6, 'Ayuda a 6 vecinos ❗', 'Escucha bien: si entiendes sin leer, pagan x1.5 👂.', 700, 3),
     M(2, 'construir', 'library', 1, 'Construye una biblioteca (library)', 'Para leer en inglés 📚.', 800),
     M(2, 'cofres', null, 4, 'Abre 4 cofres', '¡Busca los cofres en la isla!', 600, 3),
     M(2, 'nivel', null, 5, 'Llega al nivel 5', 'Tu isla está creciendo mucho 🏝️.', 1000, 5),
@@ -658,10 +882,10 @@
   function misionActual() {
     if (S.mision < HISTORIA.length) return HISTORIA[S.mision];
     // Infinitas: rotan entre varios tipos, cada vez más grandes
-    const k = S.mision - HISTORIA.length, tipos = ['recoger', 'pedidos', 'bonus', 'cofres', 'mejoras'];
+    const k = S.mision - HISTORIA.length, tipos = ['recoger', 'entregas', 'pedidos', 'cosechas', 'bonus', 'cofres', 'mejoras'];
     const tipo = tipos[k % tipos.length], esc_ = 1 + Math.floor(k / tipos.length);
-    const n = { recoger: 20000 * esc_, pedidos: 2 + esc_, bonus: 4 + esc_ * 2, cofres: 3 + esc_, mejoras: 2 + esc_ }[tipo];
-    const t = { recoger: `Recoge ${fmt(n)} monedas`, pedidos: `Completa ${n} pedidos`, bonus: `Acierta ${n} preguntas bonus`, cofres: `Abre ${n} cofres`, mejoras: `Haz ${n} mejoras` }[tipo];
+    const n = { recoger: 20000 * esc_, entregas: 4 + esc_ * 2, cosechas: 20 + esc_ * 10, pedidos: 2 + esc_, bonus: 4 + esc_ * 2, cofres: 3 + esc_, mejoras: 2 + esc_ }[tipo];
+    const t = { recoger: `Recoge ${fmt(n)} monedas`, entregas: `Ayuda a ${n} vecinos ❗`, cosechas: `Cosecha ${n} cultivos 🧺`, pedidos: `Completa ${n} pedidos`, bonus: `Acierta ${n} preguntas bonus`, cofres: `Abre ${n} cofres`, mejoras: `Haz ${n} mejoras` }[tipo];
     return M(5, tipo, null, n, t, '¡Eres un maestro de la isla! Sigue así 🌟', 5000 * esc_, 3 + esc_);
   }
   function progresoMision(m) {
@@ -719,6 +943,14 @@
     if (m.tipo === 'construir') {
       if (!seleccion) return { el: $('bConstruir') };
       if (seleccion !== m.obj) { const b = document.querySelector(`.prod[data-id="${m.obj}"]`); return b ? { el: b } : null; }
+      return null;
+    }
+    if (m.tipo === 'cosechas' || m.tipo === 'entregas') {
+      const pv = m.tipo === 'entregas' && vecinos.find((v) => S.antojos[v.n] && S.antojos[v.n].c && (S.granero[S.antojos[v.n].c] || 0) >= S.antojos[v.n].n);
+      if (pv) { const p = aPantalla(pv.x, pv.y); return { x: p.x, y: p.y - 80 * cam.z }; }
+      const g = granjas().find(([, b]) => !b.cr || listo(b)) || (m.tipo === 'entregas' && !granjas().length ? null : null);
+      if (g) { const [x, y] = g[0].split(',').map(Number), p = aPantalla(x, y); return { x: p.x, y: p.y - 95 * cam.z }; }
+      if (!granjas().length) return seleccion ? null : { el: $('bConstruir') };
       return null;
     }
     if (m.tipo === 'pedidos') return { el: $('bPedidos') };
@@ -992,13 +1224,19 @@
     } catch (e) { console.warn('[isla] sin sesión', e); }
     if (!S.st) S.st = { recogido: 0, bonus: 0, pedidos: 0, cofres: 0, mejoras: 0, deletreos: 0, ruleta: 0, frases: 0 };
     if (S.mision === undefined) { S.mision = 0; S.base = {}; }
+    S.granero = S.granero || {}; S.antojos = S.antojos || {}; S.amistad = S.amistad || {};
+    if ((S.v || 2) < 3) {   // v3 metió 5 misiones de granja en la historia: corre el índice
+      const i = S.mision; S.mision = i < 3 ? i : i < 10 ? i + 2 : i < 20 ? i + 4 : i + 5; S.v = 3;
+      for (const [, b] of Object.entries(S.mapa)) if (b.t === 'farm') delete b.u;
+    }
     centrar(); ajustarVecinos(); asegurarPedidos(); hud(); revisarMision();
     monedasMostradas = S.monedas; $('hMonedas').textContent = fmt(S.monedas);
     await cargarPalabras();
     if (primeraVez) { introAbu(); guardar(); } else bienvenida();
-    setInterval(hud, 15000);
+    revisarAntojos();
+    setInterval(() => { hud(); revisarAntojos(); }, 15000);
   })();
   requestAnimationFrame(bucle);
 
-  window.__isla = { get S() { return S; }, recoger, construir, reclamarMision, get cofres() { return cofres; }, abrirCofre, abrirPedidos, abrirRuleta, ganar, aPantalla, get palabras() { return palabras; } };
+  window.__isla = { get S() { return S; }, granja, sembrar, cosecharTodo, atenderVecino, revisarAntojos, get vecinos() { return vecinos; }, recoger, construir, reclamarMision, get cofres() { return cofres; }, abrirCofre, abrirPedidos, abrirRuleta, ganar, aPantalla, get palabras() { return palabras; } };
 })();
