@@ -3244,7 +3244,7 @@ function openAbuChat() {
             ? [{ label: 'Seguir con Dominar 🏆', onClick: () => { closeModal(); iniciarDominar(nivel); } }]
             : []),
           { label: 'Elegir nivel', style: dominarPendiente ? 'bg-slate-100 text-slate-500' : '', onClick: () => { closeModal(); openNivelSelector(); } },
-          { label: cert.listo ? 'Pedir mi certificado 📜' : 'Ver certificados 🎓', style: 'bg-slate-100 text-slate-500', onClick: () => { closeModal(); openCertificados(); } },
+          { label: cert.listo ? 'Ver mi certificado 🎓' : 'Ver certificados 🎓', style: 'bg-slate-100 text-slate-500', onClick: () => { closeModal(); openCertificados(); } },
           { label: 'Repasar lo aprendido', style: 'bg-slate-100 text-slate-500', onClick: () => { closeModal(); volverAlHub(); } }
         ]
       });
@@ -5558,7 +5558,8 @@ function openAbuChat() {
      Un certificado se desbloquea cuando TODAS las palabras del nivel
      están DOMINADAS (flujo.srs[id].learned === true). El modal muestra
      nivel por nivel cuántas palabras faltan y, cuando llegas al 100 %,
-     habilita el botón para pedirlo por WhatsApp.                       */
+     habilita la prueba y, al aprobarla, el certificado
+     descargable (PDF e imagen, ver abrirCertificado).                       */
   let certDisponibles = 0;
 
   async function getCertProgreso(nivel) {
@@ -5574,18 +5575,6 @@ function openAbuChat() {
       pct: total ? Math.round((dominadas / total) * 100) : 0,
       listo: total > 0 && dominadas >= total
     };
-  }
-
-  function certWhatsAppURL(nivel) {
-    const nombre = (userProfile?.full_name || '').trim();
-    const correo = (currentUser?.email || '').trim();
-    const texto =
-      `¡Hola Abulingo! 🎓\n\n` +
-      `Ya dominé todas las palabras del nivel ${nivel} y quisiera solicitar mi certificado.\n\n` +
-      `Nombre: ${nombre || '(escribe aquí tu nombre)'}\n` +
-      `Correo: ${correo || '(escribe aquí tu correo)'}\n` +
-      `Nivel: ${nivel}\n\n¡Gracias!`;
-    return `${CERT_WHATSAPP_URL}?text=${encodeURIComponent(texto)}`;
   }
 
   async function openCertificados() {
@@ -5627,7 +5616,7 @@ function openAbuChat() {
         ${d.dominadas
           ? `<button class="cert-prueba btn-juice ${d.listo ? 'bg-green-500' : 'bg-[#FF7A00]'} text-white font-bold py-2.5 rounded-xl w-full mt-3" data-nivel="${escapeHTML(d.nivel)}">${d.aprobadas
               ? (d.aprobadas >= d.dominadas ? `✅ Prueba al día (${d.aprobadas} aprobadas)` : `📝 Continuar prueba · ${d.aprobadas}/${d.dominadas} aprobadas`)
-              : '📝 Presentar prueba para mi certificado'}</button>`
+              : '📝 Presentar prueba para mi certificado'}</button>${d.listo && d.aprobadas >= d.total ? `<button class="cert-descargar btn-juice bg-[#0D47A1] text-white font-bold py-2.5 rounded-xl w-full mt-2" data-nivel="${escapeHTML(d.nivel)}">🎓 Descargar mi certificado</button>` : ''}`
           : `<button class="cert-lock w-full mt-3 py-2.5 rounded-xl font-bold bg-slate-100 text-slate-400 cursor-not-allowed" disabled>🔒 Aún no tienes palabras dominadas</button>`}
       </div>`).join('');
 
@@ -5645,6 +5634,167 @@ function openAbuChat() {
     el.querySelectorAll('.cert-prueba').forEach(b => {
       b.onclick = () => iniciarPruebaCert(b.dataset.nivel);
     });
+    el.querySelectorAll('.cert-descargar').forEach(b => { b.onclick = () => abrirCertificado(b.dataset.nivel); });
+  }
+
+  /* ---------- Certificado descargable ----------
+     Al aprobar la prueba de un nivel se genera el certificado en un
+     canvas: horizontal (para el PDF) o vertical 1080×1920 (para el
+     estado de WhatsApp). La fecha es la del día en que se aprobó
+     (flujo.certFechas[nivel]) y el código se deriva del usuario y el nivel. */
+  const CERT_NIVEL_DESC = {
+    A1: 'Principiante', A2: 'Básico', B1: 'Intermedio', B2: 'Intermedio alto', C1: 'Avanzado'
+  };
+  function certFecha(nivel) {
+    flujo.certFechas = flujo.certFechas || {};
+    if (!flujo.certFechas[nivel]) { flujo.certFechas[nivel] = new Date().toISOString().slice(0, 10); updateUserFlow(); }
+    return flujo.certFechas[nivel];
+  }
+  function certCodigo(nivel) {
+    let h = 2166136261;
+    for (const ch of `${currentUser?.id || ''}|${nivel}`) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; }
+    return `ABU-${nivel}-${h.toString(36).toUpperCase().padStart(7, '0').slice(0, 7)}`;
+  }
+  function certFechaTexto(iso) {
+    const [y, m, d] = iso.split('-').map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' });
+  }
+  let certLogo = null;
+  function cargarLogoCert() {
+    if (certLogo) return certLogo;
+    certLogo = new Promise(res => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = 'logo_abulingo.png'; });
+    return certLogo;
+  }
+  // Ajusta el tamaño de letra para que el texto quepa en `ancho`.
+  function certTexto(c, txt, x, y, { tam, peso = 700, fuente = 'Georgia, serif', color = '#1e293b', ancho = 9999 }) {
+    let t = tam;
+    do { c.font = `${peso} ${t}px ${fuente}`; t -= 2; } while (c.measureText(txt).width > ancho && t > 12);
+    c.fillStyle = color; c.fillText(txt, x, y);
+  }
+  async function dibujarCertificado(d, vertical) {
+    const W = vertical ? 1080 : 2000, H = vertical ? 1920 : 1414;
+    const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+    const c = cv.getContext('2d');
+    try { await document.fonts.ready; } catch {}
+    // Fondo y marcos
+    const g = c.createLinearGradient(0, 0, W, H); g.addColorStop(0, '#fffaf2'); g.addColorStop(1, '#fff3e0');
+    c.fillStyle = g; c.fillRect(0, 0, W, H);
+    c.fillStyle = 'rgba(255,122,0,.06)';
+    for (let i = 0; i < 14; i++) { c.beginPath(); c.arc((i * 337) % W, (i * 521) % H, 60 + (i % 4) * 40, 0, 7); c.fill(); }
+    const m = vertical ? 40 : 50;
+    c.strokeStyle = '#0D47A1'; c.lineWidth = 14; c.strokeRect(m, m, W - 2 * m, H - 2 * m);
+    c.strokeStyle = '#FF7A00'; c.lineWidth = 4; c.strokeRect(m + 24, m + 24, W - 2 * m - 48, H - 2 * m - 48);
+    // Esquinas doradas
+    c.fillStyle = '#f5b301';
+    for (const [x, y] of [[m + 24, m + 24], [W - m - 24, m + 24], [m + 24, H - m - 24], [W - m - 24, H - m - 24]]) { c.beginPath(); c.arc(x, y, 14, 0, 7); c.fill(); }
+    c.textAlign = 'center'; c.textBaseline = 'alphabetic';
+    const cx = W / 2, logo = await cargarLogoCert();
+    const sans = '"Nunito", "Poppins", system-ui, sans-serif';
+    let y = vertical ? 190 : 110;
+    if (logo) { const L = vertical ? 420 : 260; c.drawImage(logo, cx - L / 2, y - 20, L, L); y += L - 10; }
+    else { certTexto(c, 'Abulingo.', cx, y + 90, { tam: 90, peso: 900, fuente: sans, color: '#0D47A1' }); y += 140; }
+    certTexto(c, 'CERTIFICADO', cx, y + (vertical ? 60 : 50), { tam: vertical ? 92 : 96, peso: 900, fuente: sans, color: '#0D47A1' });
+    certTexto(c, 'DE INGLÉS AMERICANO', cx, y + (vertical ? 120 : 108), { tam: vertical ? 38 : 38, peso: 800, fuente: sans, color: '#FF7A00' });
+    y += vertical ? 290 : 190;
+    certTexto(c, 'Abulingo certifica que', cx, y, { tam: vertical ? 40 : 40, peso: 400, color: '#475569' });
+    // Nombre
+    y += vertical ? 150 : 110;
+    certTexto(c, d.nombre, cx, y, { tam: vertical ? 92 : 104, peso: 700, fuente: 'Georgia, "Times New Roman", serif', color: '#111827', ancho: W - (vertical ? 160 : 400) });
+    c.strokeStyle = '#f5b301'; c.lineWidth = 4; c.beginPath(); c.moveTo(cx - (vertical ? 400 : 560), y + 30); c.lineTo(cx + (vertical ? 400 : 560), y + 30); c.stroke();
+    // Logro
+    y += vertical ? 140 : 100;
+    const lineas = vertical
+      ? ['aprobó la prueba de vocabulario y domina', `las ${d.total} palabras del nivel`]
+      : [`aprobó la prueba de vocabulario y domina las ${d.total} palabras del nivel`];
+    for (const l of lineas) { certTexto(c, l, cx, y, { tam: 40, peso: 400, color: '#475569', ancho: W - 200 }); y += 56; }
+    // Insignia del nivel
+    y += vertical ? 170 : 90;
+    const R = vertical ? 130 : 105;
+    c.fillStyle = '#FF7A00'; c.beginPath(); c.arc(cx, y, R, 0, 7); c.fill();
+    c.strokeStyle = '#f5b301'; c.lineWidth = 10; c.stroke();
+    c.strokeStyle = '#fff'; c.lineWidth = 3; c.beginPath(); c.arc(cx, y, R - 16, 0, 7); c.stroke();
+    c.textBaseline = 'middle';
+    certTexto(c, d.nivel, cx, y - 8, { tam: vertical ? 100 : 88, peso: 900, fuente: sans, color: '#fff' });
+    certTexto(c, (CERT_NIVEL_DESC[d.nivel] || '').toUpperCase(), cx, y + R * 0.55, { tam: 22, peso: 900, fuente: sans, color: '#fff', ancho: R * 1.6 });
+    c.textBaseline = 'alphabetic';
+    // Pie: fecha, firma, código
+    const pieY = H - m - (vertical ? 190 : 170);
+    const col = vertical ? [cx - 250, cx + 250] : [cx - 600, cx + 600];
+    c.strokeStyle = '#94a3b8'; c.lineWidth = 2;
+    for (const x of col) { c.beginPath(); c.moveTo(x - 190, pieY); c.lineTo(x + 190, pieY); c.stroke(); }
+    certTexto(c, d.fechaTxt, col[0], pieY - 18, { tam: 34, peso: 700, color: '#111827', ancho: 380 });
+    certTexto(c, 'Fecha', col[0], pieY + 42, { tam: 26, peso: 700, fuente: sans, color: '#64748b' });
+    certTexto(c, 'Abulingo', col[1], pieY - 18, { tam: 50, peso: 400, fuente: '"Brush Script MT", "Segoe Script", cursive', color: '#0D47A1' });
+    certTexto(c, 'Equipo Abulingo', col[1], pieY + 42, { tam: 26, peso: 700, fuente: sans, color: '#64748b' });
+    certTexto(c, `Código: ${d.codigo} · abulingo.github.io`, cx, H - m - (vertical ? 40 : 55), { tam: 24, peso: 700, fuente: sans, color: '#94a3b8' });
+    if (vertical) certTexto(c, '🎓 ¡Lo logré! Aprendo inglés con Abulingo', cx, pieY + 110, { tam: 34, peso: 900, fuente: sans, color: '#FF7A00', ancho: W - 160 });
+    return cv;
+  }
+  function descargarBlob(blob, nombre) {
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nombre;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  }
+  function cargarJsPDF() {
+    if (window.jspdf) return Promise.resolve(window.jspdf);
+    return new Promise((res, rej) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+      s.onload = () => res(window.jspdf); s.onerror = () => rej(new Error('No se pudo cargar el generador de PDF'));
+      document.head.appendChild(s);
+    });
+  }
+  async function abrirCertificado(nivel) {
+    const el = document.getElementById('cert-body');
+    if (!el) return;
+    let nombre = (userProfile?.full_name || '').trim();
+    if (!nombre) {
+      nombre = (prompt('¿Qué nombre completo quieres que aparezca en tu certificado?') || '').trim();
+      if (!nombre) return;
+    }
+    el.innerHTML = spinnerHTML();
+    const cert = await getCertProgreso(nivel);
+    const fecha = certFecha(nivel);
+    const d = { nivel, nombre, total: cert.total, fechaTxt: certFechaTexto(fecha), codigo: certCodigo(nivel) };
+    const base = `Certificado-Abulingo-${nivel}-${nombre.replace(/[^\p{L}\p{N}]+/gu, '_')}`;
+    const vista = await dibujarCertificado(d, false);
+    el.innerHTML = `
+      <div class="text-center mb-3">
+        <h3 class="font-heading font-black text-xl text-slate-800">🎓 Tu certificado del nivel ${escapeHTML(nivel)}</h3>
+        <p class="text-sm text-slate-500">¡Felicitaciones, ${escapeHTML(nombre.split(/\s+/)[0])}! Descárgalo y compártelo.</p>
+      </div>
+      <img src="${vista.toDataURL('image/jpeg', 0.85)}" alt="Certificado" class="w-full rounded-xl shadow-md border border-slate-200 mb-4">
+      <button id="cert-pdf" class="btn-juice bg-[#0D47A1] text-white font-bold py-3 rounded-xl w-full mb-2"><i class="fas fa-file-pdf mr-2"></i>Descargar en PDF</button>
+      <button id="cert-img" class="btn-juice bg-[#FF7A00] text-white font-bold py-3 rounded-xl w-full mb-2"><i class="fas fa-image mr-2"></i>Descargar imagen</button>
+      <button id="cert-wa" class="btn-juice bg-green-500 text-white font-bold py-3 rounded-xl w-full mb-2"><i class="fab fa-whatsapp mr-2"></i>Imagen para estado de WhatsApp</button>
+      <p class="text-[11px] text-slate-400 text-center mb-3">Código de verificación: <b>${d.codigo}</b> · fecha: ${escapeHTML(d.fechaTxt)}</p>
+      <button id="cert-volver" class="btn-juice bg-slate-100 text-slate-500 font-bold py-2.5 rounded-xl w-full">Volver a certificados</button>`;
+    triggerConfetti();
+    document.getElementById('cert-volver').onclick = renderCertificados;
+    document.getElementById('cert-img').onclick = () => vista.toBlob(b => descargarBlob(b, base + '.png'), 'image/png');
+    document.getElementById('cert-pdf').onclick = async (e) => {
+      const b = e.currentTarget, txt = b.innerHTML;
+      b.disabled = true; b.innerHTML = '<i class="fas fa-circle-notch fa-spin mr-2"></i>Creando PDF...';
+      try {
+        const { jsPDF } = await cargarJsPDF();
+        const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+        pdf.setProperties({ title: `Certificado Abulingo ${nivel} - ${nombre}`, author: 'Abulingo' });
+        pdf.addImage(vista.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, 297, 210);
+        pdf.save(base + '.pdf');
+      } catch (err) { showToast('⚠️ ' + err.message + '. Revisa tu conexión.'); }
+      b.disabled = false; b.innerHTML = txt;
+    };
+    document.getElementById('cert-wa').onclick = async () => {
+      const vert = await dibujarCertificado(d, true);
+      vert.toBlob(async (blob) => {
+        const file = new File([blob], base + '-estado.png', { type: 'image/png' });
+        // En el celular abre el menú de compartir (WhatsApp → Mi estado); si no se puede, se descarga.
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          try { await navigator.share({ files: [file], text: `🎓 ¡Aprobé el nivel ${nivel} de inglés en Abulingo!` }); return; } catch (err) { if (err.name === 'AbortError') return; }
+        }
+        descargarBlob(blob, file.name);
+        showToast('📲 Imagen descargada: súbela a tu estado de WhatsApp.');
+      }, 'image/png');
+    };
   }
 
   /* ---------- Prueba del certificado ----------
@@ -5688,12 +5838,12 @@ function openAbuChat() {
           <p class="text-sm text-slate-500 mt-1">Ya aprobaste las <b>${yaAprobadas}</b> palabras que tienes dominadas del nivel ${escapeHTML(nivel)}.
           ${cert.listo ? '' : `Cuando domines las ${cert.faltan} que te faltan, vuelve aquí: solo te preguntaremos esas.`}</p>
         </div>
-        ${cert.listo ? `<button id="cert-pedir" class="btn-juice bg-green-500 text-white font-bold py-3 rounded-xl w-full mt-3">Pedir mi certificado 📜</button>` : ''}
+        ${cert.listo ? `<button id="cert-pedir" class="btn-juice bg-green-500 text-white font-bold py-3 rounded-xl w-full mt-3">🎓 Descargar mi certificado</button>` : ''}
         <button id="cert-reiniciar" class="w-full text-center text-xs font-bold text-slate-400 hover:text-slate-600 mt-3 py-2">↺ Empezar la prueba desde cero</button>
         <button id="cert-volver" class="btn-juice bg-slate-100 text-slate-500 font-bold py-2.5 rounded-xl w-full mt-1">Volver a certificados</button>`;
       document.getElementById('cert-volver').onclick = renderCertificados;
       const pedir = document.getElementById('cert-pedir');
-      if (pedir) pedir.onclick = () => { triggerConfetti(); window.open(certWhatsAppURL(nivel), '_blank', 'noopener'); };
+      if (pedir) pedir.onclick = () => abrirCertificado(nivel);
       document.getElementById('cert-reiniciar').onclick = async () => {
         if (!confirm(`¿Volver a presentar las ${yaAprobadas} palabras del nivel ${nivel}? Se borra el avance de la prueba (no las palabras dominadas).`)) return;
         dominadasNivel.forEach(id => { delete flujo.srs[String(id)].cert; });
@@ -5844,7 +5994,7 @@ function openAbuChat() {
       ${p.yaAprobadas ? `<p class="text-xs text-green-600 text-center mb-2">✅ Más ${p.yaAprobadas} que ya habías aprobado antes (no se vuelven a preguntar).</p>` : ''}
       ${sinResponder ? `<p class="text-xs text-slate-400 text-center mb-3">💾 Quedaron ${sinResponder} palabra${sinResponder === 1 ? '' : 's'} sin responder: tu avance está guardado y la próxima vez sigues con esas.</p>` : ''}
       ${aprobada
-        ? `<button id="cert-pedir" class="btn-juice bg-green-500 text-white font-bold py-3 rounded-xl w-full mb-2">Pedir mi certificado 📜</button>`
+        ? `<button id="cert-pedir" class="btn-juice bg-green-500 text-white font-bold py-3 rounded-xl w-full mb-2">🎓 Descargar mi certificado</button>`
         : `<p class="text-xs text-slate-500 text-center mb-3">Para pedir el certificado necesitas tener todas las palabras del nivel dominadas y aprobar la prueba completa. 💪</p>`}
       <button id="cert-volver" class="btn-juice bg-slate-100 text-slate-500 font-bold py-2.5 rounded-xl w-full">Volver a certificados</button>`;
 
@@ -5852,7 +6002,7 @@ function openAbuChat() {
     el.querySelectorAll('.cert-res-oir').forEach(b => { b.onclick = () => playWordAudio(porId.get(b.dataset.id)); });
     document.getElementById('cert-volver').onclick = renderCertificados;
     const pedir = document.getElementById('cert-pedir');
-    if (pedir) pedir.onclick = () => { triggerConfetti(); window.open(certWhatsAppURL(p.nivel), '_blank', 'noopener'); };
+    if (pedir) pedir.onclick = () => abrirCertificado(p.nivel);
     if (repasar.length) await updateUserFlow();
   }
 
