@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Verificar certificado · Abulingo</title>
+<meta name="description" content="Comprueba si un certificado de inglés de Abulingo es auténtico.">
+<link rel="icon" href="logo_abulingo.png">
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;font-family:Nunito,system-ui,sans-serif;background:linear-gradient(135deg,#fffaf2,#fff3e0);color:#1e293b;display:flex;align-items:center;justify-content:center;padding:16px}
+  .tarjeta{background:#fff;max-width:480px;width:100%;border-radius:24px;padding:28px 22px;box-shadow:0 10px 40px rgba(13,71,161,.12);border-top:8px solid #0D47A1;text-align:center}
+  img.logo{width:120px}
+  h1{color:#0D47A1;font-weight:900;font-size:1.5rem;margin:.4em 0 .2em}
+  p.sub{color:#64748b;margin:0 0 1.2em}
+  form{display:flex;gap:8px}
+  input{flex:1;min-width:0;padding:12px 14px;border:2px solid #cbd5e1;border-radius:14px;font:700 1rem Nunito,sans-serif;text-transform:uppercase}
+  input:focus{outline:none;border-color:#FF7A00}
+  button{background:#FF7A00;color:#fff;border:0;border-radius:14px;padding:0 18px;font:900 1rem Nunito,sans-serif;cursor:pointer}
+  #res{margin-top:20px}
+  .ok,.mal{border-radius:18px;padding:18px}
+  .ok{background:#ecfdf5;border:2px solid #10b981}
+  .mal{background:#fef2f2;border:2px solid #ef4444;color:#991b1b}
+  .ok .icono,.mal .icono{font-size:2.6rem}
+  .ok b.t{color:#047857;font-size:1.15rem}
+  .nombre{font-family:Georgia,serif;font-size:1.5rem;font-weight:700;margin:.4em 0;color:#111827}
+  .nivel{display:inline-block;background:#FF7A00;color:#fff;font-weight:900;border-radius:999px;padding:4px 16px;margin:4px 0}
+  .dato{color:#475569;margin:.3em 0}
+  footer{margin-top:22px;font-size:.8rem;color:#94a3b8}
+  footer a{color:#0D47A1}
+</style>
+</head>
+<body>
+<main class="tarjeta">
+  <img class="logo" src="logo_abulingo.png" alt="Abulingo">
+  <h1>Verificar certificado</h1>
+  <p class="sub">Escribe el código que aparece en el certificado.</p>
+  <form id="f"><input id="c" placeholder="ABU-B1-XXXXXXX" autocomplete="off" aria-label="Código"><button>Verificar</button></form>
+  <div id="res" aria-live="polite"></div>
+  <footer>Certificados emitidos por <a href="https://abulingo.github.io/">Abulingo</a>, inglés americano.</footer>
+</main>
+<script>
+const URL_SB = 'https://eylwewhqeaaqkgcxhgyv.supabase.co', KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV5bHdld2hxZWFhcWtnY3hoZ3l2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQzMzAxODgsImV4cCI6MjA5OTkwNjE4OH0.Ji8huj-ny2VcMT5UQSjOuwUKz4k23quNS0fLk-gZr7A';
+const NIVEL = { A1: 'Principiante', A2: 'Básico', B1: 'Intermedio', B2: 'Intermedio alto', C1: 'Avanzado' };
+const esc = s => String(s).replace(/[&<>"']/g, ch => '&#' + ch.charCodeAt(0) + ';');
+const res = document.getElementById('res'), inp = document.getElementById('c');
+async function verificar(codigo) {
+  codigo = codigo.trim().toUpperCase();
+  if (!codigo) return;
+  history.replaceState(null, '', '?c=' + encodeURIComponent(codigo));
+  res.innerHTML = '<p class="dato">Comprobando…</p>';
+  try {
+    const r = await fetch(URL_SB + '/rest/v1/rpc/verificar_certificado', { method: 'POST', headers: { apikey: KEY, Authorization: 'Bearer ' + KEY, 'Content-Type': 'application/json' }, body: JSON.stringify({ p_codigo: codigo }) });
+    if (!r.ok) throw new Error(r.status);
+    const [d] = await r.json();
+    if (!d) { res.innerHTML = '<div class="mal"><div class="icono">❌</div><b>Este código no existe.</b><p class="dato">No hay ningún certificado de Abulingo con el código <b>' + esc(codigo) + '</b>. Revisa que esté bien escrito.</p></div>'; return; }
+    const [y, m, dd] = d.fecha.split('-').map(Number);
+    const fecha = new Date(y, m - 1, dd).toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' });
+    res.innerHTML = '<div class="ok"><div class="icono">✅</div><b class="t">Certificado auténtico</b>'
+      + '<div class="nombre">' + esc(d.nombre) + '</div>'
+      + '<div class="nivel">Nivel ' + esc(d.nivel) + (NIVEL[d.nivel] ? ' · ' + NIVEL[d.nivel] : '') + '</div>'
+      + (d.palabras ? '<p class="dato">Domina las ' + d.palabras + ' palabras del nivel</p>' : '')
+      + '<p class="dato">Emitido el <b>' + esc(fecha) + '</b> por Abulingo</p>'
+      + '<p class="dato" style="font-size:.8rem">Código: ' + esc(codigo) + '</p></div>';
+  } catch (e) { res.innerHTML = '<div class="mal"><b>No se pudo comprobar ahora.</b><p class="dato">Revisa tu conexión e inténtalo de nuevo.</p></div>'; }
+}
+document.getElementById('f').onsubmit = e => { e.preventDefault(); verificar(inp.value); };
+const q = new URLSearchParams(location.search).get('c');
+if (q) { inp.value = q; verificar(q); }
+</script>
+</body>
+</html>

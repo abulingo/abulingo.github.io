@@ -5671,6 +5671,27 @@ function openAbuChat() {
     do { c.font = `${peso} ${t}px ${fuente}`; t -= 2; } while (c.measureText(txt).width > ancho && t > 12);
     c.fillStyle = color; c.fillText(txt, x, y);
   }
+  const CERT_VERIFICAR = 'https://abulingo.github.io/verificar.html?c=';
+  function cargarQR() {
+    if (window.qrcode) return Promise.resolve(window.qrcode);
+    return new Promise((res) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js';
+      s.onload = () => res(window.qrcode); s.onerror = () => res(null);
+      document.head.appendChild(s);
+    });
+  }
+  // QR que abre la página de verificación con el código ya puesto.
+  async function dibujarQR(c, codigo, x, y, lado) {
+    const qrcode = await cargarQR();
+    if (!qrcode) return;
+    const q = qrcode(0, 'M'); q.addData(CERT_VERIFICAR + codigo); q.make();
+    const n = q.getModuleCount(), pad = 12, t = (lado - 2 * pad) / n;
+    c.fillStyle = '#fff'; c.fillRect(x, y, lado, lado);
+    c.strokeStyle = '#0D47A1'; c.lineWidth = 3; c.strokeRect(x, y, lado, lado);
+    c.fillStyle = '#0f172a';
+    for (let r = 0; r < n; r++) for (let k = 0; k < n; k++) if (q.isDark(r, k)) c.fillRect(x + pad + k * t, y + pad + r * t, Math.ceil(t), Math.ceil(t));
+  }
   async function dibujarCertificado(d, vertical) {
     const W = vertical ? 1080 : 2000, H = vertical ? 1920 : 1414;
     const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
@@ -5726,7 +5747,10 @@ function openAbuChat() {
     certTexto(c, 'Fecha', col[0], pieY + 42, { tam: 26, peso: 700, fuente: sans, color: '#64748b' });
     certTexto(c, 'Abulingo', col[1], pieY - 18, { tam: 50, peso: 400, fuente: '"Brush Script MT", "Segoe Script", cursive', color: '#0D47A1' });
     certTexto(c, 'Equipo Abulingo', col[1], pieY + 42, { tam: 26, peso: 700, fuente: sans, color: '#64748b' });
-    certTexto(c, `Código: ${d.codigo} · abulingo.github.io`, cx, H - m - (vertical ? 40 : 55), { tam: 24, peso: 700, fuente: sans, color: '#94a3b8' });
+    const qrL = vertical ? 190 : 200, qrX = vertical ? W - m - 60 - qrL : cx - qrL / 2, qrY = vertical ? y - qrL / 2 : pieY - 150;
+    await dibujarQR(c, d.codigo, qrX, qrY, qrL);
+    certTexto(c, 'Escanea para verificar', qrX + qrL / 2, qrY + qrL + 30, { tam: 20, peso: 700, fuente: sans, color: '#64748b' });
+    certTexto(c, `Código de verificación: ${d.codigo} · abulingo.github.io/verificar.html`, cx, H - m - (vertical ? 40 : 55), { tam: 24, peso: 700, fuente: sans, color: '#94a3b8', ancho: W - 2 * m - 80 });
     if (vertical) certTexto(c, '🎓 ¡Lo logré! Aprendo inglés con Abulingo', cx, pieY + 110, { tam: 34, peso: 900, fuente: sans, color: '#FF7A00', ancho: W - 160 });
     return cv;
   }
@@ -5750,11 +5774,19 @@ function openAbuChat() {
     if (!nombre) {
       nombre = (prompt('¿Qué nombre completo quieres que aparezca en tu certificado?') || '').trim();
       if (!nombre) return;
+      await dbClient.from('profiles').update({ full_name: nombre }).eq('id', currentUser.id);
+      if (userProfile) userProfile.full_name = nombre;
     }
     el.innerHTML = spinnerHTML();
     const cert = await getCertProgreso(nivel);
-    const fecha = certFecha(nivel);
-    const d = { nivel, nombre, total: cert.total, fechaTxt: certFechaTexto(fecha), codigo: certCodigo(nivel) };
+    let fecha = certFecha(nivel), codigo = certCodigo(nivel), registrado = false;
+    // Registro en el servidor: así el código se puede verificar en verificar.html
+    try {
+      const { data, error } = await dbClient.rpc('emitir_certificado', { p_nivel: nivel, p_codigo: codigo, p_fecha: fecha });
+      if (error) throw error;
+      if (data && data[0]) { fecha = data[0].fecha; codigo = data[0].codigo; nombre = data[0].nombre; registrado = true; }
+    } catch (err) { console.warn('emitir_certificado', err); }
+    const d = { nivel, nombre, total: cert.total, fechaTxt: certFechaTexto(fecha), codigo };
     const base = `Certificado-Abulingo-${nivel}-${nombre.replace(/[^\p{L}\p{N}]+/gu, '_')}`;
     const vista = await dibujarCertificado(d, false);
     el.innerHTML = `
@@ -5766,7 +5798,9 @@ function openAbuChat() {
       <button id="cert-pdf" class="btn-juice bg-[#0D47A1] text-white font-bold py-3 rounded-xl w-full mb-2"><i class="fas fa-file-pdf mr-2"></i>Descargar en PDF</button>
       <button id="cert-img" class="btn-juice bg-[#FF7A00] text-white font-bold py-3 rounded-xl w-full mb-2"><i class="fas fa-image mr-2"></i>Descargar imagen</button>
       <button id="cert-wa" class="btn-juice bg-green-500 text-white font-bold py-3 rounded-xl w-full mb-2"><i class="fab fa-whatsapp mr-2"></i>Imagen para estado de WhatsApp</button>
-      <p class="text-[11px] text-slate-400 text-center mb-3">Código de verificación: <b>${d.codigo}</b> · fecha: ${escapeHTML(d.fechaTxt)}</p>
+      <p class="text-[11px] text-slate-400 text-center mb-3">Código de verificación: <b>${d.codigo}</b> · fecha: ${escapeHTML(d.fechaTxt)}<br>${registrado
+        ? `✅ Registrado. Cualquiera puede comprobarlo en <a href="verificar.html?c=${d.codigo}" target="_blank" class="underline">abulingo.github.io/verificar.html</a>`
+        : '⚠️ No se pudo registrar ahora (revisa tu conexión); vuelve a abrirlo más tarde para activar la verificación.'}</p>
       <button id="cert-volver" class="btn-juice bg-slate-100 text-slate-500 font-bold py-2.5 rounded-xl w-full">Volver a certificados</button>`;
     triggerConfetti();
     document.getElementById('cert-volver').onclick = renderCertificados;
