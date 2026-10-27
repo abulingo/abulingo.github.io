@@ -427,6 +427,7 @@ function openAbuChat() {
   const WHATSAPP_COMUNIDAD_URL = 'https://chat.whatsapp.com/FItyG5Nyj0FJmjtk9Fjpvx';
   const CEFR_ORDER = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
   const NIVELES_FIJOS = ['A1', 'A2', 'B1', 'B2', 'C1']; // siempre visibles en el selector
+  const NIVEL_PHRASAL = 'PV'; // phrasal verbs: viven en "palabras" pero no son un nivel del curso; se estudian desde el Mazo
 
   const ENCOURAGEMENTS = [
     { icon: '🚀', title: '¡Vas muy bien!', msg: 'Tu memoria se está fortaleciendo. Sigue así.' },
@@ -2236,7 +2237,7 @@ function openAbuChat() {
     const { data } = await muestra;
     (data || []).forEach(r => {
       const v = (r.nivel || '').trim();
-      if (v && !conContenido.some(c => c.toLowerCase() === v.toLowerCase())) conContenido.push(v);
+      if (v && v.toUpperCase() !== NIVEL_PHRASAL && !conContenido.some(c => c.toLowerCase() === v.toLowerCase())) conContenido.push(v);
     });
     console.log('[getNiveles] niveles con contenido:', conContenido);
     return sortNiveles(conContenido);
@@ -6257,6 +6258,13 @@ function openAbuChat() {
         <div id="mz-nivel-info" class="mt-2"></div>
       </div>
 
+      <div class="bg-violet-50 border-2 border-violet-200 rounded-xl p-3 mb-3" style="background:#f5f3ff;border-color:#ddd6fe">
+        <p class="font-bold text-slate-700 text-sm mb-1">🔗 Phrasal verbs</p>
+        <p class="text-[11px] text-slate-500 mb-2">Los 200 phrasal verbs más usados del inglés americano (<i>get up, find out, give up…</i>), con imagen, audio, fonética y truco para recordarlos.</p>
+        <div id="mz-pv-grupos" class="flex flex-wrap gap-1.5 mb-1"></div>
+        <div id="mz-pv-info" class="mt-2"></div>
+      </div>
+
       <div class="bg-slate-50 rounded-xl p-3 mb-3 text-sm text-slate-500 space-y-1">
         <p class="font-bold text-slate-700 mb-1">📋 ${tiene ? 'Añadir más palabras desde Excel' : 'O crea tu mazo con un Excel'}</p>
         <p>1️⃣ Un Excel con una columna llamada <b class="text-slate-700">ingles</b>.</p>
@@ -6305,6 +6313,23 @@ function openAbuChat() {
     if (fileInput) fileInput.onchange = (e) => procesarExcelMazo(e.target.files[0]);
 
     renderNivelesMazo(filas);
+    renderPhrasalMazo(filas);
+  }
+
+  // Phrasal verbs: por bloques de 20 (G1 = los más usados) o todos a la vez.
+  function renderPhrasalMazo(filas) {
+    const cont = document.getElementById('mz-pv-grupos');
+    if (!cont) return;
+    const grupos = Array.from({ length: 10 }, (_, i) => `G${i + 1}`);
+    cont.innerHTML = [['', 'Todos'], ...grupos.map((g, i) => [g, `${i * 20 + 1}–${i * 20 + 20}`])]
+      .map(([g, t]) => `<button class="mz-pv btn-juice bg-white border text-xs font-black px-3 py-1.5 rounded-xl" style="border-color:#c4b5fd;color:#6d28d9" data-g="${g}">${t}</button>`).join('');
+    cont.querySelectorAll('.mz-pv').forEach(b => {
+      b.onclick = () => {
+        cont.querySelectorAll('.mz-pv').forEach(x => { x.style.background = '#fff'; x.style.color = '#6d28d9'; });
+        b.style.background = '#7c3aed'; b.style.color = '#fff';
+        mostrarNoDominadasNivel(NIVEL_PHRASAL, filas, { grupo: b.dataset.g, info: 'mz-pv-info' });
+      };
+    });
   }
 
   /* ---------- Añadir al mazo las no dominadas de un nivel ----------
@@ -6329,19 +6354,23 @@ function openAbuChat() {
     });
   }
 
-  async function mostrarNoDominadasNivel(nivel, filas) {
-    const info = document.getElementById('mz-nivel-info');
+  async function mostrarNoDominadasNivel(nivel, filas, { grupo = '', info: infoId = 'mz-nivel-info' } = {}) {
+    const info = document.getElementById(infoId);
     if (!info) return;
     info.innerHTML = spinnerHTML();
+    const esPV = nivel === NIVEL_PHRASAL;
+    const nombre = esPV ? (grupo ? `phrasal verbs ${(+grupo.slice(1) - 1) * 20 + 1}–${+grupo.slice(1) * 20}` : 'phrasal verbs') : `nivel ${nivel}`;
 
-    let { data } = await dbClient.from('palabras').select('id, ingles, espanol').eq('nivel', nivel).order('id', { ascending: true }).range(0, 9999);
+    let q = dbClient.from('palabras').select('id, ingles, espanol').eq('nivel', nivel);
+    if (grupo) q = q.eq('grupo', grupo);
+    let { data } = await q.order('id', { ascending: true }).range(0, 9999);
     if (!(data || []).length) ({ data } = await dbClient.from('palabras').select('id, ingles, espanol').ilike('nivel', nivel).order('id', { ascending: true }).range(0, 9999));
     const enMazo = new Set((filas || []).map(f => (f.ingles || '').toLowerCase()));
     const noDominadas = (data || []).filter(w => w.ingles && !flujo.srs[String(w.id)]?.learned && !enMazo.has(w.ingles.toLowerCase()));
     const estudiadas = noDominadas.filter(w => flujo.srs[String(w.id)]);
 
     if (!noDominadas.length) {
-      info.innerHTML = `<p class="text-xs font-bold text-green-600 text-center">🏅 No te quedan palabras sin dominar del nivel ${escapeHTML(nivel)} fuera de tu mazo.</p>`;
+      info.innerHTML = `<p class="text-xs font-bold text-green-600 text-center">🏅 No te quedan ${esPV ? 'phrasal verbs' : 'palabras'} sin dominar (${escapeHTML(nombre)}) fuera de tu mazo.</p>`;
       return;
     }
     info.innerHTML = `
@@ -6349,11 +6378,11 @@ function openAbuChat() {
         ${estudiadas.length ? `<button id="mz-add-est" class="btn-juice bg-blue-500 text-white font-bold py-2.5 rounded-xl text-sm">➕ Añadir las ${estudiadas.length} que ya estudié pero no domino</button>` : ''}
         <button id="mz-add-todas" class="btn-juice ${estudiadas.length ? 'bg-white border border-blue-200 text-blue-600' : 'bg-blue-500 text-white'} font-bold py-2.5 rounded-xl text-sm">➕ Añadir todas las no dominadas (${noDominadas.length})</button>
       </div>
-      <p id="mz-add-st" class="text-xs text-slate-500 font-bold mt-2 text-center"></p>`;
+      <p id="${infoId}-st" class="text-xs text-slate-500 font-bold mt-2 text-center"></p>`;
 
     const anadir = async (lista, btn) => {
       btn.disabled = true;
-      const st = document.getElementById('mz-add-st');
+      const st = document.getElementById(`${infoId}-st`);
       if (st) st.textContent = `⏳ Añadiendo ${lista.length} palabra(s)...`;
       for (let i = 0; i < lista.length; i += 200) {
         const { error } = await dbClient.from('mazo').insert(
@@ -6368,12 +6397,12 @@ function openAbuChat() {
       }
       await limpiarMazoFlujo(); // el mazo cambió: la práctica a medias ya no cuadra
       await refreshMazoBadge();
-      showToast(`🃏 ${lista.length} palabra(s) del nivel ${nivel} añadidas a tu mazo`);
+      showToast(`🃏 ${lista.length} ${esPV ? 'phrasal verb(s)' : 'palabra(s)'} (${nombre}) añadidas a tu mazo`);
       openMazo();
     };
-    const bEst = document.getElementById('mz-add-est');
+    const bEst = info.querySelector('#mz-add-est');
     if (bEst) bEst.onclick = () => anadir(estudiadas, bEst);
-    const bTodas = document.getElementById('mz-add-todas');
+    const bTodas = info.querySelector('#mz-add-todas');
     bTodas.onclick = () => anadir(noDominadas, bTodas);
   }
 
