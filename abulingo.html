@@ -2333,14 +2333,25 @@ function openAbuChat() {
     return Math.max(0, SRS_DAILY_MAX - (flujo.daily.reviewed || 0));
   }
 
+  // Niveles que por ahora NO entran en el repaso (sus palabras se siguen estudiando normalmente).
+  const NIVELES_SIN_REPASO = ['C1'];
+  let idsSinRepaso = null;
+  async function getIdsSinRepaso() {
+    if (idsSinRepaso) return idsSinRepaso;
+    const { data, error } = await dbClient.from('palabras').select('id').in('nivel', NIVELES_SIN_REPASO).range(0, 9999);
+    if (error) { console.error('[getIdsSinRepaso] ❌', error.message); return new Set(); }
+    return (idsSinRepaso = new Set((data || []).map(r => String(r.id))));
+  }
+
   async function getDueReviews(nivel) {
+    const excluidas = await getIdsSinRepaso();
     const cupo = repasosRestantesHoy();
     if (cupo <= 0) { console.log('[getDueReviews] cupo diario de repasos agotado'); return []; }
     const tope = Math.min(SRS_SESSION_MAX, cupo);
     const now = Date.now();
     const hoy = todayStr();
     const dueIds = Object.entries(flujo.srs)
-      .filter(([, v]) => !v.learned && v.due && new Date(v.due).getTime() <= now)
+      .filter(([id, v]) => !v.learned && v.due && new Date(v.due).getTime() <= now && !excluidas.has(id))
       // Tope diario: una palabra ya vista SRS_MAX_SHOWS_PER_DAY veces hoy no vuelve a salir hoy.
       .filter(([, v]) => (v.day !== hoy) || ((v.shownToday || 0) < SRS_MAX_SHOWS_PER_DAY))
       .sort((a, b) => {
