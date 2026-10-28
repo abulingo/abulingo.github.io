@@ -40,6 +40,7 @@
        gramatica.html y pronunciacion.html -->
   <script defer src="anuncio-diario.js"></script>
   <script defer src="abu-menu.js"></script>
+  <script defer src="abu-offline.js"></script>
 
   <style>
     .pt-20 { padding-top: 5rem !important; }
@@ -8123,6 +8124,8 @@ function openAbuChat() {
 
       userProfile = profile;
       flujo = userProfile.flujo;
+      // 📥 Guardar imágenes, audios y videos en el navegador: solo Super Pro (y el equipo).
+      window.AbuOffline?.iniciar(esSuperPro() || esStaff());
 
       // Restauración anti-pérdida: si el respaldo local es más reciente que la
       // nube (p. ej. la recarga interrumpió el guardado), se usa el local y se
