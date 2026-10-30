@@ -705,27 +705,45 @@ import Landing from '../layouts/Landing.astro';
     <div id="signup-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 hidden">
         <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md relative">
             <button class="close-modal-btn absolute top-4 right-4 text-slate-400 hover:text-slate-800 text-2xl" aria-label="Cerrar">&times;</button>
-            <p class="text-2xl font-bold font-heading mb-6 text-center">Crea tu Cuenta</p>
+            <p class="text-2xl font-bold font-heading mb-1 text-center">Crea tu Cuenta</p>
+            <p class="text-sm text-slate-400 mb-6 text-center">Create your account</p>
             <form id="signup-form" class="space-y-4">
+                <fieldset>
+                    <legend class="block text-sm font-medium text-slate-600 mb-1">¿Qué idioma quieres aprender? · <span class="text-slate-400">What language do you want to learn?</span></legend>
+                    <div class="grid grid-cols-2 gap-2">
+                        <label class="idioma-opcion cursor-pointer rounded-xl border-2 p-3 text-center transition">
+                            <input type="radio" name="signup-idioma" value="en" class="sr-only" checked>
+                            <span class="block text-2xl">🇺🇸</span>
+                            <span class="block font-bold text-slate-700 text-sm">Inglés</span>
+                            <span class="block text-xs text-slate-400">English</span>
+                        </label>
+                        <label class="idioma-opcion cursor-pointer rounded-xl border-2 p-3 text-center transition">
+                            <input type="radio" name="signup-idioma" value="es" class="sr-only">
+                            <span class="block text-2xl">🇪🇸</span>
+                            <span class="block font-bold text-slate-700 text-sm">Español</span>
+                            <span class="block text-xs text-slate-400">Spanish</span>
+                        </label>
+                    </div>
+                </fieldset>
                 <div>
-                    <label for="signup-name" class="block text-sm font-medium text-slate-600 mb-1">Nombre Completo</label>
+                    <label for="signup-name" class="block text-sm font-medium text-slate-600 mb-1">Nombre Completo · <span class="text-slate-400">Full name</span></label>
                     <input type="text" id="signup-name" autocomplete="name" class="w-full input-field" required>
                 </div>
                 <div>
-                    <label for="signup-phone" class="block text-sm font-medium text-slate-600 mb-1">Número Celular o WhatsApp</label>
+                    <label for="signup-phone" class="block text-sm font-medium text-slate-600 mb-1">Número Celular o WhatsApp · <span class="text-slate-400">Phone or WhatsApp</span></label>
                     <input type="tel" id="signup-phone" placeholder="Ej: 3123456789" autocomplete="tel" class="w-full input-field" required>
                 </div>
-                <div>
+                <div id="signup-group-wrap">
                     <label for="signup-group" class="block text-sm font-medium text-slate-600 mb-1">Grupo de inglés</label>
                     <select id="signup-group" class="w-full input-field" required>
                     </select>
                 </div>
                 <div>
-                    <label for="signup-email" class="block text-sm font-medium text-slate-600 mb-1">Correo Electrónico</label>
+                    <label for="signup-email" class="block text-sm font-medium text-slate-600 mb-1">Correo Electrónico · <span class="text-slate-400">Email</span></label>
                     <input type="email" id="signup-email" autocomplete="email" class="w-full input-field" required>
                 </div>
                 <div>
-                    <label for="signup-pin" class="block text-sm font-medium text-slate-600 mb-1">Crea tu PIN (4 dígitos)</label>
+                    <label for="signup-pin" class="block text-sm font-medium text-slate-600 mb-1">Crea tu PIN (4 dígitos) · <span class="text-slate-400">Create a 4-digit PIN</span></label>
                     <input type="password" id="signup-pin" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" minlength="4" autocomplete="new-password" placeholder="••••" class="w-full input-field pin-field" required>
                     <p class="text-xs text-slate-400 mt-1">Usarás este PIN de 4 dígitos para entrar. Sencillo de recordar.</p>
                 </div>
@@ -812,6 +830,23 @@ import Landing from '../layouts/Landing.astro';
             });
         };
         if (supabase) cargarGruposSignup();
+
+        // Idioma a aprender: marca la tarjeta elegida y, para español, oculta
+        // el "Grupo de inglés" (no aplica).
+        const pintarIdiomaSignup = () => {
+            const v = document.querySelector('input[name="signup-idioma"]:checked')?.value || 'en';
+            document.querySelectorAll('.idioma-opcion').forEach(l => {
+                const on = l.querySelector('input').checked;
+                l.style.borderColor = on ? '#FF7A00' : '#e2e8f0';
+                l.style.background = on ? '#fff7ed' : '#fff';
+            });
+            const wrap = document.getElementById('signup-group-wrap');
+            const sel = document.getElementById('signup-group');
+            if (wrap) wrap.classList.toggle('hidden', v === 'es');
+            if (sel) sel.required = v !== 'es';
+        };
+        document.querySelectorAll('input[name="signup-idioma"]').forEach(r => r.addEventListener('change', pintarIdiomaSignup));
+        pintarIdiomaSignup();
 
         const loginModal = document.getElementById('login-modal');
         const signupModal = document.getElementById('signup-modal');
@@ -931,7 +966,8 @@ import Landing from '../layouts/Landing.astro';
                 e.preventDefault();
                 const name = document.getElementById('signup-name').value.trim();
                 const phone = document.getElementById('signup-phone').value.trim();
-                const groupRaw = document.getElementById('signup-group').value;
+                const idioma = document.querySelector('input[name="signup-idioma"]:checked')?.value || 'en';
+                const groupRaw = idioma === 'es' ? '' : document.getElementById('signup-group').value;
                 const group = groupRaw ? groupRaw : null; // "No tengo" (value="") se guarda como sin grupo, no como texto vacío
                 // Normalizamos el correo (minúsculas y sin espacios) para que
                 // "Juan@Correo.com" y "juan@correo.com" cuenten como el mismo.
@@ -997,6 +1033,7 @@ import Landing from '../layouts/Landing.astro';
                             phone: phone,
                             english_group: group,
                             nivel: 'A1',
+                            idioma, // 'en' = aprende inglés · 'es' = aprende español (sin valor = inglés)
                             // Consentimiento de contacto (checkbox opcional del formulario):
                             // handle_new_user() lo lee de aquí y lo guarda en profiles junto
                             // con la fecha, para tener respaldo de cuándo se dio (o no).

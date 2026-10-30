@@ -60,6 +60,8 @@
 ============================================================================ */
 (function () {
   'use strict';
+  // Los anuncios están escritos para quien aprende inglés.
+  if (window.AbuIdioma && window.AbuIdioma.aprendeEspanol) return;
 
   var TABLA = 'anuncios_diarios';
   var PREFIJO = 'abu_anuncio_';
