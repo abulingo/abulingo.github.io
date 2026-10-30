@@ -5780,15 +5780,23 @@ function openAbuChat() {
       document.head.appendChild(s);
     });
   }
+  // Pide el nombre completo (nombres y apellidos) y lo guarda en el perfil.
+  async function pedirNombreCertificado(actual = '') {
+    const nombre = (prompt('Escribe tu nombre COMPLETO (nombres y apellidos) tal como quieres que aparezca en el certificado:', actual) || '').trim().replace(/\s+/g, ' ');
+    if (!nombre || nombre === actual) return null;
+    const { error } = await dbClient.from('profiles').update({ full_name: nombre }).eq('id', currentUser.id);
+    if (error) { showToast('⚠️ No se pudo guardar el nombre: ' + error.message); return null; }
+    if (userProfile) userProfile.full_name = nombre;
+    return nombre;
+  }
   async function abrirCertificado(nivel) {
     const el = document.getElementById('cert-body');
     if (!el) return;
     let nombre = (userProfile?.full_name || '').trim();
-    if (!nombre) {
-      nombre = (prompt('¿Qué nombre completo quieres que aparezca en tu certificado?') || '').trim();
+    // Sin nombre, o con una sola palabra (p. ej. solo "Andrés"): pedir el completo.
+    if (nombre.split(/\s+/).filter(Boolean).length < 2) {
+      nombre = (await pedirNombreCertificado(nombre)) || nombre;
       if (!nombre) return;
-      await dbClient.from('profiles').update({ full_name: nombre }).eq('id', currentUser.id);
-      if (userProfile) userProfile.full_name = nombre;
     }
     el.innerHTML = spinnerHTML();
     const cert = await getCertProgreso(nivel);
@@ -5814,9 +5822,11 @@ function openAbuChat() {
       <p class="text-[11px] text-slate-400 text-center mb-3">Código de verificación: <b>${d.codigo}</b> · fecha: ${escapeHTML(d.fechaTxt)}<br>${registrado
         ? `✅ Registrado. Cualquiera puede comprobarlo en <a href="verificar.html?c=${d.codigo}" target="_blank" class="underline">abulingo.github.io/verificar.html</a>`
         : '⚠️ No se pudo registrar ahora (revisa tu conexión); vuelve a abrirlo más tarde para activar la verificación.'}</p>
+      <button id="cert-nombre" class="btn-juice bg-white border border-slate-200 text-slate-600 font-bold py-2.5 rounded-xl w-full mb-2 text-sm">✏️ ¿Tu nombre no está completo? Corregirlo</button>
       <button id="cert-volver" class="btn-juice bg-slate-100 text-slate-500 font-bold py-2.5 rounded-xl w-full">Volver a certificados</button>`;
     triggerConfetti();
     document.getElementById('cert-volver').onclick = renderCertificados;
+    document.getElementById('cert-nombre').onclick = async () => { if (await pedirNombreCertificado(nombre)) abrirCertificado(nivel); };
     document.getElementById('cert-img').onclick = () => vista.toBlob(b => descargarBlob(b, base + '.png'), 'image/png');
     document.getElementById('cert-pdf').onclick = async (e) => {
       const b = e.currentTarget, txt = b.innerHTML;
