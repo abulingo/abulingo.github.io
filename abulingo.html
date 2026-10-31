@@ -7645,7 +7645,8 @@ function openAbuChat() {
   });
   // Idioma que aprende la cuenta: 'en' (inglés, el de siempre) o 'es' (español).
   const idiomaMenu = document.getElementById('idioma-menu-actual');
-  if (idiomaMenu) idiomaMenu.textContent = window.AbuIdioma?.aprendeEspanol ? '🇪🇸 Español' : '🇺🇸 Inglés';
+  // El traductor de la interfaz no la toca: si no, «Español» saldría como «English».
+  if (idiomaMenu) { idiomaMenu.dataset.noTr = ''; idiomaMenu.textContent = window.AbuIdioma?.aprendeEspanol ? '🇪🇸 Spanish' : '🇺🇸 Inglés'; }
   function openIdioma() {
     const es = !!window.AbuIdioma?.aprendeEspanol;
     const opcion = (v, bandera, nombre, sub) => `
