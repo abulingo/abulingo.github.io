@@ -40,12 +40,97 @@
   const voz = (id) => (Number(id) % 2 ? 'm' : 'f');
   const audioEs = (tabla, id) => `${AUDIOS_ES}${tabla}/${id}_${voz(id)}.mp3`;
 
+  /* Fonética del español latinoamericano (AFI) a partir de la ortografía:
+     seseo, yeísmo, b/d/g suaves entre vocales, r simple/múltiple y la
+     sílaba fuerte marcada con ˈ (reglas de acentuación o la tilde). */
+  const VOC = 'aeiouáéíóúü';
+  const TILDE = { á: 'a', é: 'e', í: 'i', ó: 'o', ú: 'u' };
+  function ipaPalabra(pal) {
+    const w = pal.toLowerCase();
+    if (!w) return '';
+    if (/^(méxico|mexicano|mexicana|oaxaca|texas)$/.test(w)) return ipaPalabra(w.replace('x', 'j'));
+    const f = []; // fonemas: { s: símbolo, v: vocal?, t: con tilde? }
+    const C = (s) => f.push({ s }), V = (s, t) => f.push({ s, v: true, t });
+    for (let i = 0; i < w.length; i++) {
+      const c = w[i], n = w[i + 1] || '', p = w[i - 1] || '';
+      const antesEI = /[eiéí]/.test(n);
+      if (c in TILDE) V(TILDE[c], true);
+      else if ('aeiou'.includes(c)) V(c);
+      else if (c === 'ü') V('u');
+      else if (c === 'c' && n === 'h') { C('tʃ'); i++; }
+      else if (c === 'l' && n === 'l') { C('ʝ'); i++; }
+      else if (c === 'r' && n === 'r') { C('r'); i++; }
+      else if (c === 'q') { C('k'); if (n === 'u') i++; }
+      else if (c === 'g' && n === 'u' && /[eiéí]/.test(w[i + 2] || '')) { C('g'); i++; }
+      else if (c === 'g') C(antesEI ? 'x' : 'g');
+      else if (c === 'c') C(antesEI ? 's' : 'k');
+      else if (c === 'z' || c === 's') C('s');
+      else if (c === 'j') C('x');
+      else if (c === 'h') { /* muda */ }
+      else if (c === 'ñ') C('ɲ');
+      else if (c === 'v' || c === 'b') C('b');
+      else if (c === 'x') { C('k'); C('s'); }
+      else if (c === 'y') { if (!n || !VOC.includes(n)) V('i'); else C('ʝ'); }
+      else if (c === 'r') C(!p || /[nls]/.test(p) ? 'r' : 'ɾ');
+      else if (c === 'w') C('w');
+      else if (/[a-z]/.test(c)) C(c);
+    }
+    // Vocales débiles sin tilde junto a otra vocal → semivocales j / w.
+    f.forEach((x, k) => {
+      if (!x.v || x.t || !/[iu]/.test(x.s)) return;
+      const a = f[k - 1], d = f[k + 1];
+      const fuerteAl = (y) => y && y.v && !y.g && (!/[iu]/.test(y.s) || y.t);
+      if (fuerteAl(a) || fuerteAl(d) || (d && d.v && /[iu]/.test(d.s) && d.s !== x.s)) { x.v = false; x.g = true; x.s = x.s === 'i' ? 'j' : 'w'; }
+    });
+    // Sílabas: cada vocal es un núcleo; las consonantes entre núcleos se reparten.
+    const nuc = f.map((x, k) => x.v ? k : -1).filter(k => k >= 0);
+    if (!nuc.length) return f.map(x => x.s).join('');
+    const ataque = /^([pbtdkgf][lɾ])$/;
+    const inicio = [0];
+    for (let k = 1; k < nuc.length; k++) {
+      let a = nuc[k - 1] + 1; while (a < nuc[k] && f[a].g) a++;   // semivocal de diptongo
+      let b = nuc[k]; while (b - 1 >= a && f[b - 1].g) b--;
+      const cons = f.slice(a, b).map(x => x.s);
+      let corte = b - (cons.length ? 1 : 0);
+      if (cons.length >= 2 && ataque.test(cons.slice(-2).join(''))) corte = b - 2;
+      inicio.push(corte);
+    }
+    // Sílaba fuerte: la de la tilde; si no, regla general.
+    let fuerte = f.findIndex(x => x.t);
+    let silFuerte;
+    if (fuerte >= 0) silFuerte = nuc.findIndex(k => k === fuerte);
+    else silFuerte = /[aeiouns]$/.test(w.replace(/y$/, 'i')) && !/[aeiou]y$/.test(w) ? nuc.length - 2 : nuc.length - 1;
+    if (silFuerte < 0) silFuerte = nuc.length - 1;
+    // Alófonos: b d g suaves salvo al inicio o tras nasal (d también tras l); n → m ante b/p.
+    const out = f.map((x, k) => {
+      const a = f[k - 1];
+      if (x.s === 'n' && f[k + 1] && /[bpm]/.test(f[k + 1].s)) return 'm';
+      if ('bdg'.includes(x.s) && a && !(/[mnɲ]/.test(a.s) || (x.s === 'd' && a.s === 'l'))) return { b: 'β', d: 'ð', g: 'ɣ' }[x.s];
+      return x.s;
+    });
+    let r = '';
+    out.forEach((s, k) => {
+      const sil = inicio.indexOf(k);
+      if (sil > 0) r += '.';
+      if (sil === silFuerte && nuc.length > 1) r += 'ˈ';
+      r += s;
+    });
+    return r;
+  }
+  function ipaEs(texto) {
+    return String(texto || '')
+      .replace(/\([^)]*\)/g, ' ')
+      .split(/([\s,;/]+)/)
+      .map(t => /^[\s,;/]+$/.test(t) ? t.replace(/\s+/g, ' ') : ipaPalabra(t.replace(/[^a-záéíóúüñ]/gi, '')))
+      .join('').trim();
+  }
+
   function palabraAlReves(w) {
     if (!w || typeof w !== 'object' || w.ingles === undefined || w.espanol === undefined || w.__es) return w;
     const en = w.ingles;
     w.ingles = w.espanol; w.espanol = en;
     if ('audio' in w && w.id != null) w.audio = audioEs('palabras', w.id);
-    if ('fonetica' in w) w.fonetica = '';
+    if ('fonetica' in w) w.fonetica = ipaEs(w.ingles);
     if ('mnemotecnica' in w) w.mnemotecnica = null;
     w.__es = true;
     return w;
@@ -248,11 +333,10 @@
       });
     } catch {}
     document.documentElement.setAttribute('data-aprende', 'es');
-    // La fonética guardada es la del inglés: no aplica a quien aprende español.
     const css = document.createElement('style');
     // English Town (juego) y English Street (juego2) arman frases con la
     // gramática del inglés: todavía no tienen versión para aprender español.
-    css.textContent = '#btn-show-phonetic,#txt-phonetic,[data-menu="juego"],[data-menu="juego2"]{display:none!important}';
+    css.textContent = '[data-menu="juego"],[data-menu="juego2"]{display:none!important}';
     document.head.appendChild(css);
     document.documentElement.lang = 'en';
     iniciarTraductor();
@@ -345,5 +429,5 @@
     location.reload();
   }
 
-  window.AbuIdioma = { actual: () => (ES ? 'es' : 'en'), aprendeEspanol: ES, cambiar, palabraAlReves, fraseAlReves };
+  window.AbuIdioma = { actual: () => (ES ? 'es' : 'en'), aprendeEspanol: ES, cambiar, palabraAlReves, fraseAlReves, ipaEs };
 })();
