@@ -160,6 +160,11 @@ import Landing from '../layouts/Landing.astro';
 
     <section class="bg-white relative pt-32 pb-40 text-center overflow-hidden">
         <div class="container mx-auto px-6 relative z-10">
+            <p class="mb-6 -mt-10">
+                <button type="button" id="hero-spanish-btn" class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border-2 border-[#0D47A1] text-[#0D47A1] font-bold text-sm hover:bg-blue-50 transition">
+                    🇪🇸 Want to learn Spanish? <span class="underline">Start here</span>
+                </button>
+            </p>
             <h1 class="text-5xl md:text-7xl font-bold font-heading leading-tight mb-4 animate-on-scroll">
                 Aprender Inglés Online te da <br> un Nuevo <span style="color: #FF7A00;">Superpoder</span>.
             </h1>
@@ -705,8 +710,8 @@ import Landing from '../layouts/Landing.astro';
     <div id="signup-modal" class="fixed inset-0 bg-black/50 flex justify-center p-3 sm:p-4 z-50 overflow-y-auto hidden">
         <div class="bg-white px-5 py-6 sm:p-8 rounded-2xl shadow-2xl w-full max-w-md relative my-auto">
             <button class="close-modal-btn absolute top-4 right-4 text-slate-400 hover:text-slate-800 text-2xl" aria-label="Cerrar">&times;</button>
-            <p class="text-2xl font-bold font-heading mb-1 text-center">Crea tu Cuenta</p>
-            <p class="text-sm text-slate-400 mb-4 text-center">Create your account</p>
+            <p class="text-2xl font-bold font-heading mb-1 text-center" data-en="Create your Account">Crea tu Cuenta</p>
+            <p class="text-sm text-slate-400 mb-4 text-center" data-en="Learn Spanish with Abulingo 🇪🇸">Create your account</p>
             <form id="signup-form" class="space-y-3">
                 <fieldset>
                     <legend class="block text-sm font-medium text-slate-600 mb-1">¿Qué idioma quieres aprender? · <span class="text-slate-400">What language do you want to learn?</span></legend>
@@ -724,12 +729,12 @@ import Landing from '../layouts/Landing.astro';
                     </div>
                 </fieldset>
                 <div>
-                    <label for="signup-name" class="block text-sm font-medium text-slate-600 mb-1">Nombre Completo · <span class="text-slate-400">Full name</span></label>
+                    <label for="signup-name" class="block text-sm font-medium text-slate-600 mb-1" data-en="Full name">Nombre Completo · <span class="text-slate-400">Full name</span></label>
                     <input type="text" id="signup-name" autocomplete="name" class="w-full input-field" required>
                 </div>
                 <div>
-                    <label for="signup-phone" class="block text-sm font-medium text-slate-600 mb-1">Número Celular o WhatsApp · <span class="text-slate-400">Phone or WhatsApp</span></label>
-                    <input type="tel" id="signup-phone" placeholder="Ej: 3123456789" autocomplete="tel" class="w-full input-field" required>
+                    <label for="signup-phone" class="block text-sm font-medium text-slate-600 mb-1" data-en="Phone or WhatsApp number">Número Celular o WhatsApp · <span class="text-slate-400">Phone or WhatsApp</span></label>
+                    <input type="tel" id="signup-phone" placeholder="Ej: 3123456789" data-en-ph="e.g. +1 555 123 4567" autocomplete="tel" class="w-full input-field" required>
                 </div>
                 <div id="signup-group-wrap">
                     <label for="signup-group" class="block text-sm font-medium text-slate-600 mb-1">Grupo de inglés</label>
@@ -737,23 +742,23 @@ import Landing from '../layouts/Landing.astro';
                     </select>
                 </div>
                 <div>
-                    <label for="signup-email" class="block text-sm font-medium text-slate-600 mb-1">Correo Electrónico · <span class="text-slate-400">Email</span></label>
+                    <label for="signup-email" class="block text-sm font-medium text-slate-600 mb-1" data-en="Email">Correo Electrónico · <span class="text-slate-400">Email</span></label>
                     <input type="email" id="signup-email" autocomplete="email" class="w-full input-field" required>
                 </div>
                 <div>
-                    <label for="signup-pin" class="block text-sm font-medium text-slate-600 mb-1">Crea tu PIN (4 dígitos) · <span class="text-slate-400">Create a 4-digit PIN</span></label>
+                    <label for="signup-pin" class="block text-sm font-medium text-slate-600 mb-1" data-en="Create a 4-digit PIN">Crea tu PIN (4 dígitos) · <span class="text-slate-400">Create a 4-digit PIN</span></label>
                     <input type="password" id="signup-pin" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" minlength="4" autocomplete="new-password" placeholder="••••" class="w-full input-field pin-field" required>
-                    <p class="text-xs text-slate-400 mt-1">Usarás este PIN de 4 dígitos para entrar. Sencillo de recordar.</p>
+                    <p class="text-xs text-slate-400 mt-1" data-en="You will use this 4-digit PIN to log in. Easy to remember.">Usarás este PIN de 4 dígitos para entrar. Sencillo de recordar.</p>
                 </div>
                 <div id="signup-cookies-aviso" class="hidden rounded-lg bg-amber-50 border border-amber-200 p-3 text-xs text-amber-800 leading-snug">
-                    🍪 Para crear tu cuenta primero tienes que <b>aceptar el uso de cookies</b>.
-                    <button type="button" id="signup-abrir-cookies" class="underline font-bold hover:text-amber-900">Ver el aviso de cookies</button>
+                    <span data-en="🍪 To create your account you first need to &lt;b&gt;accept cookies&lt;/b&gt;.">🍪 Para crear tu cuenta primero tienes que <b>aceptar el uso de cookies</b>.</span>
+                    <button type="button" id="signup-abrir-cookies" class="underline font-bold hover:text-amber-900" data-en="See the cookie notice">Ver el aviso de cookies</button>
                 </div>
                 <label class="flex items-start gap-2 text-xs text-slate-500 leading-snug">
                     <input type="checkbox" id="signup-consiente-contacto" class="mt-0.5 w-4 h-4 shrink-0 accent-[#FF7A00]" required>
-                    <span>Acepto que Abulingo me contacte por correo o WhatsApp (por ejemplo, para avisos sobre mi cuenta o novedades del curso) y que me agreguen a un grupo de WhatsApp de estudiantes, donde mi número y nombre serán visibles para los demás miembros. <b class="text-slate-600">Es obligatorio para crear la cuenta.</b> Ver <button type="button" id="signup-ver-privacidad" class="underline hover:text-[#0D47A1]">política de privacidad</button>.</span>
+                    <span><span data-en="I agree that Abulingo may contact me by email or WhatsApp (for example, about my account or course news) and add me to a students' WhatsApp group, where my number and name will be visible to other members. &lt;b class=&quot;text-slate-600&quot;&gt;Required to create the account.&lt;/b&gt; See the">Acepto que Abulingo me contacte por correo o WhatsApp (por ejemplo, para avisos sobre mi cuenta o novedades del curso) y que me agreguen a un grupo de WhatsApp de estudiantes, donde mi número y nombre serán visibles para los demás miembros. <b class="text-slate-600">Es obligatorio para crear la cuenta.</b> Ver</span> <button type="button" id="signup-ver-privacidad" class="underline hover:text-[#0D47A1]" data-en="privacy policy">política de privacidad</button>.</span>
                 </label>
-                <button type="submit" id="signup-submit-btn" class="w-full btn-primary font-bold py-3 rounded-lg !mt-6">Crear Cuenta</button>
+                <button type="submit" id="signup-submit-btn" class="w-full btn-primary font-bold py-3 rounded-lg !mt-6" data-en="Create Account">Crear Cuenta</button>
             </form>
             <div id="signup-message" class="text-sm mt-4 text-center h-4"></div>
         </div>
@@ -842,9 +847,21 @@ import Landing from '../layouts/Landing.astro';
             const sel = document.getElementById('signup-group');
             if (wrap) wrap.classList.toggle('hidden', v === 'es');
             if (sel) sel.required = v !== 'es';
+            // Quien aprende español habla inglés: el formulario pasa a inglés.
+            const en = v === 'es';
+            document.querySelectorAll('#signup-modal [data-en]').forEach(el => {
+                if (el.dataset.es === undefined) el.dataset.es = el.innerHTML;
+                el.innerHTML = en ? el.dataset.en : el.dataset.es;
+            });
+            document.querySelectorAll('#signup-modal [data-en-ph]').forEach(el => {
+                if (el.dataset.esPh === undefined) el.dataset.esPh = el.placeholder;
+                el.placeholder = en ? el.dataset.enPh : el.dataset.esPh;
+            });
         };
         document.querySelectorAll('input[name="signup-idioma"]').forEach(r => r.addEventListener('change', pintarIdiomaSignup));
         pintarIdiomaSignup();
+        // Textos del registro según el idioma elegido (es: aprende inglés; en: aprende español).
+        const tx = (es, en) => (document.querySelector('input[name="signup-idioma"]:checked')?.value === 'es' ? en : es);
 
         const loginModal = document.getElementById('login-modal');
         const signupModal = document.getElementById('signup-modal');
@@ -874,6 +891,13 @@ import Landing from '../layouts/Landing.astro';
         };
         const abrirRegistro = () => { refrescarAvisoCookies(); openModal(signupModal); };
         document.querySelectorAll('.auth-btn-signup').forEach(btn => btn.addEventListener('click', abrirRegistro));
+        // "Want to learn Spanish?": abre el registro con Español ya elegido.
+        document.getElementById('hero-spanish-btn')?.addEventListener('click', () => {
+            const es = document.querySelector('input[name="signup-idioma"][value="es"]');
+            if (es) { es.checked = true; pintarIdiomaSignup(); }
+            if (window.AbuTrack) window.AbuTrack.clic('hero_learn_spanish', {});
+            abrirRegistro();
+        });
         document.getElementById('signup-abrir-cookies')?.addEventListener('click', () => {
             if (window.AbuCookies) window.AbuCookies.mostrarBanner();
         });
@@ -978,13 +1002,13 @@ import Landing from '../layouts/Landing.astro';
                     msgEl.textContent = texto;
                     msgEl.className = 'text-sm mt-4 text-center text-feedback-error';
                 };
-                const yaRegistrado = () => showError('Este correo ya está registrado. Inicia sesión con tu PIN.');
+                const yaRegistrado = () => showError(tx('Este correo ya está registrado. Inicia sesión con tu PIN.', 'This email is already registered. Log in with your PIN.'));
 
                 // REQUISITO 1: cookies aceptadas. Sin esto no se crea la cuenta;
                 // se vuelve a mostrar el banner para poder aceptarlas ahí mismo.
                 if (!cookiesAceptadas()) {
                     refrescarAvisoCookies();
-                    showError('🍪 Para crear tu cuenta primero tienes que aceptar el uso de cookies.');
+                    showError(tx('🍪 Para crear tu cuenta primero tienes que aceptar el uso de cookies.', '🍪 To create your account you first need to accept cookies.'));
                     if (window.AbuCookies) window.AbuCookies.mostrarBanner();
                     return;
                 }
@@ -993,18 +1017,18 @@ import Landing from '../layouts/Landing.astro';
                 // "required", pero se comprueba igual por si el navegador no
                 // valida (o alguien lo salta desde la consola).
                 if (!consienteContacto) {
-                    showError('Para crear tu cuenta tienes que aceptar que Abulingo te contacte y te agregue al grupo de WhatsApp.');
+                    showError(tx('Para crear tu cuenta tienes que aceptar que Abulingo te contacte y te agregue al grupo de WhatsApp.', 'To create your account you need to agree that Abulingo may contact you and add you to the WhatsApp group.'));
                     document.getElementById('signup-consiente-contacto').focus();
                     return;
                 }
 
                 if (!isValidPin(pin)) {
-                    showError('El PIN debe tener exactamente 4 dígitos numéricos.');
+                    showError(tx('El PIN debe tener exactamente 4 dígitos numéricos.', 'The PIN must be exactly 4 digits.'));
                     return;
                 }
 
                 const password = buildPassword(pin); // p.ej. 345299
-                msgEl.textContent = 'Creando cuenta...';
+                msgEl.textContent = tx('Creando cuenta...', 'Creating account...');
                 msgEl.className = 'text-sm mt-4 text-center text-slate-500';
 
                 // VERIFICACIÓN 1 (la más segura): preguntamos a la base de datos si el
@@ -1082,7 +1106,7 @@ import Landing from '../layouts/Landing.astro';
                         password: password
                     });
                     if (signInError) {
-                        showError('Cuenta creada, pero no se pudo entrar automáticamente. Inicia sesión manualmente.');
+                        showError(tx('Cuenta creada, pero no se pudo entrar automáticamente. Inicia sesión manualmente.', 'Account created, but we could not log you in automatically. Please log in.'));
                         return;
                     }
                     session = signInData.session;
@@ -1092,7 +1116,7 @@ import Landing from '../layouts/Landing.astro';
                     await upsertProfile(session.user, { full_name: name, phone, english_group: group });
                 }
 
-                msgEl.textContent = '¡Cuenta creada! Entrando...';
+                msgEl.textContent = tx('¡Cuenta creada! Entrando...', 'Account created! Logging in...');
                 msgEl.className = 'text-sm mt-4 text-center text-feedback-success';
                 window.location.href = 'abulingo.html';
             });
