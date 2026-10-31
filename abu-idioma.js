@@ -275,6 +275,9 @@
       if (!dic || !t || !/[A-Za-zÁÉÍÓÚáéíóúñÑ¿¡]/.test(t)) return t;
       const lim = t.trim();
       if (dic.has(lim)) return t.replace(lim, dic.get(lim));
+      // «Continuar 🔤», «🔥 Racha»: el texto con un emoji pegado al principio o al final.
+      const m = lim.match(/^([\p{Extended_Pictographic}\uFE0F\u200D\s]*)(.*?)([\s\p{Extended_Pictographic}\uFE0F\u200D]*)$/u);
+      if (m && m[2] !== lim && dic.has(m[2])) return t.replace(m[2], dic.get(m[2]));
       const u = patron ? t.replace(patron, (m) => dic.get(m) ?? m) : t;
       // Conteos armados en el código («7 frases», «70 palabras»).
       return u.replace(CONTEOS_RE, (m, n, w) => `${n} ${CONTEOS[w.toLowerCase()] || w}`);
@@ -302,8 +305,12 @@
     });
     const escapar = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     fetch('i18n-en.json').then(r => r.json()).then(j => {
+      // __solo_exacto: frases que también salen en el contenido en español;
+      // se traducen solo si son el texto entero, nunca dentro de otra frase.
+      const soloExacto = new Set(j.__solo_exacto || []);
+      delete j.__solo_exacto;
       dic = new Map(Object.entries(j));
-      const largas = [...dic.keys()].filter(k => /\s/.test(k.trim()) && k.trim().length >= 4).sort((a, b) => b.length - a.length);
+      const largas = [...dic.keys()].filter(k => /\s/.test(k.trim()) && k.trim().length >= 4 && !soloExacto.has(k)).sort((a, b) => b.length - a.length);
       if (largas.length) patron = new RegExp('(?<![\\p{L}])(?:' + largas.map(escapar).join('|') + ')(?![\\p{L}])', 'gu');
       const arrancar = () => {
         document.title = traducir(document.title);
