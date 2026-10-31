@@ -2163,19 +2163,21 @@ function openAbuChat() {
   const CACHE_CONTENIDO_MS = 7 * 86400000;
   const CACHE_CONTENIDO_VER = 'v1';
   const memContenido = new Map();
+  // _es2: las palabras en español ya traen su fonética; se borra la caché anterior.
+  try { Object.keys(localStorage).filter(k => k.startsWith(`abu_cc_${CACHE_CONTENIDO_VER}_es_`)).forEach(k => localStorage.removeItem(k)); } catch {}
   function leerCacheContenido(clave) {
     try {
-      const x = JSON.parse(localStorage.getItem(`abu_cc_${CACHE_CONTENIDO_VER}${window.AbuIdioma?.aprendeEspanol ? '_es' : ''}_${clave}`) || 'null');
+      const x = JSON.parse(localStorage.getItem(`abu_cc_${CACHE_CONTENIDO_VER}${window.AbuIdioma?.aprendeEspanol ? '_es2' : ''}_${clave}`) || 'null');
       return x && Date.now() - x.t < CACHE_CONTENIDO_MS ? x.v : null;
     } catch { return null; }
   }
   function guardarCacheContenido(clave, v, grupoUnico) {
     try {
       if (grupoUnico) {
-        const pref = `abu_cc_${CACHE_CONTENIDO_VER}${window.AbuIdioma?.aprendeEspanol ? '_es' : ''}_${grupoUnico}`;
+        const pref = `abu_cc_${CACHE_CONTENIDO_VER}${window.AbuIdioma?.aprendeEspanol ? '_es2' : ''}_${grupoUnico}`;
         Object.keys(localStorage).filter(k => k.startsWith(pref)).forEach(k => localStorage.removeItem(k));
       }
-      localStorage.setItem(`abu_cc_${CACHE_CONTENIDO_VER}${window.AbuIdioma?.aprendeEspanol ? '_es' : ''}_${clave}`, JSON.stringify({ t: Date.now(), v }));
+      localStorage.setItem(`abu_cc_${CACHE_CONTENIDO_VER}${window.AbuIdioma?.aprendeEspanol ? '_es2' : ''}_${clave}`, JSON.stringify({ t: Date.now(), v }));
     } catch { /* almacenamiento lleno: se sigue sin caché */ }
   }
   function conCache(clave, cargar, { grupoUnico = null, persistir = true } = {}) {
