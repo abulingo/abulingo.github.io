@@ -269,7 +269,8 @@
     textos: 'texts', minutos: 'minutes', días: 'days', dia: 'day', día: 'day', estrellas: 'stars', errores: 'mistakes', aciertos: 'correct', veces: 'times', preguntas: 'questions' };
   const CONTEOS_RE = new RegExp(`(\\d+)\\s(${Object.keys(CONTEOS).join('|')})\\b`, 'gi');
   function iniciarTraductor() {
-    let dic = null, patron = null;
+    let dic = null, patron = null, htmlDic = null;
+    const INLINE = new Set(['B', 'I', 'STRONG', 'EM', 'SPAN', 'A', 'BR', 'SMALL', 'U', 'MARK', 'SUP', 'SUB', 'KBD']);
     const NO = new Set(['SCRIPT', 'STYLE', 'TEXTAREA', 'CODE', 'PRE']);
     const traducir = (t) => {
       if (!dic || !t || !/[A-Za-zÁÉÍÓÚáéíóúñÑ¿¡]/.test(t)) return t;
@@ -291,6 +292,12 @@
         if (v !== n.nodeValue) n.nodeValue = v;
       } else if (n.nodeType === 1) {
         if (NO.has(n.tagName) || n.hasAttribute('data-no-tr')) return;
+        // Párrafo con negritas u otras marcas: se cambia entero (__html), así
+        // la frase no queda partida en pedazos traducidos por separado.
+        if (htmlDic && n.firstElementChild && n.childNodes.length <= 24 && [...n.children].every(c => INLINE.has(c.tagName))) {
+          const t = htmlDic.get(n.innerHTML.replace(/\s+/g, ' ').trim());
+          if (t) { n.innerHTML = t; return; }
+        }
         for (const a of ATR) { const v = n.getAttribute(a); if (v) { const t = traducir(v); if (t !== v) n.setAttribute(a, t); } }
         if (n.tagName === 'INPUT' && /^(button|submit)$/i.test(n.type) && n.value) n.value = traducir(n.value);
         for (const h of n.childNodes) nodo(h);
@@ -304,11 +311,13 @@
       }
     });
     const escapar = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    try { if (localStorage.getItem('abu-sin-traducir') === '1') return; } catch {}
     fetch('i18n-en.json').then(r => r.json()).then(j => {
       // __solo_exacto: frases que también salen en el contenido en español;
       // se traducen solo si son el texto entero, nunca dentro de otra frase.
       const soloExacto = new Set(j.__solo_exacto || []);
-      delete j.__solo_exacto;
+      htmlDic = new Map(Object.entries(j.__html || {}));
+      delete j.__solo_exacto; delete j.__html;
       dic = new Map(Object.entries(j));
       const largas = [...dic.keys()].filter(k => /\s/.test(k.trim()) && k.trim().length >= 4 && !soloExacto.has(k)).sort((a, b) => b.length - a.length);
       if (largas.length) patron = new RegExp('(?<![\\p{L}])(?:' + largas.map(escapar).join('|') + ')(?![\\p{L}])', 'gu');
