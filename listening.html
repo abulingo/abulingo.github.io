@@ -25,6 +25,8 @@
   <script defer src="abu-progreso.js"></script>
   <script defer src="listening-datos.js"></script>
   <script defer src="listening-datos-extra.js"></script>
+  <!-- Quien aprende español: actividades y audios en español (window.LISTENING_DATOS_ES) -->
+  <script>if (window.AbuIdioma && AbuIdioma.aprendeEspanol) document.write('<script src="listening-datos-es.js"><\/script>');</script>
   <style>
     body { background-color: #f0f4f8; font-family: 'Work Sans', sans-serif; overflow-x: hidden; }
     .font-heading { font-family: 'Space Grotesk', sans-serif; }
@@ -196,7 +198,8 @@
 
   const { createClient } = supabase;
   const dbClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-  const D = window.LISTENING_DATOS;
+  const ES = !!window.AbuIdioma?.aprendeEspanol;
+  const D = (ES && window.LISTENING_DATOS_ES) || window.LISTENING_DATOS;
 
   let currentUser = null;
   let userProfile = null;
@@ -255,7 +258,8 @@
   const barajar = (a) => { a = [...a]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
   const dormir = (ms) => new Promise(r => setTimeout(r, ms));
   const hoy = () => new Date().toISOString().slice(0, 10);
-  const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  // Sin tildes (las palabras en español): «aquí» → «aqui».
+  const slug = (s) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
   const confeti = (n = 70) => { if (window.confetti) confetti({ particleCount: n, spread: 60, origin: { y: 0.7 }, colors: ['#FF7A00', '#fbbf24', '#0D47A1'] }); };
 
   /* ---------- Flujo compartido (lo necesita el menú de perfil) ---------- */
@@ -338,7 +342,9 @@
      archivo no carga, se lee con la voz del dispositivo para no dejar a
      nadie sin práctica.
   ============================================================ */
-  const AUDIO_BASE = `${SUPABASE_URL}/storage/v1/object/public/listening/actividades/`;
+  const AUDIO_BASE = (ES && window.LISTENING_DATOS_ES)
+    ? `${SUPABASE_URL}/storage/v1/object/public/audios_es/actividades/`
+    : `${SUPABASE_URL}/storage/v1/object/public/listening/actividades/`;
   const audioUrl = (archivo) => `${AUDIO_BASE}${archivo}.mp3`;
   const VELOCIDADES = [0.5, 0.75, 1, 1.25];
   let velocidad = 1;
@@ -1637,11 +1643,12 @@
   let lsVelocidad = 1;          // velocidad global elegida por la persona
   let lsAudio = null;           // <audio> en curso (uno a la vez)
   let lsFraseSonando = null;    // índice de la frase que está sonando
+  let lsTextosEs = null;         // textos en español (solo quien aprende español)
   let lsTextoAbierto = false;   // ¿está desplegado el transcript completo?
   let lsOrden = {};             // { [frase]: { puestas: [], banco: [] } } del ejercicio de ordenar
   let lsRec = null;             // reconocimiento de voz del shadowing
 
-  const lsUrl = (ruta) => (ruta ? LISTENING_BUCKET + ruta : null);
+  const lsUrl = (ruta) => (ruta ? (/^https?:/.test(ruta) ? ruta : LISTENING_BUCKET + ruta) : null);
 
   function lsDetenerAudio() {
     if (lsAudio) { try { lsAudio.pause(); } catch {} lsAudio = null; }
@@ -1700,6 +1707,13 @@
       return;
     }
     lsTextosNivel = data || [];
+    // En español: el mismo texto, en español y con sus audios (textos-listening-es.json).
+    if (ES && lsTextosNivel.length) {
+      try {
+        lsTextosEs = lsTextosEs || await (await fetch('textos-listening-es.json')).json();
+        lsTextosNivel = lsTextosNivel.map(t => ({ ...t, ...(lsTextosEs[t.id] || {}) }));
+      } catch (e) { console.warn('[listening] textos en español', e); }
+    }
     if (!lsTextosNivel.length) {
       document.getElementById('ls-lista-wrap').innerHTML = '<p class="text-center text-slate-400 text-sm py-6">Todavía no hay textos cargados para este nivel.</p>';
       return;

@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Abulingo - Spanish Pronunciation</title>
+<meta name="description" content="Spanish pronunciation explained for English speakers: vowels, tricky consonants, stress and linking, with native audio and practice.">
+<meta name="theme-color" content="#FF7A00">
+<link rel="icon" href="icono.png" type="image/x-icon">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Work+Sans:wght@400;600;800&display=swap" rel="stylesheet">
+<script defer src="fonetica-es-datos.js"></script>
+<style>
+  :root { --naranja: #FF7A00; --azul: #0D47A1; --texto: #1e293b; --suave: #64748b; --borde: #e2e8f0; --fondo: #f1f5f9; --tarjeta: #fff; --verde: #16a34a; --rojo: #dc2626; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: 'Work Sans', system-ui, sans-serif; background: var(--fondo); color: var(--texto); }
+  h1, h2, h3 { font-family: 'Space Grotesk', sans-serif; margin: 0; }
+  header { position: sticky; top: 0; z-index: 5; background: #fff; border-bottom: 1px solid var(--borde); padding: 10px 16px; display: flex; align-items: center; gap: 12px; }
+  header a { color: var(--suave); text-decoration: none; font-weight: 800; font-size: 14px; }
+  .logo { width: 40px; height: 40px; border-radius: 12px; background: var(--naranja); color: #fff; display: grid; place-items: center; font-weight: 800; font-size: 18px; }
+  header h1 { font-size: 17px; color: var(--azul); }
+  header p { margin: 0; font-size: 12px; color: var(--suave); }
+  nav { display: flex; gap: 6px; overflow-x: auto; padding: 10px 16px; background: #fff; border-bottom: 1px solid var(--borde); scrollbar-width: none; }
+  nav button { flex: none; border: 2px solid var(--borde); background: #fff; border-radius: 999px; padding: 7px 14px; font: 700 13px 'Work Sans'; color: var(--suave); cursor: pointer; }
+  nav button.on { border-color: var(--naranja); background: #fff7ed; color: var(--naranja); }
+  main { max-width: 760px; margin: 0 auto; padding: 16px; }
+  .card { background: var(--tarjeta); border-radius: 18px; padding: 16px; margin-bottom: 14px; box-shadow: 0 3px 0 #e2e8f0; border: 1px solid var(--borde); }
+  .intro { color: var(--suave); font-size: 14px; line-height: 1.5; margin: 6px 0 14px; }
+  .sim { font-family: 'Space Grotesk'; font-weight: 700; font-size: 30px; color: var(--naranja); min-width: 54px; }
+  .fila { display: flex; gap: 12px; align-items: flex-start; }
+  .t { font-weight: 800; font-size: 16px; }
+  .p { font-size: 14px; line-height: 1.5; margin: 4px 0; }
+  .trampa { background: #fff7ed; border-left: 4px solid var(--naranja); border-radius: 8px; padding: 8px 10px; font-size: 13.5px; line-height: 1.45; margin-top: 8px; }
+  .palabras { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .w { border: 2px solid var(--borde); background: #fff; border-radius: 12px; padding: 6px 10px; font: 700 15px 'Work Sans'; color: var(--texto); cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
+  .w:hover, .w.sonando { border-color: var(--naranja); background: #fff7ed; }
+  .w small { font-weight: 600; color: var(--suave); font-size: 12px; }
+  .par { display: inline-flex; gap: 4px; align-items: center; color: var(--suave); font-size: 13px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  td { padding: 8px 4px; border-top: 1px solid var(--borde); vertical-align: top; }
+  .silabas b { color: var(--naranja); }
+  .btn { width: 100%; border: 0; border-radius: 14px; padding: 14px; font: 800 16px 'Work Sans'; color: #fff; background: var(--naranja); box-shadow: 0 4px 0 #c45e00; cursor: pointer; }
+  .btn.azul { background: var(--azul); box-shadow: 0 4px 0 #082c66; }
+  .opciones { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+  .op { border: 2px solid var(--borde); background: #fff; border-radius: 14px; padding: 16px 8px; font: 800 20px 'Space Grotesk'; cursor: pointer; color: var(--texto); }
+  .op.bien { border-color: var(--verde); background: #f0fdf4; color: var(--verde); }
+  .op.mal { border-color: var(--rojo); background: #fef2f2; color: var(--rojo); }
+  .marcador { display: flex; gap: 10px; font-weight: 800; font-size: 14px; color: var(--suave); justify-content: center; margin-bottom: 10px; }
+  .grande { text-align: center; font: 700 15px 'Work Sans'; color: var(--suave); }
+  .oir { display: block; margin: 8px auto 0; width: 84px; height: 84px; border-radius: 50%; border: 0; background: var(--naranja); color: #fff; font-size: 34px; cursor: pointer; box-shadow: 0 5px 0 #c45e00; }
+  .silaba { border: 2px solid var(--borde); background: #fff; border-radius: 12px; padding: 12px 14px; font: 800 20px 'Space Grotesk'; cursor: pointer; }
+  .silabas-op { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 14px; }
+  @media (prefers-color-scheme: dark) {
+    :root { --texto: #e2e8f0; --suave: #94a3b8; --borde: #334155; --fondo: #0f172a; --tarjeta: #1e293b; }
+    header, nav, nav button, .w, .op, .silaba { background: #1e293b; }
+    nav button.on, .w:hover, .w.sonando { background: #3b2410; }
+    .trampa { background: #3b2410; }
+    .card { box-shadow: none; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <a href="abulingo.html" aria-label="Back to Abulingo">←</a>
+  <div class="logo">ñ</div>
+  <div>
+    <h1>Spanish Pronunciation</h1>
+    <p>Latin American Spanish, explained in English</p>
+  </div>
+</header>
+<nav id="tabs">
+  <button data-tab="vocales" class="on">👄 Vowels</button>
+  <button data-tab="consonantes">🦷 Consonants</button>
+  <button data-tab="acento">🎯 Stress</button>
+  <button data-tab="enlace">🔗 Linking</button>
+  <button data-tab="practica">🎮 Practice</button>
+</nav>
+<main id="vista"></main>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const D = window.FON_ES, ARCHIVO = window.FON_ES_ARCHIVO;
+  const AUDIO = 'https://eylwewhqeaaqkgcxhgyv.supabase.co/storage/v1/object/public/audios_es/fonetica/';
+  const $ = (q) => document.querySelector(q);
+  const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const vista = $('#vista');
+
+  // Audio nativo; si falla, la voz en español del dispositivo.
+  let actual = null;
+  function decir(w, boton) {
+    if (actual) actual.pause();
+    document.querySelectorAll('.sonando').forEach(b => b.classList.remove('sonando'));
+    if (boton) boton.classList.add('sonando');
+    const fin = () => boton && boton.classList.remove('sonando');
+    const a = new Audio(AUDIO + ARCHIVO(w) + '.mp3');
+    actual = a;
+    a.onended = fin;
+    a.play().catch(() => {
+      if (!window.speechSynthesis) return fin();
+      const u = new SpeechSynthesisUtterance(w);
+      u.lang = 'es-US'; u.rate = 0.85; u.onend = fin;
+      const v = speechSynthesis.getVoices().find(v => /^es/i.test(v.lang));
+      if (v) u.voice = v;
+      speechSynthesis.speak(u);
+    });
+  }
+  const boton = (w, extra = '') => `<button class="w" data-say="${esc(w)}">🔊 ${esc(w)}${extra ? ` <small>${extra}</small>` : ''}</button>`;
+  vista.addEventListener('click', (e) => { const b = e.target.closest('[data-say]'); if (b) decir(b.dataset.say, b); });
+
+  function vocales() {
+    vista.innerHTML = `
+      <div class="card">
+        <h2>👄 The 5 Spanish vowels</h2>
+        <p class="intro">English has around 15 vowel sounds; Spanish has only <b>5</b>, and they <b>never change</b>. Each one is short, pure and tense: no gliding (“oh-oo”, “ay-ee”) and no lazy “uh” in unstressed syllables. Get these right and you already sound much more natural.</p>
+        <div class="palabras">${['a', 'e', 'i', 'o', 'u'].map(v => boton(v)).join('')}</div>
+      </div>
+      ${D.VOCALES.map(v => `
+        <div class="card"><div class="fila">
+          <div class="sim">${v.s}</div>
+          <div style="flex:1;min-width:0">
+            <p class="p"><b>How:</b> ${esc(v.como)}</p>
+            <p class="p"><b>In English:</b> ${esc(v.en)}</p>
+            <div class="trampa">⚠️ ${esc(v.trampa)}</div>
+            <div class="palabras">${v.ej.map(w => boton(w)).join('')}</div>
+          </div>
+        </div></div>`).join('')}`;
+  }
+
+  function consonantes() {
+    vista.innerHTML = `
+      <div class="card">
+        <h2>🦷 The tricky consonants</h2>
+        <p class="intro">Most Spanish consonants are close to English. These are the ones that give English speakers away. Tap each word to hear it.</p>
+      </div>
+      ${D.CONSONANTES.map(c => `
+        <div class="card"><div class="fila">
+          <div class="sim" style="font-size:24px">${c.ico}</div>
+          <div style="flex:1;min-width:0">
+            <p class="t">${esc(c.t)} <span style="color:var(--naranja)">· ${esc(c.s)}</span></p>
+            <p class="p"><b>How:</b> ${esc(c.como)}</p>
+            <p class="p"><b>In English:</b> ${esc(c.en)}</p>
+            <div class="trampa">⚠️ ${esc(c.trampa)}</div>
+            <div class="palabras">${c.ej.map(w => boton(w)).join('')}</div>
+            ${c.pares ? `<p class="p" style="margin-top:10px"><b>Minimal pairs:</b></p><div class="palabras">${c.pares.map(([a, b]) => `<span class="par">${boton(a)} vs ${boton(b)}</span>`).join('')}</div>` : ''}
+          </div>
+        </div></div>`).join('')}`;
+  }
+
+  const silabas = (s) => s.split('-').map(x => x === x.toUpperCase() && /[A-ZÁÉÍÓÚÑ]/.test(x) ? `<b>${esc(x.toLowerCase())}</b>` : esc(x)).join('·');
+  function acento() {
+    vista.innerHTML = `
+      <div class="card">
+        <h2>🎯 Word stress</h2>
+        <p class="intro">Spanish stress is <b>100% predictable</b> from the spelling. Three rules cover every word, and stressing the wrong syllable can change the meaning.</p>
+        <table>${D.ACENTO.reglas.map(([r, q, ej]) => `
+          <tr><td style="width:45%"><b>${esc(r)}</b><br><span style="color:var(--suave);font-size:13px">→ ${esc(q)}</span></td>
+          <td><div class="palabras" style="margin:0">${ej.map(([w, s]) => boton(w, `<span class="silabas">${silabas(s)}</span>`)).join('')}</div></td></tr>`).join('')}
+        </table>
+      </div>
+      <div class="card">
+        <h3>The accent mark changes the word</h3>
+        <p class="intro">Listen to the difference:</p>
+        <table>${D.ACENTO.pares.map(([a, ae, b, be]) => `
+          <tr><td>${boton(a)} <small style="color:var(--suave)">${esc(ae)}</small></td><td>${boton(b)} <small style="color:var(--suave)">${esc(be)}</small></td></tr>`).join('')}
+        </table>
+        <div class="trampa">💡 <b>si / sí</b> and <b>tu / tú</b> sound the same: the accent only tells them apart in writing.</div>
+      </div>`;
+  }
+
+  function enlace() {
+    vista.innerHTML = `
+      <div class="card">
+        <h2>🔗 Linking words</h2>
+        <p class="intro">Native speakers don’t pause between words: they glue them together. That is why spoken Spanish sounds so fast. Once you know these patterns, you’ll start hearing the words inside the flow.</p>
+      </div>
+      ${D.ENLACE.map(g => `
+        <div class="card">
+          <p class="t">${esc(g.t)}</p>
+          <p class="p" style="color:var(--suave)">${esc(g.d)}</p>
+          <div class="palabras">${g.ej.map(([w, s]) => boton(w, `<span class="silabas">${silabas(s)}</span>`)).join('')}</div>
+        </div>`).join('')}`;
+  }
+
+  // Práctica: ¿qué palabra oíste? (pares mínimos) y ¿dónde va el acento?
+  const PARES = [...D.CONSONANTES.flatMap(c => c.pares || []), ...D.ACENTO.pares.filter(p => !['si', 'tu'].includes(p[0])).map(p => [p[0], p[2]])]
+    .filter((p, i, l) => l.findIndex(q => q.slice().sort().join() === p.slice().sort().join()) === i);
+  const SILABAS = [...D.ACENTO.reglas.flatMap(r => r[2]), ...D.ENLACE.flatMap(g => g.ej)].filter(([w]) => !/\s/.test(w));
+  let marcador = { ok: 0, n: 0, racha: 0 };
+  try { marcador = { ...marcador, ...JSON.parse(localStorage.getItem('abu-fon-es') || '{}') }; } catch {}
+  const guardar = () => { try { localStorage.setItem('abu-fon-es', JSON.stringify(marcador)); } catch {} };
+
+  function practica() {
+    vista.innerHTML = `
+      <div class="card">
+        <h2>🎮 Practice</h2>
+        <p class="intro">Train your ear with minimal pairs, and your eye with stress.</p>
+        <div class="marcador"><span>✅ ${marcador.ok}/${marcador.n}</span><span>🔥 ${marcador.racha}</span></div>
+        <button class="btn" id="p-oido">👂 Which word did you hear?</button>
+        <div style="height:10px"></div>
+        <button class="btn azul" id="p-acento">🎯 Where is the stress?</button>
+      </div>
+      <div id="ejercicio"></div>`;
+    $('#p-oido').onclick = oido;
+    $('#p-acento').onclick = acentoJuego;
+  }
+  function anotar(bien) {
+    marcador.n++; if (bien) { marcador.ok++; marcador.racha++; } else marcador.racha = 0;
+    guardar();
+    const m = document.querySelector('.marcador');
+    if (m) m.innerHTML = `<span>✅ ${marcador.ok}/${marcador.n}</span><span>🔥 ${marcador.racha}</span>`;
+  }
+  function oido() {
+    const par = PARES[Math.floor(Math.random() * PARES.length)];
+    const w = par[Math.floor(Math.random() * 2)];
+    const ops = Math.random() < 0.5 ? par : [par[1], par[0]];
+    $('#ejercicio').innerHTML = `
+      <div class="card">
+        <p class="grande">Listen and choose</p>
+        <button class="oir" id="re">🔊</button>
+        <div class="opciones">${ops.map(o => `<button class="op" data-o="${esc(o)}">${esc(o)}</button>`).join('')}</div>
+        <div id="sig"></div>
+      </div>`;
+    $('#re').onclick = () => decir(w);
+    decir(w);
+    document.querySelectorAll('.op').forEach(b => b.onclick = () => {
+      if ($('#sig').innerHTML) return;
+      const bien = b.dataset.o === w;
+      b.classList.add(bien ? 'bien' : 'mal');
+      if (!bien) document.querySelector(`.op[data-o="${CSS.escape(w)}"]`).classList.add('bien');
+      anotar(bien);
+      $('#sig').innerHTML = `<div style="height:12px"></div><button class="btn" id="otra">Next →</button>`;
+      $('#otra').onclick = oido;
+    });
+  }
+  function acentoJuego() {
+    const [w, s] = SILABAS[Math.floor(Math.random() * SILABAS.length)];
+    const partes = s.split('-');
+    const fuerte = partes.findIndex(x => x === x.toUpperCase() && /[A-ZÁÉÍÓÚÑ]/.test(x));
+    $('#ejercicio').innerHTML = `
+      <div class="card">
+        <p class="grande">Tap the stressed syllable of</p>
+        <p style="text-align:center;font:800 30px 'Space Grotesk';margin:6px 0">${esc(w)}</p>
+        <div class="silabas-op">${partes.map((x, i) => `<button class="silaba" data-i="${i}">${esc(x.toLowerCase())}</button>`).join('')}</div>
+        <div id="sig"></div>
+      </div>`;
+    document.querySelectorAll('.silaba').forEach(b => b.onclick = () => {
+      if ($('#sig').innerHTML) return;
+      const bien = +b.dataset.i === fuerte;
+      b.classList.add('op', bien ? 'bien' : 'mal');
+      if (!bien) document.querySelector(`.silaba[data-i="${fuerte}"]`).classList.add('op', 'bien');
+      anotar(bien);
+      decir(w);
+      $('#sig').innerHTML = `<div style="height:12px"></div><button class="btn azul" id="otra">Next →</button>`;
+      $('#otra').onclick = acentoJuego;
+    });
+  }
+
+  const VISTAS = { vocales, consonantes, acento, enlace, practica };
+  document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => {
+    document.querySelectorAll('#tabs button').forEach(x => x.classList.toggle('on', x === b));
+    if (actual) actual.pause();
+    VISTAS[b.dataset.tab]();
+    window.scrollTo({ top: 0 });
+  });
+  vocales();
+});
+</script>
+</body>
+</html>

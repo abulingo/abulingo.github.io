@@ -577,6 +577,15 @@ const Charla = (() => {
     })
   ];
 
+  // Quien aprende español: las mismas escenas con los idiomas al revés
+  // (lo que se dice y se practica es el español; la ayuda, en inglés).
+  if (window.AbuIdioma && window.AbuIdioma.aprendeEspanol) {
+    ESCENAS.forEach(e => {
+      e.titulo = { en: e.titulo.es, es: e.titulo.en };
+      e.dialogo = e.dialogo.map(([npcEn, npcEs, tuEn, tuEs]) => [npcEs, npcEn, tuEs, tuEn]);
+    });
+  }
+
   // Cada día se visitan 3 escenas (30 frases). Se repasan las más falladas.
   const POR_DIA = 3;
   return { ESCENAS, POR_DIA };

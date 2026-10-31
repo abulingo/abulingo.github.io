@@ -2487,6 +2487,61 @@
     B2: { temas: GRAM_TOPICS_B2, partes: GRAM_PARTES_B2, byId: GRAM_BY_ID_B2, meta: 'Inglés americano · nivel intermedio alto', canDo: CAN_DO_B2 }
   };
 
+  /* Quien aprende español (abu-idioma.js) estudia otro temario con las
+     mismas pantallas: el contenido llega de gramatica_es/ en el bucket y
+     las partes, metas y can-do van ya en inglés (su idioma). */
+  const GRAM_ES = !!window.AbuIdioma?.aprendeEspanol;
+  if (GRAM_ES) {
+    const PARTES_ES = [
+      { n: 0, icon: '🧱', t: 'Foundations' },
+      { n: 1, icon: '📦', t: 'Nouns & articles' },
+      { n: 2, icon: '👤', t: 'Pronouns' },
+      { n: 3, icon: '⚡', t: 'Verbs' },
+      { n: 4, icon: '🎨', t: 'Adjectives & adverbs' },
+      { n: 5, icon: '📍', t: 'Prepositions' },
+      { n: 6, icon: '🧩', t: 'Building sentences' },
+      { n: 7, icon: '🛠️', t: 'Functional Spanish' },
+      { n: 8, icon: '🏆', t: 'Extras & traps' }
+    ];
+    const META_ES = { A1: 'Latin American Spanish · beginner', A2: 'Latin American Spanish · elementary', B1: 'Latin American Spanish · intermediate', B2: 'Latin American Spanish · upper intermediate' };
+    const id = (n, ids) => ids.map(x => `es-${n}-${x}`);
+    const CAN_DO_ES = {
+      A1: [
+        ['👋', 'Introduce yourself and others', id('A1', ['3.1', '2.1', '2.2'])],
+        ['🔤', 'Spell your name and give your phone number', id('A1', ['0.1', '0.2'])],
+        ['👨‍👩‍👧', 'Describe your family and what you have', id('A1', ['3.4', '1.5', '2.3'])],
+        ['🏠', 'Describe places and things', id('A1', ['1.6', '5.1', '4.1'])],
+        ['📅', 'Talk about your daily routine', id('A1', ['3.5', '3.6', '3.11'])],
+        ['❤️', 'Say what you like and want', id('A1', ['3.10', '3.12'])],
+        ['❓', 'Ask and answer simple questions', id('A1', ['6.1', '6.2'])],
+        ['🕐', 'Tell the time, days and dates', id('A1', ['7.1', '7.2'])],
+        ['🔮', 'Talk about your plans', id('A1', ['3.9'])]
+      ],
+      A2: [
+        ['⏪', 'Tell what happened yesterday', id('A2', ['3.1', '3.2'])],
+        ['🎞️', 'Describe how things used to be', id('A2', ['3.3', '3.4'])],
+        ['🎯', 'Use object pronouns naturally', id('A2', ['2.1', '2.2'])],
+        ['📊', 'Compare people and things', id('A2', ['4.1', '4.2'])],
+        ['🍽️', 'Order food and make polite requests', id('A2', ['7.1'])],
+        ['↔️', 'Choose between por and para', id('A2', ['5.1'])]
+      ],
+      B1: [
+        ['✅', 'Talk about experiences', id('B1', ['3.1', '3.2'])],
+        ['🙏', 'Express wishes, advice and emotions', id('B1', ['3.5', '3.6', '3.7'])],
+        ['🤔', 'Express doubt and opinions', id('B1', ['3.8'])],
+        ['💭', 'Make polite requests and suggestions', id('B1', ['3.4', '3.9'])],
+        ['🗣️', 'Report what others said', id('B1', ['7.1'])]
+      ],
+      B2: [
+        ['💭', 'Talk about hypothetical situations', id('B2', ['3.1', '3.2', '3.3'])],
+        ['⏱️', 'Link ideas with the right mood', id('B2', ['3.5', '6.2', '6.3'])],
+        ['📝', 'Write formal messages', id('B2', ['7.1'])],
+        ['💬', 'Use common idiomatic expressions', id('B2', ['7.2'])]
+      ]
+    };
+    GRAM_ORDEN.forEach(n => Object.assign(GRAM_NIVELES[n], { partes: PARTES_ES, meta: META_ES[n], canDo: CAN_DO_ES[n] }));
+  }
+
   /* ============================================================
      GENERADORES DE EJERCICIOS POR TEMA
      ------------------------------------------------------------
@@ -2662,7 +2717,7 @@
      GRAM_GEN y se vuelven a enganchar por id al cargar.
   ============================================================ */
   const GRAM_BUCKET = 'contenido';
-  const GRAM_RUTA = (n) => `gramatica/${n}.json`;
+  const GRAM_RUTA = (n) => `gramatica/${GRAM_ES ? 'es_' : ''}${n}.json`;
   const GRAM_CONTENIDO_VERSION = 'v1';   // ⬅️ súbelo al publicar contenido nuevo
   const GRAM_CACHE = 'abu-gramatica';
 
@@ -2674,7 +2729,8 @@
   const GRAM_TOTALES_APROX = { A1: 50, A2: 24, B1: 53, B2: 75 };
 
   async function gramLeerNivel(nivel) {
-    const clave = `/${GRAM_CACHE}/${nivel}-${GRAM_CONTENIDO_VERSION}.json`;
+    const pref = GRAM_ES ? 'es_' : '';
+    const clave = `/${GRAM_CACHE}/${pref}${nivel}-${GRAM_CONTENIDO_VERSION}.json`;
 
     // 1) ¿Ya lo tenemos guardado de una visita anterior?
     try {
@@ -2702,7 +2758,7 @@
       // Limpieza: se borran las versiones viejas del mismo nivel
       const viejas = await cache.keys();
       await Promise.all(viejas
-        .filter(r => r.url.includes(`/${nivel}-`) && !r.url.endsWith(`${nivel}-${GRAM_CONTENIDO_VERSION}.json`))
+        .filter(r => r.url.includes(`/${pref}${nivel}-`) && !r.url.endsWith(`/${pref}${nivel}-${GRAM_CONTENIDO_VERSION}.json`))
         .map(r => cache.delete(r)));
     } catch { /* sin caché no pasa nada, solo se vuelve a bajar */ }
 
@@ -3027,8 +3083,8 @@
           <div class="flex items-center gap-3">
             <div class="text-4xl">📚</div>
             <div class="flex-1 min-w-0">
-              <h1 class="font-heading font-bold text-xl text-slate-800 leading-tight">Gramática ${nivel}</h1>
-              <p class="text-[11px] text-slate-400">${temario.meta} · ${total} temas</p>
+              <h1 class="font-heading font-bold text-xl text-slate-800 leading-tight">${GRAM_ES ? 'Spanish grammar' : 'Gramática'} ${nivel}</h1>
+              <p class="text-[11px] text-slate-400">${temario.meta} · ${total} ${GRAM_ES ? 'topics' : 'temas'}</p>
             </div>
             <button id="gram-cfg" class="tool-btn text-slate-400 hover:text-slate-600 text-lg px-2" title="Personalizar"><i class="fas fa-sliders"></i></button>
           </div>
@@ -3086,7 +3142,7 @@
         </div>` : ''}
 
         ${temario.canDo ? `<div class="card-3d p-4 mb-6">
-          <p class="text-[11px] font-black text-slate-400 uppercase mb-2">🎓 Al terminar ${nivel} sabrás…</p>
+          <p class="text-[11px] font-black text-slate-400 uppercase mb-2">🎓 ${GRAM_ES ? `By the end of ${nivel} you will be able to…` : `Al terminar ${nivel} sabrás…`}</p>
           ${temario.canDo.map(c => {
             // Un can-do puede citar un tema de otro nivel ("A1:3.3") si se fusionó allí.
             const listo = c[2].every(id => {
