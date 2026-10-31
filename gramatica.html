@@ -2718,7 +2718,7 @@
   ============================================================ */
   const GRAM_BUCKET = 'contenido';
   const GRAM_RUTA = (n) => `gramatica/${GRAM_ES ? 'es_' : ''}${n}.json`;
-  const GRAM_CONTENIDO_VERSION = 'v1';   // ⬅️ súbelo al publicar contenido nuevo
+  const GRAM_CONTENIDO_VERSION = GRAM_ES ? 'v2' : 'v1';   // ⬅️ súbelo al publicar contenido nuevo (el 1.º es el temario de español)
   const GRAM_CACHE = 'abu-gramatica';
 
   let gramContenidoListo = false;
@@ -3069,7 +3069,7 @@
       return `<button data-gt="${t.id}" class="gt-row w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-orange-50 text-left transition">
         <span class="text-2xl w-8 text-center shrink-0">${t.icon}</span>
         <span class="flex-1 min-w-0">
-          <span class="block font-bold text-slate-700 truncate">${t.en}</span>
+          <span class="block font-bold text-slate-700 truncate" data-no-tr>${t.en}</span>
           <span class="block text-[11px] text-slate-400 truncate">${t.es}</span>
         </span>
         ${st.fav ? '<i class="fas fa-heart text-pink-400 text-xs shrink-0"></i>' : ''}
@@ -3196,14 +3196,14 @@
         <div class="flex items-center gap-2 mt-2 mb-3">
           <button id="gl-back" class="tool-btn bg-white border border-slate-200 rounded-xl w-10 h-10 text-slate-500 shrink-0"><i class="fas fa-arrow-left"></i></button>
           <div class="flex-1 min-w-0">
-            <h1 class="font-heading font-bold text-lg text-slate-800 leading-tight truncate">${t.icon} ${t.en}</h1>
+            <h1 class="font-heading font-bold text-lg text-slate-800 leading-tight truncate" data-no-tr>${t.icon} ${t.en}</h1>
             <p class="text-[11px] text-slate-400 truncate">${t.es} · ${t.tag}</p>
           </div>
           <button id="gl-fav" class="tool-btn text-xl ${st.fav ? 'text-pink-500' : 'text-slate-300'} shrink-0" title="Favorito"><i class="fas fa-heart"></i></button>
           <span class="text-sm ${st.stars ? 'text-yellow-400' : 'text-slate-300'} shrink-0">${'★'.repeat(st.stars || 0)}${'☆'.repeat(3 - (st.stars || 0))}</span>
         </div>
         <div class="flex gap-1 bg-white border border-slate-200 rounded-2xl p-1 mb-4">
-          ${tabBtn('learn', '📖 Aprender')}${tabBtn('quiz', '🎯 Practicar')}
+          ${tabBtn('learn', GRAM_ES ? '📖 Learn' : '📖 Aprender')}${tabBtn('quiz', '🎯 Practicar')}
         </div>
         <div id="gl-body"></div>
       </div>`;
@@ -3220,9 +3220,9 @@
     return `<div class="gx-item bg-slate-50 rounded-xl px-3 py-2.5 mb-2 tip-in" data-en="${escapeHTML(e.en)}">
       <div class="flex items-center gap-2">
         <button class="gx-audio text-[#FF7A00] w-8 h-8 rounded-full bg-orange-100 shrink-0" title="Escuchar"><i class="fas fa-volume-up text-sm"></i></button>
-        <p class="flex-1 font-bold text-slate-700">${e.en}</p>
+        <p class="flex-1 font-bold text-slate-700" data-no-tr>${e.en}</p>
       </div>
-      <p class="gx-es ${auto ? '' : 'hidden'} text-[12px] text-slate-400 mt-1 pl-10">${e.es}</p>
+      <p class="gx-es ${auto ? '' : 'hidden'} text-[12px] text-slate-400 mt-1 pl-10" data-no-tr>${e.es}</p>
       ${auto ? '' : '<button class="gx-toggle text-[10px] font-bold text-slate-300 hover:text-slate-500 pl-10 mt-0.5">ver traducción</button>'}
     </div>`;
   }
@@ -3294,7 +3294,7 @@
   }
 
   const gramErrFila = (e) => `
-    <div class="mb-3 last:mb-0">
+    <div class="mb-3 last:mb-0" data-no-tr>
       <p class="text-sm text-red-400 font-bold">❌ <s>${e.b}</s></p>
       <p class="text-sm text-green-600 font-bold">✅ ${e.g}</p>
       <p class="text-[11px] text-slate-400 mt-0.5">${e.w}</p>
@@ -3316,8 +3316,8 @@
       ${t.widget ? `<div class="card-3d p-4 mb-4" id="gl-widget"></div>` : ''}
       <div class="card-3d p-4 mb-4">
         <p class="text-[11px] font-black text-slate-400 uppercase mb-2">📐 Estructura · FORM</p>
-        <div class="text-sm text-slate-700 leading-relaxed">${t.form}</div>
-        ${amps.filter(a => a.form).map(a => gramAmpAncla(a) + `<div class="text-sm text-slate-700 leading-relaxed">${a.form}</div>`).join('')}
+        <div class="text-sm text-slate-700 leading-relaxed" data-no-tr>${t.form}</div>
+        ${amps.filter(a => a.form).map(a => gramAmpAncla(a) + `<div class="text-sm text-slate-700 leading-relaxed" data-no-tr>${a.form}</div>`).join('')}
       </div>
       <div class="card-3d p-4 mb-4">
         <div class="flex items-center justify-between mb-1">
@@ -3331,8 +3331,8 @@
       <div class="rounded-2xl border-2 border-amber-200 bg-amber-50 p-4 mb-4">
         <p class="text-[11px] font-black text-amber-500 uppercase mb-1">🔑 La clave (en español)</p>
         ${claves.length > 1
-          ? `<ul class="space-y-2">${claves.map(c => `<li class="flex gap-2 text-sm text-amber-900 leading-relaxed"><span class="text-amber-400 shrink-0">●</span><span>${c}</span></li>`).join('')}</ul>`
-          : `<p class="text-sm text-amber-900 leading-relaxed">${t.tip}</p>`}
+          ? `<ul class="space-y-2">${claves.map(c => `<li class="flex gap-2 text-sm text-amber-900 leading-relaxed"><span class="text-amber-400 shrink-0">●</span><span data-no-tr>${c}</span></li>`).join('')}</ul>`
+          : `<p class="text-sm text-amber-900 leading-relaxed" data-no-tr>${t.tip}</p>`}
       </div>
       ${errores.length ? `<div class="card-3d p-4 mb-4">
         <p class="text-[11px] font-black text-slate-400 uppercase mb-2">⚠️ Errores típicos del hispanohablante</p>
@@ -3892,7 +3892,7 @@
       : pct >= 0.9 ? '¡PERFECTO! Dominas este tema. 🏆'
       : pct >= 0.7 ? '¡Muy bien! Ya casi lo dominas.'
       : pct >= 0.5 ? 'Buen intento. Repasa la lección y vuelve por las 3 estrellas.'
-      : 'No pasa nada: vuelve a 📖 Aprender y inténtalo de nuevo. ¡Tú puedes!';
+      : (GRAM_ES ? 'No worries: go back to 📖 Learn and try again. You can do it!' : 'No pasa nada: vuelve a 📖 Aprender y inténtalo de nuevo. ¡Tú puedes!');
     const modo = S.mode, topicId = S.topic, ok = S.ok, pts = S.pts;
     gramQuiz = null;
 
