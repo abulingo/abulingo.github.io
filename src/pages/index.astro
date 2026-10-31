@@ -702,26 +702,24 @@ import Landing from '../layouts/Landing.astro';
         </div>
     </div>
 
-    <div id="signup-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 hidden">
-        <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md relative">
+    <div id="signup-modal" class="fixed inset-0 bg-black/50 flex justify-center p-3 sm:p-4 z-50 overflow-y-auto hidden">
+        <div class="bg-white px-5 py-6 sm:p-8 rounded-2xl shadow-2xl w-full max-w-md relative my-auto">
             <button class="close-modal-btn absolute top-4 right-4 text-slate-400 hover:text-slate-800 text-2xl" aria-label="Cerrar">&times;</button>
             <p class="text-2xl font-bold font-heading mb-1 text-center">Crea tu Cuenta</p>
-            <p class="text-sm text-slate-400 mb-6 text-center">Create your account</p>
-            <form id="signup-form" class="space-y-4">
+            <p class="text-sm text-slate-400 mb-4 text-center">Create your account</p>
+            <form id="signup-form" class="space-y-3">
                 <fieldset>
                     <legend class="block text-sm font-medium text-slate-600 mb-1">¿Qué idioma quieres aprender? · <span class="text-slate-400">What language do you want to learn?</span></legend>
                     <div class="grid grid-cols-2 gap-2">
-                        <label class="idioma-opcion cursor-pointer rounded-xl border-2 p-3 text-center transition">
+                        <label class="idioma-opcion cursor-pointer rounded-lg border-2 px-2 py-1.5 flex items-center justify-center gap-2 transition">
                             <input type="radio" name="signup-idioma" value="en" class="sr-only" checked>
-                            <span class="block text-2xl">🇺🇸</span>
-                            <span class="block font-bold text-slate-700 text-sm">Inglés</span>
-                            <span class="block text-xs text-slate-400">English</span>
+                            <span class="text-lg leading-none">🇺🇸</span>
+                            <span class="leading-tight text-left"><span class="block font-bold text-slate-700 text-sm">Inglés</span><span class="block text-[11px] text-slate-400">English</span></span>
                         </label>
-                        <label class="idioma-opcion cursor-pointer rounded-xl border-2 p-3 text-center transition">
+                        <label class="idioma-opcion cursor-pointer rounded-lg border-2 px-2 py-1.5 flex items-center justify-center gap-2 transition">
                             <input type="radio" name="signup-idioma" value="es" class="sr-only">
-                            <span class="block text-2xl">🇪🇸</span>
-                            <span class="block font-bold text-slate-700 text-sm">Español</span>
-                            <span class="block text-xs text-slate-400">Spanish</span>
+                            <span class="text-lg leading-none">🇪🇸</span>
+                            <span class="leading-tight text-left"><span class="block font-bold text-slate-700 text-sm">Español</span><span class="block text-[11px] text-slate-400">Spanish</span></span>
                         </label>
                     </div>
                 </fieldset>
