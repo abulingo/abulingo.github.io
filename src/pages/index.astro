@@ -669,11 +669,26 @@ import Landing from '../layouts/Landing.astro';
         </div>
     </div>
 
-    <div id="login-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 hidden">
-        <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md relative">
+    <div id="login-modal" class="fixed inset-0 bg-black/50 flex items-start justify-center p-4 z-50 hidden overflow-y-auto">
+        <div class="bg-white p-6 sm:p-8 rounded-2xl shadow-2xl w-full max-w-md relative my-auto">
             <button class="close-modal-btn absolute top-4 right-4 text-slate-400 hover:text-slate-800 text-2xl" aria-label="Cerrar">&times;</button>
             <p class="text-2xl font-bold font-heading mb-6 text-center">Iniciar Sesión</p>
             <form id="login-form">
+                <fieldset class="mb-4">
+                    <legend class="block text-sm font-medium text-slate-600 mb-1">¿Qué idioma aprendes? · <span class="text-slate-400">What are you learning?</span></legend>
+                    <div class="grid grid-cols-2 gap-2">
+                        <label class="idioma-opcion cursor-pointer rounded-lg border-2 px-2 py-1.5 flex items-center justify-center gap-2 transition">
+                            <input type="radio" name="login-idioma" value="en" class="sr-only">
+                            <span class="text-lg leading-none">🇺🇸</span>
+                            <span class="leading-tight text-left"><span class="block font-bold text-slate-700 text-sm">Inglés</span><span class="block text-[11px] text-slate-400">English</span></span>
+                        </label>
+                        <label class="idioma-opcion cursor-pointer rounded-lg border-2 px-2 py-1.5 flex items-center justify-center gap-2 transition">
+                            <input type="radio" name="login-idioma" value="es" class="sr-only">
+                            <span class="text-lg leading-none">🇪🇸</span>
+                            <span class="leading-tight text-left"><span class="block font-bold text-slate-700 text-sm">Español</span><span class="block text-[11px] text-slate-400">Spanish</span></span>
+                        </label>
+                    </div>
+                </fieldset>
                 <div class="mb-4">
                     <label for="login-email" class="block text-sm font-medium text-slate-600 mb-1">Correo Electrónico</label>
                     <input type="email" id="login-email" placeholder="tu@correo.com" autocomplete="email" class="w-full input-field" required>
@@ -834,6 +849,17 @@ import Landing from '../layouts/Landing.astro';
         };
         if (supabase) cargarGruposSignup();
 
+        // Idioma que la persona eligió en esta visita (registro, login o el botón
+        // "Want to learn Spanish?"). Se guarda en sessionStorage para que
+        // sobreviva a la vuelta de Google.
+        function quiereIdioma(v) {
+            try {
+                if (v === 'es' || v === 'en') sessionStorage.setItem('abu-quiere-idioma', v);
+                return sessionStorage.getItem('abu-quiere-idioma');
+            } catch { return null; }
+        }
+        window.quiereIdioma = quiereIdioma;
+
         // Idioma a aprender: marca la tarjeta elegida y, para español, oculta
         // el "Grupo de inglés" (no aplica).
         const pintarIdiomaSignup = () => {
@@ -858,7 +884,17 @@ import Landing from '../layouts/Landing.astro';
                 el.placeholder = en ? el.dataset.enPh : el.dataset.esPh;
             });
         };
-        document.querySelectorAll('input[name="signup-idioma"]').forEach(r => r.addEventListener('change', pintarIdiomaSignup));
+        document.querySelectorAll('input[name="signup-idioma"]').forEach(r => r.addEventListener('change', () => { quiereIdioma(r.value); pintarIdiomaSignup(); }));
+        // Login: sin opción marcada se respeta el idioma que ya tiene la cuenta;
+        // si la persona elige uno (o vino de "Want to learn Spanish?"), se aplica al entrar.
+        const marcarIdiomaLogin = () => {
+            const q = quiereIdioma();
+            document.querySelectorAll('input[name="login-idioma"]').forEach(r => { r.checked = r.value === q; });
+            pintarIdiomaSignup();
+        };
+        document.querySelectorAll('input[name="login-idioma"]').forEach(r => r.addEventListener('change', () => { quiereIdioma(r.value); pintarIdiomaSignup(); }));
+        document.querySelectorAll('.auth-btn-login').forEach(b => b.addEventListener('click', marcarIdiomaLogin));
+        marcarIdiomaLogin();
         pintarIdiomaSignup();
         // Textos del registro según el idioma elegido (es: aprende inglés; en: aprende español).
         const tx = (es, en) => (document.querySelector('input[name="signup-idioma"]:checked')?.value === 'es' ? en : es);
@@ -894,7 +930,7 @@ import Landing from '../layouts/Landing.astro';
         // "Want to learn Spanish?": abre el registro con Español ya elegido.
         document.getElementById('hero-spanish-btn')?.addEventListener('click', () => {
             const es = document.querySelector('input[name="signup-idioma"][value="es"]');
-            if (es) { es.checked = true; pintarIdiomaSignup(); }
+            if (es) { es.checked = true; quiereIdioma('es'); pintarIdiomaSignup(); }
             if (window.AbuTrack) window.AbuTrack.clic('hero_learn_spanish', {});
             abrirRegistro();
         });
@@ -1178,6 +1214,18 @@ import Landing from '../layouts/Landing.astro';
                 window.location.href = window.location.pathname;
             });
 
+            // Si eligió un idioma distinto al de su cuenta, se cambia antes de entrar.
+            async function aplicarIdiomaElegido(user) {
+                const q = window.quiereIdioma?.();
+                if (!user || !q) return;
+                const actual = user.user_metadata?.idioma === 'es' ? 'es' : 'en';
+                if (q !== actual) {
+                    const { error } = await supabase.auth.updateUser({ data: { idioma: q } });
+                    if (error) console.warn('No se pudo guardar el idioma:', error.message);
+                }
+                try { sessionStorage.removeItem('abu-quiere-idioma'); } catch {}
+            }
+
             // INICIO DE SESIÓN
             document.getElementById('login-form').addEventListener('submit', async (e) => {
                 e.preventDefault();
@@ -1203,6 +1251,7 @@ import Landing from '../layouts/Landing.astro';
 
                 // Aseguramos que el perfil exista/se actualice al entrar.
                 if (data.user) await upsertProfile(data.user);
+                await aplicarIdiomaElegido(data.user);
                 window.location.href = 'abulingo.html';
             });
 
@@ -1319,6 +1368,7 @@ import Landing from '../layouts/Landing.astro';
                     // datos que trae la cuenta de Google (nombre, etc.) por si
                     // es la primera vez que este usuario inicia sesión.
                     await upsertProfile(session.user);
+                    await aplicarIdiomaElegido(session.user);
                     window.location.href = 'abulingo.html';
                 } else {
                     updateUI(null);
