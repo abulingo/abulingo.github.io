@@ -135,10 +135,15 @@
     w.__es = true;
     return w;
   }
+  const NOTAS_FRASES = { 'al llegar': 'when arriving', 'al irse/dormir': 'when leaving or going to bed',
+    'personalidad': 'personality', 'acuerdo enfático': 'emphatic agreement' };
   function fraseAlReves(f) {
     if (!f || typeof f !== 'object' || f.fraseingles === undefined || f['fraseespañol'] === undefined || f.__es) return f;
     const en = f.fraseingles;
-    f.fraseingles = f['fraseespañol']; f['fraseespañol'] = en;
+    // «Buenas noches (al llegar).»: la nota no se dice; pasa, en inglés, al significado.
+    const nota = String(f['fraseespañol'] || '').match(/\s*\(([^)]*)\)/);
+    f.fraseingles = nota ? f['fraseespañol'].replace(nota[0], '').trim() : f['fraseespañol'];
+    f['fraseespañol'] = nota ? `${en} (${NOTAS_FRASES[nota[1]] || nota[1]})` : en;
     if ('audio_url' in f && f.id != null) f.audio_url = audioEs('frases', f.id);
     f.__es = true;
     return f;
@@ -160,6 +165,21 @@
     return c;
   }
   const TABLAS = { palabras: palabraAlReves, frases: fraseAlReves, conversaciones_pronunciacion: conversacionAlReves };
+
+  // Frases que en inglés eran distintas pero en español quedan iguales
+  // ("Hi." / "Hello." → «Hola.»): se deja la primera y se ocultan las demás
+  // ({id: nivel}, sacado de la tabla "frases" el 31-oct-2026).
+  const FRASES_REPETIDAS = {"2":"A1","22":"A1","37":"A1","53":"A1","141":"A1","147":"A1","149":"A1","151":"A1","167":"A1","274":"A1","275":"A1","277":"A1","278":"A1","341":"A2","342":"A2","440":"A2","499":"A2","501":"A2","503":"A2","504":"A2","505":"A2","507":"A2","508":"A2","509":"A2","511":"A2","513":"A2","514":"A2","515":"A2","517":"A2","519":"A2","521":"A2","523":"A2","524":"A2","525":"A2","633":"B1","676":"B1","689":"B1","704":"B1","709":"B1","736":"B2","743":"B2","751":"B2","868":"B2","880":"B2","882":"B2"};
+  const frasesSinRepetir = (d) => (Array.isArray(d) ? d.filter(f => !(f && FRASES_REPETIDAS[f.id])) : d);
+  // Los conteos ("count=exact") por nivel también descuentan las ocultas.
+  function rangoSinRepetidas(r, url) {
+    const cr = r.headers.get('content-range');
+    const m = cr && cr.match(/^(.*)\/(\d+)$/);
+    if (!m) return null;
+    const nivel = (url.searchParams.get('nivel') || '').replace(/^eq\./, '');
+    const quitar = Object.values(FRASES_REPETIDAS).filter(n => !nivel || n === nivel).length;
+    return `${m[1]}/${Math.max(0, Number(m[2]) - quitar)}`;
+  }
 
   /* ---- Avance separado por idioma ----
      profiles.flujo es el avance de inglés (como siempre) y el de español
@@ -280,6 +300,12 @@
       } catch {}
     }
     const r = await fetchOriginal(input, init);
+    if (ES && tabla === 'frases' && metodo === 'HEAD' && r.ok) {
+      const rango = rangoSinRepetidas(r, url);
+      if (!rango) return r;
+      const h = new Headers(r.headers); h.set('content-range', rango);
+      return new Response(null, { status: r.status, statusText: r.statusText, headers: h });
+    }
     if (!r.ok || !esJSON(r)) return r;
     try {
       if (tabla === 'profiles') {
@@ -288,7 +314,16 @@
         return responder(r, mapear(datos, flujoParaApp));
       }
       if (!ES || metodo !== 'GET') return r;
-      const datos = await r.clone().json();
+      let datos = await r.clone().json();
+      if (tabla === 'frases') {
+        datos = frasesSinRepetir(datos);
+        const rango = rangoSinRepetidas(r, url);
+        if (rango) {
+          const res = responder(r, mapear(datos, TABLAS[tabla]));
+          res.headers.set('content-range', rango);
+          return res;
+        }
+      }
       if (tabla === 'conversaciones_pronunciacion' && !convEs) {
         try { convEs = await (await fetchOriginal('conversaciones-es.json')).json(); } catch { convEs = {}; }
       }

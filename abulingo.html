@@ -516,7 +516,9 @@ function openAbuChat() {
   /* ============================================================
      2. UTILIDADES GENERALES
   ============================================================ */
-  const norm = (s) => (s || '').toString().trim().toLowerCase().replace(/[.,!?;:'"]/g, '');
+  const norm = (s) => (s || '').toString().trim().toLowerCase().replace(/[.,!?;:'"¿¡]/g, '');
+  // Quien aprende español: una respuesta sin tilde también vale ("donde" = "dónde").
+  const sinTildes = (s) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   const todayStr = () => new Date().toISOString().slice(0, 10);
 
   /* Solo el PRIMER nombre: "Nikol Yuliana Heredia Rangel" → "Nikol".
@@ -3997,6 +3999,10 @@ function openAbuChat() {
   const DOM_PTS_SUBSECCION = 15;        // bono al completar toda la subsección
   const DOM_CHAT_GOAL      = GC_MENSAJES_ABU; // largo de "Conversa con Abu" (guion completo)
 
+  // Textos de Dominar con números o nombres dentro: para quien aprende
+  // español van ya en inglés (el traductor de la interfaz no los arma).
+  const domTx = (es, en) => (window.AbuIdioma?.aprendeEspanol ? en : es);
+
   let dominarCache = {};   // { [nivel]: { frases, practica_frases, practica_escucha, practica_videos, practica_textos, conversaciones, plan, cargado } }
 
   function defaultDominarNivelState() { return { subseccionActual: 1, subs: {}, completado: false }; }
@@ -4040,8 +4046,28 @@ function openAbuChat() {
     return (data || []).filter(r => r.activo !== false);
   }
 
+  // Quien aprende español: lecturas, frases y conversaciones propias (en
+  // español, con audio) desde dominar-es/<nivel>.json; las "frases" de la
+  // tabla ya llegan en español por abu-idioma.js. Sin videos por ahora.
+  async function cargarContenidoDominarEs(nivel) {
+    let d = {};
+    try { d = await (await fetch(`dominar-es/${nivel}.json`)).json(); } catch { d = {}; }
+    const frases = await traerTablaDominar('frases', nivel);
+    const conversaciones = (d.conversaciones || []).map(c => {
+      let parsed = null;
+      try { parsed = JSON.parse(c.conversacion); } catch { parsed = null; }
+      return { ...c, parsed };
+    }).filter(c => c.parsed && Array.isArray(c.parsed.lineas) && c.parsed.lineas.length);
+    const datos = { frases, practica_frases: d.practica_frases || [], practica_escucha: d.practica_escucha || [],
+      practica_videos: [], practica_textos: d.practica_textos || [], conversaciones, cargado: true };
+    datos.plan = construirPlanDominar(datos);
+    dominarCache[nivel] = datos;
+    return datos;
+  }
+
   async function cargarContenidoDominar(nivel) {
     if (dominarCache[nivel]?.cargado) return dominarCache[nivel];
+    if (window.AbuIdioma?.aprendeEspanol) return cargarContenidoDominarEs(nivel);
     const [frases, practica_frases, practica_escucha, practica_videos, practica_textos, conversacionesRaw] = await Promise.all([
       traerTablaDominar('frases', nivel),
       traerTablaDominar('practica_frases', nivel),
@@ -4181,7 +4207,8 @@ function openAbuChat() {
       const inp = raiz.querySelector(`input.hueco[data-h="${k}"]`);
       if (!inp) return;
       const correcta = prep.tokens[ix].p.replace(/[.,!?;:]+$/, '');
-      const bien = norm(inp.value) === norm(correcta);
+      const bien = norm(inp.value) === norm(correcta)
+        || (!!window.AbuIdioma?.aprendeEspanol && sinTildes(norm(inp.value)) === sinTildes(norm(correcta)));
       inp.disabled = true;
       inp.classList.add(bien ? 'ok' : 'mal');
       if (bien) ok++;
@@ -4276,7 +4303,8 @@ function openAbuChat() {
       if (perfecto) triggerConfetti();
       const msg = document.getElementById('dom-msg');
       msg.className = `text-center font-bold text-sm mb-2 min-h-[1.25rem] ${perfecto ? 'text-green-600' : 'text-slate-500'}`;
-      msg.innerHTML = perfecto ? '🎉 ¡Perfecto!' : `Acertaste <b class="text-[#FF7A00]">${r.ok}</b> de ${r.total}. En verde está la respuesta.`;
+      msg.innerHTML = perfecto ? '🎉 ¡Perfecto!' : domTx(`Acertaste <b class="text-[#FF7A00]">${r.ok}</b> de ${r.total}. En verde está la respuesta.`,
+        `You got <b class="text-[#FF7A00]">${r.ok}</b> of ${r.total}. The answer is in green.`);
       const pts = r.puntos ?? (r.ok * DOM_PTS_HUECO);
       if (pts > 0) addPoints(pts);
       btn.className = 'w-full btn-juice bg-[#FF7A00] text-white font-bold py-3 rounded-xl text-lg shadow-lg';
@@ -4308,8 +4336,8 @@ function openAbuChat() {
           <button id="dom-say" class="w-9 h-9 rounded-full bg-slate-100 text-slate-400 hover:text-[#FF7A00]" title="Escuchar"><i class="fas fa-volume-up"></i></button>
         </div>
         <p class="text-slate-500 text-center font-medium mb-3">${escapeHTML(fila.traduccion || 'Ordena las palabras en inglés')}</p>
-        <div id="dom-zona" class="zona-respuesta mb-3"></div>
-        <div id="dom-banco" class="text-center"></div>
+        <div id="dom-zona" data-no-tr class="zona-respuesta mb-3"></div>
+        <div id="dom-banco" data-no-tr class="text-center"></div>
         ${domPieEjercicio()}
       </div>`;
     const zona = document.getElementById('dom-zona');
@@ -4346,7 +4374,7 @@ function openAbuChat() {
         <button id="dom-play" class="w-20 h-20 bg-gradient-to-br from-[#FF7A00] to-orange-600 rounded-full shadow-xl shadow-orange-200 text-white text-3xl hover:scale-105 transition active:scale-95 my-4 flex items-center justify-center mx-auto">
           <i class="fas fa-volume-up"></i>
         </button>
-        <div id="dom-huecos" class="bg-slate-50 border border-slate-100 rounded-xl p-3 text-[15px]">${huecosHTML(prep)}</div>
+        <div id="dom-huecos" data-no-tr class="bg-slate-50 border border-slate-100 rounded-xl p-3 text-[15px]">${huecosHTML(prep)}</div>
         ${domPieEjercicio()}
       </div>`;
     document.getElementById('dom-play').onclick = () => reproducirAudioDom(fila, 'frase');
@@ -4372,7 +4400,7 @@ function openAbuChat() {
           <span class="text-[10px] font-bold text-slate-300">${palabras} palabras</span>
         </div>
         <h3 class="font-heading font-bold text-slate-800 text-lg mb-2">${escapeHTML(fila.titulo || '')}</h3>
-        <div id="dom-huecos" class="bg-slate-50 border border-slate-100 rounded-xl p-3 text-[15px]">${huecosHTML(prep)}</div>
+        <div id="dom-huecos" data-no-tr class="bg-slate-50 border border-slate-100 rounded-xl p-3 text-[15px]">${huecosHTML(prep)}</div>
         <div class="flex items-center gap-3 mt-2">
           <button id="dom-say" class="text-[11px] font-bold text-slate-400 hover:text-[#FF7A00]"><i class="fas fa-volume-up mr-1"></i>Escuchar el texto</button>
         </div>
@@ -4794,8 +4822,8 @@ function openAbuChat() {
     if (role === 'user') {
       div.className = 'chat-fila tuya';
       div.innerHTML = `${btnSay}<div class="burbuja burbuja-tuya">
-        ${objetivo ? `<div class="font-bold">${escapeHTML(objetivo)}</div><div class="burbuja-sep">Dijiste</div>` : ''}
-        <div>${escapeHTML(en)}</div>
+        ${objetivo ? `<div class="font-bold" data-no-tr>${escapeHTML(objetivo)}</div><div class="burbuja-sep">Dijiste</div>` : ''}
+        <div data-no-tr>${escapeHTML(en)}</div>
         ${es ? `<button data-toggle-tr="${idTr}" class="burbuja-link"><i class="fas fa-language"></i> Traducción</button>
         <div id="${idTr}" class="hidden burbuja-trad">${escapeHTML(es)}</div>` : ''}
       </div>`;
@@ -4803,7 +4831,7 @@ function openAbuChat() {
       div.className = 'chat-fila';
       div.innerHTML = `${chatAvatarHTML(role)}<div class="burbuja burbuja-otro">
         <div class="burbuja-nombre">${escapeHTML(role)}</div>
-        <div id="${idMsg}" class="hidden">${escapeHTML(en)}</div>
+        <div id="${idMsg}" class="hidden" data-no-tr>${escapeHTML(en)}</div>
         <button data-toggle-msg="${idMsg}" class="burbuja-link"><i class="fas fa-eye"></i> Ver mensaje</button>
         ${es ? `<button data-toggle-tr="${idTr}" class="burbuja-link"><i class="fas fa-language"></i> Traducción</button>
         <div id="${idTr}" class="hidden burbuja-trad">${escapeHTML(es)}</div>` : ''}
@@ -4812,7 +4840,69 @@ function openAbuChat() {
     box.appendChild(div); box.scrollTop = box.scrollHeight;
   }
 
+  /* ⏺ Grabarme: graba tu línea y la puedes oír al lado del audio modelo.
+     Va aparte del 🎙️ (reconocimiento): en el celular el micrófono no se
+     puede usar para las dos cosas a la vez. Solo para quien aprende español. */
+  function domGrabarmeHTML() {
+    return `<div class="flex flex-wrap items-center justify-center gap-2 mt-1">
+      <button id="dom-conv-grabar" class="text-[12px] font-bold text-slate-500 bg-white border-2 border-slate-200 hover:border-red-300 rounded-full px-3 py-1.5 transition"><i class="fas fa-circle text-red-500 mr-1"></i>Record myself</button>
+      <span id="dom-conv-mia" class="hidden flex items-center gap-2">
+        <button id="dom-conv-mia-play" class="text-[12px] font-bold text-[#FF7A00] bg-orange-50 border-2 border-orange-200 rounded-full px-3 py-1.5"><i class="fas fa-play mr-1"></i>My voice</button>
+        <button id="dom-conv-modelo" class="text-[12px] font-bold text-slate-500 bg-slate-50 border-2 border-slate-200 rounded-full px-3 py-1.5"><i class="fas fa-volume-up mr-1"></i>Model</button>
+      </span>
+    </div>`;
+  }
+  let domGrabacion = null; // { rec, stream, url }
+  function domSoltarGrabacion() {
+    if (!domGrabacion) return;
+    try { if (domGrabacion.rec?.state === 'recording') domGrabacion.rec.stop(); } catch {}
+    domGrabacion.stream?.getTracks().forEach(t => t.stop());
+    domGrabacion = null;
+  }
+  function domBindGrabarme(linea) {
+    const btn = document.getElementById('dom-conv-grabar');
+    if (!btn) return;
+    if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) { btn.parentElement.remove(); return; }
+    const caja = document.getElementById('dom-conv-mia');
+    let url = null, voz = null;
+    const modelo = () => {
+      stopSpeaking();
+      if (linea.audio) reproducirAudioDom({ audio_url: linea.audio, texto: linea.en }, 'texto', velConversacion);
+      else speak(linea.en, null, velConversacion);
+    };
+    document.getElementById('dom-conv-modelo').onclick = modelo;
+    document.getElementById('dom-conv-mia-play').onclick = () => { if (!url) return; stopSpeaking(); voz?.pause(); voz = new Audio(url); voz.play().catch(() => {}); };
+    btn.onclick = async () => {
+      if (domGrabacion?.rec?.state === 'recording') { domGrabacion.rec.stop(); return; }
+      stopSpeaking();
+      let stream;
+      try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+      catch { showToast('⚠️ Could not use the microphone. Check the browser permissions.'); return; }
+      const tipo = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'].find(t => MediaRecorder.isTypeSupported?.(t));
+      const rec = tipo ? new MediaRecorder(stream, { mimeType: tipo }) : new MediaRecorder(stream);
+      const trozos = [];
+      domGrabacion = { rec, stream };
+      rec.ondataavailable = (e) => { if (e.data?.size) trozos.push(e.data); };
+      rec.onstop = () => {
+        clearTimeout(tope);
+        stream.getTracks().forEach(t => t.stop());
+        domGrabacion = null;
+        if (url) URL.revokeObjectURL(url);
+        url = URL.createObjectURL(new Blob(trozos, { type: rec.mimeType || 'audio/webm' }));
+        btn.innerHTML = '<i class="fas fa-redo mr-1"></i>Record again';
+        btn.classList.remove('border-red-400', 'text-red-500');
+        caja.classList.remove('hidden');
+        voz = new Audio(url); voz.play().catch(() => {});
+      };
+      rec.start();
+      const tope = setTimeout(() => { if (rec.state === 'recording') rec.stop(); }, 15000);
+      btn.innerHTML = '<i class="fas fa-stop mr-1"></i>Stop recording';
+      btn.classList.add('border-red-400', 'text-red-500');
+    };
+  }
+
   function domConversarPaso(nivel, n, conv, personaje, idx) {
+    domSoltarGrabacion();
     stopSpeaking();
     const lineas = conv.parsed.lineas;
     const bar = document.getElementById('dom-conv-bar'); if (bar) bar.style.width = `${Math.round((idx / lineas.length) * 100)}%`;
@@ -4840,14 +4930,16 @@ function openAbuChat() {
 
     turno.innerHTML = `
       <div class="turno-card">
-        <span class="turno-etiqueta">🎙️ Te toca · ${escapeHTML(personaje)}</span>
-        <p class="turno-frase">“${escapeHTML(linea.en)}”</p>
+        <span class="turno-etiqueta">🎙️ ${domTx('Te toca', 'Your turn')} · ${escapeHTML(personaje)}</span>
+        <p class="turno-frase" data-no-tr>“${escapeHTML(linea.en)}”</p>
       </div>
+      ${window.AbuIdioma?.aprendeEspanol ? domGrabarmeHTML() : ''}
       <button id="dom-conv-mic" class="mic-btn mt-1"><i class="fas fa-microphone"></i></button>
       <div id="dom-conv-vivo" class="voz-vivo hidden"></div>
       <p id="dom-conv-mic-msg" class="text-xs font-bold text-slate-400 min-h-[1.2em] text-center px-4">Toca el micrófono y habla: se enviará solo al terminar</p>`;
     const micBtn = document.getElementById('dom-conv-mic');
     const msg = document.getElementById('dom-conv-mic-msg');
+    domBindGrabarme(linea);
     bindMicManual(micBtn, msg, {
       vivo: 'dom-conv-vivo',
       onFinal: (texto) => {
@@ -4909,7 +5001,7 @@ function openAbuChat() {
     const turno = document.getElementById('dom-conv-turno');
     if (!turno) return pasoDominar(nivel);
     turno.innerHTML = `
-      <p class="text-center text-sm font-bold text-green-600 mb-2">🎉 ¡Conversación terminada! <span class="text-yellow-600">+${DOM_PTS_CONVERSAR} puntos</span></p>
+      <p class="text-center text-sm font-bold text-green-600 mb-2">🎉 ${domTx('¡Conversación terminada!', 'Conversation complete!')} <span class="text-yellow-600">+${DOM_PTS_CONVERSAR} ${domTx('puntos', 'points')}</span></p>
       <div class="flex gap-2 w-full">
         <button id="dom-conv-repetir" class="flex-1 btn-juice bg-white border-2 border-slate-200 text-slate-600 font-bold py-2.5 rounded-xl text-sm"><i class="fas fa-rotate-right mr-1"></i>Escuchar de nuevo</button>
         <button id="dom-conv-continuar" class="flex-1 btn-juice bg-[#FF7A00] text-white font-bold py-2.5 rounded-xl text-sm">Continuar 👉</button>
@@ -5032,7 +5124,8 @@ function openAbuChat() {
     playSound('complete'); triggerConfetti();
     const ok = gcPieFinal({
       titulo: '🦜🎉 ¡Charla completada!',
-      resumen: `Dijiste bien <b class="text-green-600">${resumen?.aciertos ?? 0}</b> de <b>${resumen?.tuyos ?? 0}</b> frases. <span class="text-yellow-600 font-bold">+${DOM_PTS_ABU} puntos</span>`,
+      resumen: domTx(`Dijiste bien <b class="text-green-600">${resumen?.aciertos ?? 0}</b> de <b>${resumen?.tuyos ?? 0}</b> frases. <span class="text-yellow-600 font-bold">+${DOM_PTS_ABU} puntos</span>`,
+        `You said <b class="text-green-600">${resumen?.aciertos ?? 0}</b> of <b>${resumen?.tuyos ?? 0}</b> sentences correctly. <span class="text-yellow-600 font-bold">+${DOM_PTS_ABU} points</span>`),
       acciones: [{ label: 'Continuar 👉', onClick: () => pasoDominar(cs.nivel) }]
     });
     if (!ok) pasoDominar(cs.nivel);
@@ -5083,7 +5176,7 @@ function openAbuChat() {
       body: `
         <div class="sub-dots mb-3">${subDotsHTML(nivel, n)}</div>
         <span class="block">Aciertos: <b class="text-green-600">${st.rondaAciertos || 0}</b> · Fallos: <b class="text-slate-400">${st.rondaFallos || 0}</b></span>
-        <span class="block text-yellow-600 font-bold mt-1">+${DOM_PTS_SUBSECCION} puntos</span>
+        <span class="block text-yellow-600 font-bold mt-1">+${DOM_PTS_SUBSECCION} ${domTx('puntos', 'points')}</span>
         ${esUltima ? '<span class="block mt-2 text-slate-500">Completaste las 32 subsecciones de este nivel. 🎉</span>' : ''}`,
       dismissable: false,
       actions: [
@@ -5172,11 +5265,11 @@ function openAbuChat() {
         <div class="space-y-3">
           <button id="dom-ir-vocab" class="w-full btn-juice bg-white border-2 border-slate-200 text-slate-700 font-bold py-4 rounded-xl text-left px-5">
             <span class="block text-lg">${hayMasVocab ? '📚 Seguir con Vocabulario' : '🔁 Repasar mis palabras'}</span>
-            <span class="block text-xs font-normal text-slate-400 mt-0.5">${hayMasVocab ? 'Continúa con el siguiente grupo de palabras' : `Ya viste todas las palabras de ${escapeHTML(nivel)}: aquí solo repasas las que toquen hoy`}</span>
+            <span class="block text-xs font-normal text-slate-400 mt-0.5">${hayMasVocab ? 'Continúa con el siguiente grupo de palabras' : domTx(`Ya viste todas las palabras de ${escapeHTML(nivel)}: aquí solo repasas las que toquen hoy`, `You've seen all the ${escapeHTML(nivel)} words: here you only review the ones due today`)}</span>
           </button>
           <button id="dom-ir-dominar" class="w-full btn-juice ${dominarListo ? 'bg-white border-2 border-slate-200 text-slate-700' : 'bg-[#FF7A00] text-white'} font-bold py-4 rounded-xl text-left px-5">
             <span class="block text-lg">🏆 Dominar${dominarListo ? ' (completado)' : ''}</span>
-            <span class="block text-xs font-normal ${dominarListo ? 'text-slate-400' : 'text-orange-100'} mt-0.5">${dominarListo ? 'Puedes volver a repasar cualquier subsección' : (hayAvanceDominar ? `Sigue en la subsección ${d.subseccionActual}/${DOMINAR_SUBS}` : `Frases, videos y conversaciones del nivel ${escapeHTML(nivel)}`)}</span>
+            <span class="block text-xs font-normal ${dominarListo ? 'text-slate-400' : 'text-orange-100'} mt-0.5">${dominarListo ? 'Puedes volver a repasar cualquier subsección' : (hayAvanceDominar ? domTx(`Sigue en la subsección ${d.subseccionActual}/${DOMINAR_SUBS}`, `Continue at subsection ${d.subseccionActual}/${DOMINAR_SUBS}`) : domTx(`Frases, videos y conversaciones del nivel ${escapeHTML(nivel)}`, `Readings, phrases and conversations for level ${escapeHTML(nivel)}`))}</span>
           </button>
           <button id="dom-ir-nivel" class="w-full text-slate-400 font-bold text-sm py-2">🎯 Cambiar de nivel</button>
         </div>
@@ -5210,7 +5303,8 @@ function openAbuChat() {
     // Plan Gratis: solo las primeras GRATIS_DOMINAR_SUBS subsecciones.
     if (esGratis() && n > GRATIS_DOMINAR_SUBS) {
       return renderMessage('🔒', 'Ya usaste tu Dominar gratis',
-        `Con el plan <b>Gratis</b> puedes hacer las primeras <b>${GRATIS_DOMINAR_SUBS} subsecciones</b> de Dominar. Mejora tu plan para seguir con las ${DOMINAR_SUBS} subsecciones del nivel.`,
+        domTx(`Con el plan <b>Gratis</b> puedes hacer las primeras <b>${GRATIS_DOMINAR_SUBS} subsecciones</b> de Dominar. Mejora tu plan para seguir con las ${DOMINAR_SUBS} subsecciones del nivel.`,
+          `With the <b>Free</b> plan you can do the first <b>${GRATIS_DOMINAR_SUBS} subsections</b> of Master. Upgrade your plan to continue with all ${DOMINAR_SUBS} subsections of the level.`),
         'Ver planes ✨', () => openPlanesPro('gratis_limite_dominar'));
     }
     const d = ensureDominar(nivel);
@@ -5218,9 +5312,9 @@ function openAbuChat() {
     appContainer.innerHTML = `
       <div class="card-3d p-6 text-center animate-pop mt-4">
         <span class="bg-orange-100 text-[#FF7A00] px-3 py-1 rounded-full text-xs font-bold uppercase mb-3 inline-block">🏆 Dominar · ${escapeHTML(nivel)}</span>
-        <h2 class="font-heading font-bold text-slate-800 text-xl mb-2">Subsección ${n} de ${DOMINAR_SUBS}</h2>
+        <h2 class="font-heading font-bold text-slate-800 text-xl mb-2">${domTx(`Subsección ${n} de ${DOMINAR_SUBS}`, `Subsection ${n} of ${DOMINAR_SUBS}`)}</h2>
         <div class="sub-dots mb-4">${subDotsHTML(nivel, n)}</div>
-        <p class="text-slate-500 text-sm mb-5">📖 Lectura · 👂 Escucha · 🧩 Frases${n % 2 === 0 ? ' · 🎬 Video · 🎭 Conversación' : ''} · 🦜 Abu</p>
+        <p class="text-slate-500 text-sm mb-5">${domTx(`📖 Lectura · 👂 Escucha · 🧩 Frases${n % 2 === 0 ? ' · 🎬 Video · 🎭 Conversación' : ''} · 🦜 Abu`, `📖 Reading · 👂 Listening · 🧩 Phrases${n % 2 === 0 ? ' · 🎭 Conversation' : ''} · 🦜 Abu`)}</p>
         <button id="dom-empezar-sub" class="w-full btn-juice bg-[#FF7A00] text-white font-bold py-3 rounded-xl text-lg">Empezar 👉</button>
         ${hayAnteriores ? '<button id="dom-ver-anteriores" class="w-full mt-2 btn-juice bg-slate-100 text-slate-600 font-bold text-sm py-2.5 rounded-xl">📚 Repasar una subsección anterior</button>' : ''}
         <button id="dom-volver-hub" class="w-full mt-2 text-slate-400 font-bold text-sm py-2">Volver</button>
@@ -5249,7 +5343,7 @@ function openAbuChat() {
     showModal({
       icon: '📚', title: 'Secciones anteriores', size: 'lg',
       body: hechas.length
-        ? `<p class="text-slate-500 text-sm mb-3 text-center">Elige una subsección ya completada para repasarla. Tu progreso actual (subsección ${d.subseccionActual}) no se pierde.</p>
+        ? `<p class="text-slate-500 text-sm mb-3 text-center">${domTx(`Elige una subsección ya completada para repasarla. Tu progreso actual (subsección ${d.subseccionActual}) no se pierde.`, `Pick a completed subsection to review it. Your current progress (subsection ${d.subseccionActual}) is kept.`)}</p>
            <div class="grid grid-cols-4 gap-2">${hechas.map(i => `<button class="dom-sub-ant btn-juice bg-slate-100 text-slate-700 font-black py-2.5 rounded-xl" data-n="${i}">${i}</button>`).join('')}</div>`
         : `<p class="text-slate-400 text-center py-4">Todavía no has completado ninguna subsección para repasar.</p>`,
       actions: [{ label: 'Cerrar', style: 'bg-slate-100 text-slate-500', onClick: closeModal }]
@@ -5274,7 +5368,7 @@ function openAbuChat() {
     appContainer.innerHTML = `
       <div class="card-3d p-8 text-center animate-pop mt-6">
         <div class="text-6xl mb-3">🏆</div>
-        <h2 class="font-heading font-bold text-slate-800 text-xl mb-2">¡Ya dominaste el nivel ${escapeHTML(nivel)}!</h2>
+        <h2 class="font-heading font-bold text-slate-800 text-xl mb-2">${domTx(`¡Ya dominaste el nivel ${escapeHTML(nivel)}!`, `You've mastered level ${escapeHTML(nivel)}!`)}</h2>
         <p class="text-slate-500 mb-5">Completaste las 32 subsecciones de frases, videos y conversaciones.</p>
         <button id="dom-volver-hub2" class="w-full btn-juice bg-[#FF7A00] text-white font-bold py-3 rounded-xl text-lg">Volver</button>
       </div>`;
