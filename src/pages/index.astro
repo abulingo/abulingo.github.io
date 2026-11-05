@@ -1362,6 +1362,21 @@ import Landing from '../layouts/Landing.astro';
                     updateUI(null);
                     return;
                 }
+                // Enlace de entrada directa (cuentas de regalo):
+                // index.html#entrar=<base64("correo|PIN")> inicia sesión con un clic.
+                const entrar = (location.hash.match(/entrar=([A-Za-z0-9+/=_-]+)/) || [])[1];
+                if (entrar) {
+                    try {
+                        const [correo, pinLink] = atob(entrar.replace(/-/g, '+').replace(/_/g, '/')).split('|');
+                        history.replaceState(null, '', location.pathname + location.search);
+                        const { data: d2, error: e2 } = await supabase.auth.signInWithPassword({ email: correo, password: buildPassword(pinLink) });
+                        if (!e2 && d2.user) {
+                            await upsertProfile(d2.user);
+                            window.location.href = 'abulingo.html';
+                            return;
+                        }
+                    } catch (e) { console.warn('Enlace de entrada inválido', e); }
+                }
                 const { data: { session } } = await supabase.auth.getSession();
                 if (session) {
                     // Cubre el caso de Google: crea/actualiza el perfil con los
