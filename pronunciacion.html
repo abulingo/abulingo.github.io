@@ -219,7 +219,7 @@
   ============================================================ */
   const SUPABASE_URL = 'https://eylwewhqeaaqkgcxhgyv.supabase.co';
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV5bHdld2hxZWFhcWtnY3hoZ3l2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQzMzAxODgsImV4cCI6MjA5OTkwNjE4OH0.Ji8huj-ny2VcMT5UQSjOuwUKz4k23quNS0fLk-gZr7A';
-  const NIVELES_FIJOS = ['A1', 'A2', 'B1', 'B2'];
+  const NIVELES_FIJOS = (window.AbuIdioma?.aprendeEspanol ? ['A0'] : []).concat(['A1', 'A2', 'B1', 'B2']);
 
   // ⚠️ Reemplaza por el link real de tu grupo o canal de WhatsApp.
   const WHATSAPP_COMUNIDAD_URL = 'https://chat.whatsapp.com/TU_ENLACE_AQUI';

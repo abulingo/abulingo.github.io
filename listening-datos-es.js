@@ -11,12 +11,183 @@ window.LISTENING_DATOS_ES = {
   "fenrir": "es-US-Chirp3-HD-Fenrir"
  },
  "ritmo": {
+  "A0": 0.85,
   "A1": 0.92,
   "A2": 0.97,
   "B1": 1,
   "B2": 1.06
  },
  "dictados": {
+  "A0": [
+   {
+    "id": "d-a0-1",
+    "titulo": "En el restaurante",
+    "es": "At the restaurant",
+    "voz": "leda",
+    "frases": [
+     [
+      "Tengo hambre.",
+      "I am hungry."
+     ],
+     [
+      "Quiero un taco.",
+      "I want a taco."
+     ],
+     [
+      "Aquí está el taco.",
+      "Here is the taco."
+     ],
+     [
+      "El taco está rico.",
+      "The taco is tasty."
+     ],
+     [
+      "Muchas gracias.",
+      "Thank you very much."
+     ]
+    ]
+   },
+   {
+    "id": "d-a0-2",
+    "titulo": "En casa",
+    "es": "At home",
+    "voz": "charon",
+    "frases": [
+     [
+      "Esta es mi casa.",
+      "This is my house."
+     ],
+     [
+      "La casa es grande.",
+      "The house is big."
+     ],
+     [
+      "Abro la puerta.",
+      "I open the door."
+     ],
+     [
+      "Veo el gato.",
+      "I see the cat."
+     ],
+     [
+      "El gato es negro.",
+      "The cat is black."
+     ]
+    ]
+   },
+   {
+    "id": "d-a0-3",
+    "titulo": "De compras",
+    "es": "Shopping",
+    "voz": "aoede",
+    "frases": [
+     [
+      "Necesito una camisa.",
+      "I need a shirt."
+     ],
+     [
+      "Me gusta esta camisa.",
+      "I like this shirt."
+     ],
+     [
+      "¿Cuánto cuesta?",
+      "How much does it cost?"
+     ],
+     [
+      "Es muy cara.",
+      "It is very expensive."
+     ],
+     [
+      "No la compro.",
+      "I don't buy it."
+     ]
+    ]
+   },
+   {
+    "id": "d-a0-4",
+    "titulo": "Mi familia",
+    "es": "My family",
+    "voz": "puck",
+    "frases": [
+     [
+      "Esta es mi familia.",
+      "This is my family."
+     ],
+     [
+      "Mi mamá se llama Ana.",
+      "My mom's name is Ana."
+     ],
+     [
+      "Mi papá es Juan.",
+      "My dad is Juan."
+     ],
+     [
+      "Tengo un hermano.",
+      "I have a brother."
+     ],
+     [
+      "Estamos felices.",
+      "We are happy."
+     ]
+    ]
+   },
+   {
+    "id": "d-a0-5",
+    "titulo": "En la escuela",
+    "es": "At school",
+    "voz": "kore",
+    "frases": [
+     [
+      "Soy estudiante.",
+      "I am a student."
+     ],
+     [
+      "Estudio español.",
+      "I study Spanish."
+     ],
+     [
+      "La profesora es amable.",
+      "The teacher is nice."
+     ],
+     [
+      "Tengo un libro.",
+      "I have a book."
+     ],
+     [
+      "La clase es divertida.",
+      "The class is fun."
+     ]
+    ]
+   },
+   {
+    "id": "d-a0-6",
+    "titulo": "En el doctor",
+    "es": "At the doctor's",
+    "voz": "fenrir",
+    "frases": [
+     [
+      "Me siento mal.",
+      "I feel sick."
+     ],
+     [
+      "Me duele la cabeza.",
+      "My head hurts."
+     ],
+     [
+      "El doctor me ayuda.",
+      "The doctor helps me."
+     ],
+     [
+      "Necesito medicina.",
+      "I need medicine."
+     ],
+     [
+      "Ahora estoy mejor.",
+      "Now I am better."
+     ]
+    ]
+   }
+  ],
   "A1": [
    {
     "id": "d-a1-1",
@@ -699,6 +870,273 @@ window.LISTENING_DATOS_ES = {
   ]
  },
  "conectada": {
+  "A0": [
+   {
+    "id": "c-a0-1",
+    "titulo": "Vowel Linking (Sinalefa)",
+    "patron": "que es → qué's",
+    "explica": "When one word ends in a vowel and the next starts with one, Spanish speakers often blend them, sometimes dropping a vowel. This can make two words sound like one, which is tricky for English ears.",
+    "ejemplos": [
+     {
+      "lento": "¿Qué es esto?",
+      "natural": "¿Qué's esto?",
+      "es": "What is this?",
+      "trampas": [
+       "¿Qué sexto?",
+       "Queso esto"
+      ]
+     },
+     {
+      "lento": "Ella es alta.",
+      "natural": "Ella's alta.",
+      "es": "She is tall.",
+      "trampas": [
+       "Ella salta.",
+       "Ella salada."
+      ]
+     },
+     {
+      "lento": "Este es mi amigo.",
+      "natural": "Este's mi amigo.",
+      "es": "This is my friend.",
+      "trampas": [
+       "Este es mi abrigo.",
+       "Este es un amigo."
+      ]
+     },
+     {
+      "lento": "La otra casa es azul.",
+      "natural": "La otra casa's azul.",
+      "es": "The other house is blue.",
+      "trampas": [
+       "La otra caja es azul.",
+       "La otra gata es azul."
+      ]
+     },
+     {
+      "lento": "Este hombre es mi papá.",
+      "natural": "Est'hombre es mi papá.",
+      "es": "This man is my dad.",
+      "trampas": [
+       "Este hombre mi papá.",
+       "Este hombre es papá."
+      ]
+     }
+    ]
+   },
+   {
+    "id": "c-a0-2",
+    "titulo": "Shortening 'para' to 'pa'",
+    "patron": "para → pa' · para el → pa'l",
+    "explica": "The common word 'para' (for/to) is often shortened to 'pa'' in casual speech. This happens so fast it can be hard to catch if you're listening for the full word.",
+    "ejemplos": [
+     {
+      "lento": "Esto es para ti.",
+      "natural": "Esto es pa' ti.",
+      "es": "This is for you.",
+      "trampas": [
+       "Esto es patí.",
+       "Esto es para mí."
+      ]
+     },
+     {
+      "lento": "Voy para la casa.",
+      "natural": "Voy pa' la casa.",
+      "es": "I'm heading home.",
+      "trampas": [
+       "Voy por la casa.",
+       "Voy a la casa."
+      ]
+     },
+     {
+      "lento": "Es un regalo para mi mamá.",
+      "natural": "Es un regalo pa' mi mamá.",
+      "es": "It's a gift for my mom.",
+      "trampas": [
+       "Es un regalo de mi mamá.",
+       "Es un regalo a mi mamá."
+      ]
+     },
+     {
+      "lento": "Necesito dinero para el bus.",
+      "natural": "Necesito dinero pa'l bus.",
+      "es": "I need money for the bus.",
+      "trampas": [
+       "Necesito dinero por el bus.",
+       "Necesito dinero del bus."
+      ]
+     },
+     {
+      "lento": "Vamos para el cine.",
+      "natural": "Vamos pa'l cine.",
+      "es": "Let's go to the movies.",
+      "trampas": [
+       "Vamos por el cine.",
+       "Vamos para el fin."
+      ]
+     }
+    ]
+   },
+   {
+    "id": "c-a0-3",
+    "titulo": "Dropping 'es-' from 'está'",
+    "patron": "está → 'tá",
+    "explica": "In rapid, informal speech, the first syllable of 'está' (is/are) is often dropped, leaving just ''tá'. This is especially common after a word ending in a vowel.",
+    "ejemplos": [
+     {
+      "lento": "¿Dónde está el baño?",
+      "natural": "¿Dónde 'tá el baño?",
+      "es": "Where is the bathroom?",
+      "trampas": [
+       "¿Dónde está el paño?",
+       "¿Dónde está el daño?"
+      ]
+     },
+     {
+      "lento": "Mi mamá está en la cocina.",
+      "natural": "Mi mamá 'tá en la cocina.",
+      "es": "My mom is in the kitchen.",
+      "trampas": [
+       "Mi mamá está en la cochina.",
+       "Mi mamá está en la bocina."
+      ]
+     },
+     {
+      "lento": "El café está muy caliente.",
+      "natural": "El café 'tá muy caliente.",
+      "es": "The coffee is very hot.",
+      "trampas": [
+       "El café está caliente.",
+       "El café está muy valiente."
+      ]
+     },
+     {
+      "lento": "¿Cómo está usted?",
+      "natural": "¿Cómo 'tá usted?",
+      "es": "How are you? (formal)",
+      "trampas": [
+       "¿Cómo es usted?",
+       "¿Cómo estás tú?"
+      ]
+     },
+     {
+      "lento": "La puerta está cerrada.",
+      "natural": "La puerta 'tá cerrada.",
+      "es": "The door is closed.",
+      "trampas": [
+       "La puerta está serrada.",
+       "La puerta es cerrada."
+      ]
+     }
+    ]
+   },
+   {
+    "id": "c-a0-4",
+    "titulo": "Dropping the 'd' in '-ado' endings",
+    "patron": "cansado → cansao",
+    "explica": "The 'd' sound between vowels, especially in words ending in '-ado', is often softened or dropped completely in casual speech. This makes words like 'cansado' (tired) sound like 'cansao'.",
+    "ejemplos": [
+     {
+      "lento": "Estoy muy cansado.",
+      "natural": "Estoy muy cansao.",
+      "es": "I'm very tired.",
+      "trampas": [
+       "Estoy muy casado.",
+       "Estoy muy cantado."
+      ]
+     },
+     {
+      "lento": "El mercado está cerrado.",
+      "natural": "El mercao 'tá cerrao.",
+      "es": "The market is closed.",
+      "trampas": [
+       "El mercado está marcado.",
+       "El mercao 'tá amarrado."
+      ]
+     },
+     {
+      "lento": "Quiero pescado asado.",
+      "natural": "Quiero pescao asao.",
+      "es": "I want grilled fish.",
+      "trampas": [
+       "Quiero pesado asado.",
+       "Quiero pecado asado."
+      ]
+     },
+     {
+      "lento": "Pescado frito, por favor.",
+      "natural": "Pescao frito, por favor.",
+      "es": "Fried fish, please.",
+      "trampas": [
+       "Pecado frito, por favor.",
+       "Pescado frío, por favor."
+      ]
+     },
+     {
+      "lento": "El supermercado está al lado.",
+      "natural": "El supermercao 'tá al lao.",
+      "es": "The supermarket is next door.",
+      "trampas": [
+       "El supermercado está salado.",
+       "El supermercado está alado."
+      ]
+     }
+    ]
+   },
+   {
+    "id": "c-a0-5",
+    "titulo": "Merging 'voy a' into 'voy'a'",
+    "patron": "voy a → voy'a",
+    "explica": "The phrase 'voy a' (I'm going to) is extremely common and often gets compressed into a single sound, 'voy'a'. This is a form of vowel linking, but so frequent it deserves its own lesson.",
+    "ejemplos": [
+     {
+      "lento": "Voy a comer.",
+      "natural": "Voy'a comer.",
+      "es": "I'm going to eat.",
+      "trampas": [
+       "Voy a correr.",
+       "Voy a ver."
+      ]
+     },
+     {
+      "lento": "Voy a trabajar.",
+      "natural": "Voy'a trabajar.",
+      "es": "I'm going to work.",
+      "trampas": [
+       "Voy a trabar.",
+       "Voy a bajar."
+      ]
+     },
+     {
+      "lento": "Voy a la tienda.",
+      "natural": "Voy'a la tienda.",
+      "es": "I'm going to the store.",
+      "trampas": [
+       "Voy de la tienda.",
+       "Voy a la tina."
+      ]
+     },
+     {
+      "lento": "Voy a llamar a mi amigo.",
+      "natural": "Voy'a llamar a mi amigo.",
+      "es": "I'm going to call my friend.",
+      "trampas": [
+       "Voy a llamar mi amigo.",
+       "Voy a amar a mi amigo."
+      ]
+     },
+     {
+      "lento": "Voy a pedir un taxi.",
+      "natural": "Voy'a pedir un taxi.",
+      "es": "I'm going to order a taxi.",
+      "trampas": [
+       "Voy a pedir un taco.",
+       "Voy a perder un taxi."
+      ]
+     }
+    ]
+   }
+  ],
   "A1": [
    {
     "id": "c-a1-1",
@@ -1769,6 +2207,338 @@ window.LISTENING_DATOS_ES = {
   ]
  },
  "vocab": {
+  "A0": [
+   [
+    "pero",
+    [
+     "perro",
+     "pelo",
+     "cero"
+    ],
+    "Quiero un taco, *pero* sin queso.",
+    "I want a taco, but without cheese.",
+    "but"
+   ],
+   [
+    "casa",
+    [
+     "caza",
+     "cosa",
+     "caja"
+    ],
+    "Mi *casa* es blanca.",
+    "My house is white.",
+    "house"
+   ],
+   [
+    "caro",
+    [
+     "carro",
+     "claro",
+     "coro"
+    ],
+    "El hotel es muy *caro*.",
+    "The hotel is very expensive.",
+    "expensive"
+   ],
+   [
+    "hijo",
+    [
+     "higo",
+     "dijo",
+     "fijo"
+    ],
+    "Mi *hijo* se llama Carlos.",
+    "My son's name is Carlos.",
+    "son"
+   ],
+   [
+    "paga",
+    [
+     "pega",
+     "paca",
+     "paja"
+    ],
+    "Ella *paga* con tarjeta.",
+    "She pays with a card.",
+    "he/she pays"
+   ],
+   [
+    "dos",
+    [
+     "tos",
+     "voz",
+     "dios"
+    ],
+    "Necesito *dos* aspirinas.",
+    "I need two aspirins.",
+    "two"
+   ],
+   [
+    "mesa",
+    [
+     "misa",
+     "pesa",
+     "besa"
+    ],
+    "La computadora está en la *mesa*.",
+    "The computer is on the table.",
+    "table"
+   ],
+   [
+    "lápiz",
+    [
+     "tapiz",
+     "feliz",
+     "maíz"
+    ],
+    "¿Tienes un *lápiz*?",
+    "Do you have a pencil?",
+    "pencil"
+   ],
+   [
+    "bueno",
+    [
+     "bono",
+     "sueno",
+     "nuevo"
+    ],
+    "¿*Bueno*? ¿Está Ana?",
+    "Hello? Is Ana there?",
+    "hello (on the phone in Mexico)"
+   ],
+   [
+    "vez",
+    [
+     "ves",
+     "voz",
+     "pez"
+    ],
+    "Otra *vez*, por favor.",
+    "One more time, please.",
+    "time / occasion"
+   ],
+   [
+    "queso",
+    [
+     "eso",
+     "beso",
+     "peso"
+    ],
+    "Me gusta el *queso* fresco.",
+    "I like fresh cheese.",
+    "cheese"
+   ],
+   [
+    "cama",
+    [
+     "gama",
+     "rama",
+     "dama"
+    ],
+    "Estoy en la *cama*.",
+    "I am in bed.",
+    "bed"
+   ],
+   [
+    "calle",
+    [
+     "callo",
+     "cae",
+     "valle"
+    ],
+    "Mi hotel está en esta *calle*.",
+    "My hotel is on this street.",
+    "street"
+   ],
+   [
+    "padre",
+    [
+     "madre",
+     "cuadre",
+     "ladre"
+    ],
+    "Mi *padre* es de Colombia.",
+    "My father is from Colombia.",
+    "father"
+   ],
+   [
+    "cien",
+    [
+     "sien",
+     "bien",
+     "quien"
+    ],
+    "La camisa cuesta *cien* pesos.",
+    "The shirt costs one hundred pesos.",
+    "one hundred"
+   ],
+   [
+    "mano",
+    [
+     "mono",
+     "malo",
+     "maní"
+    ],
+    "Me duele la *mano*.",
+    "My hand hurts.",
+    "hand"
+   ],
+   [
+    "jefe",
+    [
+     "deje",
+     "teje",
+     "eje"
+    ],
+    "Mi *jefe* es muy amable.",
+    "My boss is very kind.",
+    "boss"
+   ],
+   [
+    "libro",
+    [
+     "libra",
+     "libre",
+     "vibro"
+    ],
+    "Yo leo un *libro*.",
+    "I read a book.",
+    "book"
+   ],
+   [
+    "ocho",
+    [
+     "oso",
+     "ocio",
+     "odio"
+    ],
+    "Mi número de teléfono tiene un *ocho*.",
+    "My phone number has an eight.",
+    "eight"
+   ],
+   [
+    "vino",
+    [
+     "nido",
+     "pino",
+     "fino"
+    ],
+    "Mi amigo toma *vino* tinto.",
+    "My friend drinks red wine.",
+    "wine"
+   ],
+   [
+    "vaso",
+    [
+     "paso",
+     "caso",
+     "baso"
+    ],
+    "Quiero un *vaso* de agua.",
+    "I want a glass of water.",
+    "glass"
+   ],
+   [
+    "sala",
+    [
+     "sola",
+     "bala",
+     "cala"
+    ],
+    "La televisión está en la *sala*.",
+    "The television is in the living room.",
+    "living room"
+   ],
+   [
+    "año",
+    [
+     "amo",
+     "ano",
+     "daño"
+    ],
+    "El próximo *año* viajo a México.",
+    "Next year I'm traveling to Mexico.",
+    "year"
+   ],
+   [
+    "tía",
+    [
+     "lía",
+     "mía",
+     "vía"
+    ],
+    "Mi *tía* vive en Miami.",
+    "My aunt lives in Miami.",
+    "aunt"
+   ],
+   [
+    "pesos",
+    [
+     "besos",
+     "esos",
+     "pisos"
+    ],
+    "Un café cuesta treinta *pesos*.",
+    "A coffee costs thirty pesos.",
+    "pesos (currency)"
+   ],
+   [
+    "ojo",
+    [
+     "oso",
+     "cojo",
+     "rojo"
+    ],
+    "Tengo algo en el *ojo*.",
+    "I have something in my eye.",
+    "eye"
+   ],
+   [
+    "día",
+    [
+     "pía",
+     "mía",
+     "vía"
+    ],
+    "Hoy es un buen *día*.",
+    "Today is a good day.",
+    "day"
+   ],
+   [
+    "lee",
+    [
+     "le",
+     "ve",
+     "red"
+    ],
+    "El estudiante *lee* el menú.",
+    "The student reads the menu.",
+    "he/she reads"
+   ],
+   [
+    "seis",
+    [
+     "sé",
+     "es",
+     "sed"
+    ],
+    "Son las *seis* de la tarde.",
+    "It is six in the evening.",
+    "six"
+   ],
+   [
+    "mira",
+    [
+     "mía",
+     "misa",
+     "tira"
+    ],
+    "Mi amiga *mira* una película.",
+    "My friend watches a movie.",
+    "he/she looks at / watches"
+   ]
+  ],
   "A1": [
    [
     "pero",
@@ -3099,6 +3869,398 @@ window.LISTENING_DATOS_ES = {
   ]
  },
  "prediccion": {
+  "A0": [
+   {
+    "id": "p-a0-1",
+    "titulo": "En el restaurante",
+    "contexto": "A woman is ordering food at a restaurant.",
+    "predice": {
+     "opciones": [
+      "agua",
+      "pollo",
+      "gracias",
+      "pescado",
+      "por favor",
+      "carne"
+     ],
+     "correctas": [
+      "agua",
+      "pollo",
+      "gracias",
+      "por favor"
+     ]
+    },
+    "lineas": [
+     [
+      "charon",
+      "¿Hola, qué desea?",
+      "Hello, what would you like?"
+     ],
+     [
+      "leda",
+      "Hola. Quiero pollo, por favor.",
+      "Hello. I want chicken, please."
+     ],
+     [
+      "charon",
+      "Muy bien. ¿Y para beber?",
+      "Very good. And to drink?"
+     ],
+     [
+      "leda",
+      "Un agua, por favor.",
+      "A water, please."
+     ],
+     [
+      "charon",
+      "Perfecto. ¿Algo más?",
+      "Perfect. Anything else?"
+     ],
+     [
+      "leda",
+      "No, gracias. Eso es todo.",
+      "No, thank you. That's all."
+     ]
+    ],
+    "preguntas": [
+     [
+      "¿Qué quiere comer Leda?",
+      "What does Leda want to eat?",
+      [
+       "Pescado",
+       "Pollo",
+       "Carne"
+      ],
+      1
+     ],
+     [
+      "¿Qué quiere beber?",
+      "What does she want to drink?",
+      [
+       "Un refresco",
+       "Un café",
+       "Un agua"
+      ],
+      2
+     ],
+     [
+      "¿Leda dice 'gracias'?",
+      "Does Leda say 'thank you'?",
+      [
+       "Sí",
+       "No",
+       "No sé"
+      ],
+      0
+     ],
+     [
+      "¿Quién toma la orden?",
+      "Who takes the order?",
+      [
+       "Leda",
+       "Charon",
+       "Un amigo"
+      ],
+      1
+     ]
+    ]
+   },
+   {
+    "id": "p-a0-2",
+    "titulo": "¿Dónde está mi libro?",
+    "contexto": "A man is asking his sister where his book is.",
+    "predice": {
+     "opciones": [
+      "libro",
+      "mesa",
+      "aquí",
+      "cama",
+      "silla",
+      "allá"
+     ],
+     "correctas": [
+      "libro",
+      "mesa",
+      "aquí",
+      "cama"
+     ]
+    },
+    "lineas": [
+     [
+      "puck",
+      "Kore, ¿dónde está mi libro?",
+      "Kore, where is my book?"
+     ],
+     [
+      "kore",
+      "No sé. ¿No está en la mesa?",
+      "I don't know. Isn't it on the table?"
+     ],
+     [
+      "puck",
+      "No, no está aquí.",
+      "No, it's not here."
+     ],
+     [
+      "kore",
+      "Mira en tu cuarto.",
+      "Look in your room."
+     ],
+     [
+      "puck",
+      "Ah, sí. Está en la cama.",
+      "Ah, yes. It's on the bed."
+     ],
+     [
+      "kore",
+      "¡Qué bien!",
+      "Great!"
+     ]
+    ],
+    "preguntas": [
+     [
+      "¿Qué busca Puck?",
+      "What is Puck looking for?",
+      [
+       "Su teléfono",
+       "Su libro",
+       "Sus llaves"
+      ],
+      1
+     ],
+     [
+      "¿Dónde está el libro al final?",
+      "Where is the book in the end?",
+      [
+       "En la mesa",
+       "En la silla",
+       "En la cama"
+      ],
+      2
+     ],
+     [
+      "¿El libro está en la mesa?",
+      "Is the book on the table?",
+      [
+       "Sí",
+       "No",
+       "No sé"
+      ],
+      1
+     ],
+     [
+      "¿Quién ayuda a Puck?",
+      "Who helps Puck?",
+      [
+       "Su mamá",
+       "Kore",
+       "Su amigo"
+      ],
+      1
+     ]
+    ]
+   },
+   {
+    "id": "p-a0-3",
+    "titulo": "Una camisa nueva",
+    "contexto": "A man is shopping for a new shirt.",
+    "predice": {
+     "opciones": [
+      "camisa",
+      "roja",
+      "cuesta",
+      "pantalón",
+      "azul",
+      "cuánto"
+     ],
+     "correctas": [
+      "camisa",
+      "roja",
+      "cuesta",
+      "cuánto"
+     ]
+    },
+    "lineas": [
+     [
+      "kore",
+      "Hola, ¿en qué le puedo ayudar?",
+      "Hello, how can I help you?"
+     ],
+     [
+      "puck",
+      "Sí, por favor. Busco una camisa.",
+      "Yes, please. I'm looking for a shirt."
+     ],
+     [
+      "kore",
+      "Tenemos camisas rojas y azules.",
+      "We have red and blue shirts."
+     ],
+     [
+      "puck",
+      "Me gusta la camisa roja. ¿Cuánto cuesta?",
+      "I like the red shirt. How much does it cost?"
+     ],
+     [
+      "kore",
+      "Cuesta veinte dólares.",
+      "It costs twenty dollars."
+     ],
+     [
+      "puck",
+      "Perfecto. La compro.",
+      "Perfect. I'll buy it."
+     ]
+    ],
+    "preguntas": [
+     [
+      "¿Qué compra Puck?",
+      "What does Puck buy?",
+      [
+       "Un pantalón",
+       "Una camisa",
+       "Unos zapatos"
+      ],
+      1
+     ],
+     [
+      "¿De qué color es la camisa?",
+      "What color is the shirt?",
+      [
+       "Azul",
+       "Verde",
+       "Roja"
+      ],
+      2
+     ],
+     [
+      "¿Cuánto cuesta la camisa?",
+      "How much does the shirt cost?",
+      [
+       "Diez dólares",
+       "Veinte dólares",
+       "Treinta dólares"
+      ],
+      1
+     ],
+     [
+      "¿Quién trabaja en la tienda?",
+      "Who works in the store?",
+      [
+       "Puck",
+       "Un amigo",
+       "Kore"
+      ],
+      2
+     ]
+    ]
+   },
+   {
+    "id": "p-a0-4",
+    "titulo": "No me siento bien",
+    "contexto": "A woman tells her friend she doesn't feel well.",
+    "predice": {
+     "opciones": [
+      "bien",
+      "casa",
+      "doctor",
+      "trabajo",
+      "mal",
+      "agua"
+     ],
+     "correctas": [
+      "bien",
+      "casa",
+      "doctor",
+      "mal"
+     ]
+    },
+    "lineas": [
+     [
+      "charon",
+      "Hola Leda, ¿cómo estás?",
+      "Hi Leda, how are you?"
+     ],
+     [
+      "leda",
+      "Hola, Charon. No estoy bien, me siento un poco mal.",
+      "Hi, Charon. I'm not well, I feel a little sick."
+     ],
+     [
+      "charon",
+      "¡Oh, no! ¿Qué pasa?",
+      "Oh, no! What's wrong?"
+     ],
+     [
+      "leda",
+      "Tengo dolor de cabeza.",
+      "I have a headache."
+     ],
+     [
+      "charon",
+      "¿Necesitas un doctor?",
+      "Do you need a doctor?"
+     ],
+     [
+      "leda",
+      "No, creo que no. Necesito descansar en casa.",
+      "No, I don't think so. I need to rest at home."
+     ],
+     [
+      "charon",
+      "Está bien. Descansa mucho.",
+      "Okay. Rest a lot."
+     ],
+     [
+      "leda",
+      "Gracias.",
+      "Thanks."
+     ]
+    ],
+    "preguntas": [
+     [
+      "¿Cómo se siente Leda?",
+      "How is Leda feeling?",
+      [
+       "Bien",
+       "Mal",
+       "Contenta"
+      ],
+      1
+     ],
+     [
+      "¿Qué le duele a Leda?",
+      "What hurts Leda?",
+      [
+       "El estómago",
+       "La garganta",
+       "La cabeza"
+      ],
+      2
+     ],
+     [
+      "¿Leda necesita un doctor?",
+      "Does Leda need a doctor?",
+      [
+       "Sí",
+       "No",
+       "Quizás"
+      ],
+      1
+     ],
+     [
+      "¿Qué necesita hacer Leda?",
+      "What does Leda need to do?",
+      [
+       "Trabajar",
+       "Descansar en casa",
+       "Ir a una fiesta"
+      ],
+      1
+     ]
+    ]
+   }
+  ],
   "A1": [
    {
     "id": "p-a1-1",
@@ -4749,6 +5911,48 @@ window.LISTENING_DATOS_ES = {
   ]
  },
  "contar": {
+  "A0": [
+   [
+    "Es un helado.",
+    "Es un helado."
+   ],
+   [
+    "Abre el auto.",
+    "Abre el auto."
+   ],
+   [
+    "Es el otro.",
+    "Es el otro."
+   ],
+   [
+    "Es mi abuelo.",
+    "Es mi abuelo."
+   ],
+   [
+    "Voy a la una.",
+    "Voy a la una."
+   ],
+   [
+    "Me duele algo.",
+    "Me duele algo."
+   ],
+   [
+    "Es el jefe.",
+    "Es el jefe."
+   ],
+   [
+    "Es una idea.",
+    "Es una idea."
+   ],
+   [
+    "Es un amigo.",
+    "Es un amigo."
+   ],
+   [
+    "¿Está Ana ahí?",
+    "¿Está Ana ahí?"
+   ]
+  ],
   "A1": [
    [
     "Es el hermano de Ana.",

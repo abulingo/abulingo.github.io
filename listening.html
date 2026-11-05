@@ -190,7 +190,7 @@
   ============================================================ */
   const SUPABASE_URL = 'https://eylwewhqeaaqkgcxhgyv.supabase.co';
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV5bHdld2hxZWFhcWtnY3hoZ3l2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQzMzAxODgsImV4cCI6MjA5OTkwNjE4OH0.Ji8huj-ny2VcMT5UQSjOuwUKz4k23quNS0fLk-gZr7A';
-  const NIVELES_FIJOS = ['A1', 'A2', 'B1', 'B2'];
+  const NIVELES_FIJOS = (window.AbuIdioma?.aprendeEspanol ? ['A0'] : []).concat(['A1', 'A2', 'B1', 'B2']);
   const WHATSAPP_COMUNIDAD_URL = 'https://chat.whatsapp.com/FItyG5Nyj0FJmjtk9Fjpvx';
   const MISION_FRASES_DIA = 5;
   const MISION_PALABRAS_DIA = 30;
@@ -1696,7 +1696,7 @@
     lsNivelElegido = nivelX;
     const { data, error } = await dbClient.from('textos_listening')
       .select('id,nivel,titulo,tema,texto,traduccion,frases,audio_url,palabras')
-      .eq('nivel', nivelX)
+      .eq('nivel', nivelX === 'A0' ? 'A1' : nivelX) // A0 (Principiante) usa los textos de A1
       .order('orden', { ascending: true });
 
     // El usuario pudo cambiar de pantalla mientras cargaba.

@@ -636,7 +636,7 @@
   }
 
   // Nivel activo: el mismo que usa el flujo de palabras, para que ambas partes vayan sincronizadas.
-  function gramNivel() { return flujo?.currentNivel || userProfile?.nivel || 'A1'; }
+  function gramNivel() { const n = flujo?.currentNivel || userProfile?.nivel || 'A1'; return n === 'A0' ? 'A1' : n; } // A0 (Principiante, español) no tiene gramática propia: usa la de A1
 
   /* Bolsa de progreso de un nivel concreto (no siempre es el nivel activo:
      una lección fusionada vive en el nivel donde se aprende por primera vez). */

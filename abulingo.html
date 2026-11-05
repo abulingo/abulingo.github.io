@@ -428,8 +428,10 @@ function openAbuChat() {
 
   // ⚠️ Reemplaza por el link real de tu grupo o canal de WhatsApp.
   const WHATSAPP_COMUNIDAD_URL = 'https://chat.whatsapp.com/FItyG5Nyj0FJmjtk9Fjpvx';
-  const CEFR_ORDER = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
-  const NIVELES_FIJOS = ['A1', 'A2', 'B1', 'B2', 'C1']; // siempre visibles en el selector
+  const CEFR_ORDER = (window.AbuIdioma?.aprendeEspanol ? ['A0'] : []).concat(['A1', 'A2', 'B1', 'B2', 'C1', 'C2']);
+  // Quien aprende español empieza en A0 (Principiante: lo súper básico).
+  const NIVEL_INICIAL = window.AbuIdioma?.aprendeEspanol ? 'A0' : 'A1';
+  const NIVELES_FIJOS = (window.AbuIdioma?.aprendeEspanol ? ['A0'] : []).concat(['A1', 'A2', 'B1', 'B2', 'C1']); // siempre visibles en el selector
   const NIVEL_PHRASAL = 'PV'; // phrasal verbs: viven en "palabras" pero no son un nivel del curso; se estudian desde el Mazo
 
   const ENCOURAGEMENTS = [
@@ -2165,21 +2167,21 @@ function openAbuChat() {
   const CACHE_CONTENIDO_MS = 7 * 86400000;
   const CACHE_CONTENIDO_VER = 'v1';
   const memContenido = new Map();
-  // _es2: las palabras en español ya traen su fonética; se borra la caché anterior.
-  try { Object.keys(localStorage).filter(k => k.startsWith(`abu_cc_${CACHE_CONTENIDO_VER}_es_`)).forEach(k => localStorage.removeItem(k)); } catch {}
+  // _es3: las palabras en español traen su fonética y el nivel A0; se borra la caché anterior.
+  try { Object.keys(localStorage).filter(k => (k.startsWith(`abu_cc_${CACHE_CONTENIDO_VER}_es_`) || k.startsWith(`abu_cc_${CACHE_CONTENIDO_VER}_es2_`))).forEach(k => localStorage.removeItem(k)); } catch {}
   function leerCacheContenido(clave) {
     try {
-      const x = JSON.parse(localStorage.getItem(`abu_cc_${CACHE_CONTENIDO_VER}${window.AbuIdioma?.aprendeEspanol ? '_es2' : ''}_${clave}`) || 'null');
+      const x = JSON.parse(localStorage.getItem(`abu_cc_${CACHE_CONTENIDO_VER}${window.AbuIdioma?.aprendeEspanol ? '_es3' : ''}_${clave}`) || 'null');
       return x && Date.now() - x.t < CACHE_CONTENIDO_MS ? x.v : null;
     } catch { return null; }
   }
   function guardarCacheContenido(clave, v, grupoUnico) {
     try {
       if (grupoUnico) {
-        const pref = `abu_cc_${CACHE_CONTENIDO_VER}${window.AbuIdioma?.aprendeEspanol ? '_es2' : ''}_${grupoUnico}`;
+        const pref = `abu_cc_${CACHE_CONTENIDO_VER}${window.AbuIdioma?.aprendeEspanol ? '_es3' : ''}_${grupoUnico}`;
         Object.keys(localStorage).filter(k => k.startsWith(pref)).forEach(k => localStorage.removeItem(k));
       }
-      localStorage.setItem(`abu_cc_${CACHE_CONTENIDO_VER}${window.AbuIdioma?.aprendeEspanol ? '_es2' : ''}_${clave}`, JSON.stringify({ t: Date.now(), v }));
+      localStorage.setItem(`abu_cc_${CACHE_CONTENIDO_VER}${window.AbuIdioma?.aprendeEspanol ? '_es3' : ''}_${clave}`, JSON.stringify({ t: Date.now(), v }));
     } catch { /* almacenamiento lleno: se sigue sin caché */ }
   }
   function conCache(clave, cargar, { grupoUnico = null, persistir = true } = {}) {
@@ -2265,7 +2267,7 @@ function openAbuChat() {
   let gratisIdsCache = null;
   async function palabrasPermitidasGratisIds() {
     if (gratisIdsCache) return gratisIdsCache;
-    const { data } = await dbClient.from('palabras').select('id').eq('nivel', 'A1').order('id', { ascending: true }).limit(GRATIS_WORD_LIMIT);
+    const { data } = await dbClient.from('palabras').select('id').eq('nivel', NIVEL_INICIAL).order('id', { ascending: true }).limit(GRATIS_WORD_LIMIT);
     gratisIdsCache = new Set((data || []).map(r => String(r.id)));
     return gratisIdsCache;
   }
@@ -2408,7 +2410,7 @@ function openAbuChat() {
   }
 
   async function ensureFlujo() {
-    const baseNivel = (userProfile.nivel) || 'A1';
+    const baseNivel = window.AbuIdioma?.aprendeEspanol ? 'A0' : ((userProfile.nivel) || 'A1');
 
     // Migración: si viene el formato viejo (flowState) o no existe, se reinicia a v2.
     if (!flujo || !flujo.version || flujo.version < 2 || flujo.flowState) {
@@ -3274,7 +3276,7 @@ function openAbuChat() {
      12. SELECTOR DE NIVEL
   ============================================================ */
   async function openNivelSelector() {
-    if (esGratis()) return mostrarBloqueoPlan('En el plan <b>Gratis</b> solo puedes estudiar el nivel <b>A1</b>. Mejora tu plan para desbloquear A2, B1 y B2.');
+    if (esGratis()) return mostrarBloqueoPlan('En el plan <b>Gratis</b> solo puedes estudiar el nivel <b>' + NIVEL_INICIAL + '</b>. Mejora tu plan para desbloquear los demás niveles.');
     const conContenido = await getNiveles(); // niveles que sí tienen palabras
     // Unimos los niveles fijos con cualquier otro detectado en la base de datos.
     const niveles = sortNiveles([...new Set([...NIVELES_FIJOS, ...conContenido])]);
@@ -3284,7 +3286,7 @@ function openAbuChat() {
       const tiene = conContenido.includes(n);
       const activo = n === current;
       return `<button class="nivel-opt btn-juice ${activo ? 'bg-[#FF7A00] text-white' : (tiene ? 'bg-slate-100 text-slate-700' : 'bg-slate-50 text-slate-400')} font-black text-lg py-4 rounded-xl flex flex-col items-center gap-1" data-nivel="${n}">
-        <span>${n}</span>
+        <span>${n}</span>${n === 'A0' ? '<span class="text-[11px] font-bold">Principiante</span>' : ''}
         <span class="text-[10px] font-bold uppercase ${activo ? 'text-white/80' : (tiene ? 'text-green-500' : 'text-slate-300')}">${tiene ? 'Disponible' : 'Sin contenido'}</span>
       </button>`;
     }).join('')}</div>`;
@@ -3369,7 +3371,7 @@ function openAbuChat() {
   // (flujo.currentNivel es justo lo que ese botón cambia).
   function nivelActual(preferido) {
     const etiqueta = (document.getElementById('nivel-label')?.textContent || '').trim();
-    const candidatos = [flujo?.currentNivel, etiqueta, preferido, 'A1'];
+    const candidatos = [flujo?.currentNivel, etiqueta, preferido, NIVEL_INICIAL];
     return candidatos.find(n => typeof NIVELES_FIJOS !== 'undefined' ? NIVELES_FIJOS.includes(n) : !!n) || 'A1';
   }
 

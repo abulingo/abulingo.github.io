@@ -299,6 +299,12 @@
         if (nuevo) init = { ...init, body: JSON.stringify(nuevo) };
       } catch {}
     }
+    // Nivel A0 (Principiante): contenido solo para quien aprende español.
+    if (!ES && (tabla === 'palabras' || tabla === 'frases') && (metodo === 'GET' || metodo === 'HEAD')) {
+      if (url.searchParams.has('or')) url.searchParams.append('nivel', 'neq.A0');
+      else url.searchParams.set('or', '(nivel.is.null,nivel.neq.A0)');
+      input = typeof input === 'string' ? url.toString() : new Request(url.toString(), input);
+    }
     const r = await fetchOriginal(input, init);
     if (ES && tabla === 'frases' && metodo === 'HEAD' && r.ok) {
       const rango = rangoSinRepetidas(r, url);
