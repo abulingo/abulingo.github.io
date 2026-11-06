@@ -682,7 +682,9 @@
     'mazo': openMazo,
     'soporte': openSoporte,
     'solicitar-tutor': openSolicitarTutor,
-    'mision': abrirMisionDia
+    'mision': abrirMisionDia,
+    'idioma': openIdioma,
+    'racha': abrirRacha
   };
 
   const PAGINAS_MENU = {
@@ -701,6 +703,398 @@
     const fn = ACCIONES[nombre];
     if (!fn) { console.warn('[AbuMenu] opción desconocida:', nombre); return; }
     fn();
+  }
+
+
+  /* ---------- Racha (imagen para compartir), idioma y barra de arriba ----------
+     Copiado de abulingo.html para que funcione igual en todas las páginas. */
+  const RACHA_W = 1080, RACHA_H = 1350;
+  let rachaArchivo = null;      // File del PNG ya generado
+  let rachaURL = null;          // object URL de la vista previa
+
+  function cargarImagenSegura(src) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => resolve(null);   // si falta el archivo, se dibuja un sustituto
+      img.src = src;
+    });
+  }
+
+  function rectRedondo(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  // Llama dibujada a mano en vez del emoji 🔥: en canvas los emojis
+  // dependen de la fuente del sistema y en varios Android salen como
+  // un cuadrito vacío.
+  function dibujarLlama(ctx, cx, cy, h) {
+    const dibujo = (alto, relleno) => {
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - alto * 0.55);
+      ctx.bezierCurveTo(cx + alto * 0.30, cy - alto * 0.28, cx + alto * 0.42, cy + alto * 0.05, cx + alto * 0.30, cy + alto * 0.26);
+      ctx.bezierCurveTo(cx + alto * 0.20, cy + alto * 0.45, cx - alto * 0.20, cy + alto * 0.45, cx - alto * 0.30, cy + alto * 0.26);
+      ctx.bezierCurveTo(cx - alto * 0.42, cy + alto * 0.05, cx - alto * 0.24, cy - alto * 0.16, cx - alto * 0.10, cy - alto * 0.30);
+      ctx.bezierCurveTo(cx - alto * 0.06, cy - alto * 0.16, cx - alto * 0.02, cy - alto * 0.30, cx, cy - alto * 0.55);
+      ctx.closePath();
+      ctx.fillStyle = relleno;
+      ctx.fill();
+    };
+    const fuera = ctx.createLinearGradient(cx, cy - h * 0.55, cx, cy + h * 0.45);
+    fuera.addColorStop(0, '#FFB347');
+    fuera.addColorStop(0.5, '#FF7A00');
+    fuera.addColorStop(1, '#E2452B');
+    dibujo(h, fuera);
+    ctx.save();
+    ctx.translate(0, h * 0.14);
+    dibujo(h * 0.52, '#FFD166');
+    ctx.restore();
+  }
+
+  // Destello de 4 puntas (los emojis en canvas fallan en varios Android).
+  function dibujarDestello(ctx, x, y, r, color) {
+    ctx.beginPath();
+    ctx.moveTo(x, y - r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.quadraticCurveTo(x, y, x, y + r);
+    ctx.quadraticCurveTo(x, y, x - r, y);
+    ctx.quadraticCurveTo(x, y, x, y - r);
+    ctx.fillStyle = color;
+    ctx.fill();
+  }
+
+  // Escribe el texto reduciendo el tamaño hasta que quepa en `max` px.
+  function textoAjustado(ctx, texto, x, y, max, peso, tam, familia) {
+    let t = tam;
+    do { ctx.font = `${peso} ${t}px ${familia}`; t -= 2; } while (ctx.measureText(texto).width > max && t > 12);
+    ctx.fillText(texto, x, y);
+  }
+
+  async function dibujarTarjetaRacha() {
+    const dias   = ctx.flujo?.racha?.days || 0;
+    const mejor  = Math.max(ctx.flujo?.racha?.best || 0, dias);
+    const nivel  = ctx.flujo?.currentNivel || 'A1';
+    const nombreCrudo = primerNombreR(ctx.userProfile?.full_name, '');
+    const nombre = nombreCrudo ? nombreCrudo.charAt(0).toUpperCase() + nombreCrudo.slice(1) : '';
+    const nuevoRecord = dias >= 2 && dias >= mejor;
+
+    const TITULO = '"Space Grotesk", system-ui, sans-serif';
+    const CUERPO = '"Work Sans", system-ui, sans-serif';
+
+    const canvas = document.createElement('canvas');
+    canvas.width = RACHA_W; canvas.height = RACHA_H;
+    const c2d = canvas.getContext('2d');
+    const cx = RACHA_W / 2;
+    const conEspaciado = (px, fn) => { const prev = c2d.letterSpacing; if ('letterSpacing' in c2d) c2d.letterSpacing = px; fn(); if ('letterSpacing' in c2d) c2d.letterSpacing = prev; };
+
+    // Pesos que la página no usa todavía no están descargados: se piden antes de dibujar.
+    try {
+      await Promise.all([
+        document.fonts.load(`700 100px ${TITULO}`), document.fonts.load(`800 40px ${CUERPO}`),
+        document.fonts.load(`600 40px ${CUERPO}`), document.fonts.load(`400 40px ${CUERPO}`)
+      ]);
+    } catch { /* navegador sin la API */ }
+
+    // ---- Fondo: degradado, luces y trama de puntos ----
+    const fondo = c2d.createLinearGradient(0, 0, RACHA_W, RACHA_H);
+    fondo.addColorStop(0, '#1152B8');
+    fondo.addColorStop(0.55, '#0A3478');
+    fondo.addColorStop(1, '#04173A');
+    c2d.fillStyle = fondo;
+    c2d.fillRect(0, 0, RACHA_W, RACHA_H);
+
+    const luz = (x, y, r, color) => {
+      const g = c2d.createRadialGradient(x, y, 0, x, y, r);
+      g.addColorStop(0, color); g.addColorStop(1, 'rgba(0,0,0,0)');
+      c2d.fillStyle = g; c2d.fillRect(x - r, y - r, r * 2, r * 2);
+    };
+    luz(960, 90, 380, 'rgba(96,165,250,0.30)');
+    luz(80, 1260, 420, 'rgba(255,122,0,0.18)');
+    luz(cx, 440, 460, 'rgba(255,122,0,0.40)');
+
+    c2d.fillStyle = 'rgba(255,255,255,0.05)';
+    for (let y = 18; y < RACHA_H; y += 36) for (let x = 18; x < RACHA_W; x += 36) { c2d.beginPath(); c2d.arc(x, y, 2, 0, Math.PI * 2); c2d.fill(); }
+
+    // ---- Cabecera: pastilla con ícono + logotipo ----
+    const icono = await cargarImagenSegura('icono.png');
+    c2d.font = `700 52px ${TITULO}`;
+    const anchoLogo = c2d.measureText('Abulingo.').width;
+    const ico = 80, pillW = 18 + ico + 20 + anchoLogo + 34, pillH = 108;
+    const pillX = cx - pillW / 2, pillY = 62;
+    rectRedondo(c2d, pillX, pillY, pillW, pillH, pillH / 2);
+    c2d.fillStyle = 'rgba(255,255,255,0.10)'; c2d.fill();
+    c2d.lineWidth = 2; c2d.strokeStyle = 'rgba(255,255,255,0.18)'; c2d.stroke();
+
+    const icoCx = pillX + 14 + ico / 2, icoCy = pillY + pillH / 2;
+    c2d.save();
+    c2d.beginPath(); c2d.arc(icoCx, icoCy, ico / 2, 0, Math.PI * 2);
+    c2d.fillStyle = '#FFFFFF'; c2d.fill();
+    if (icono) {
+      c2d.clip();
+      const lado = Math.min(icono.width, icono.height) || 1;
+      c2d.drawImage(icono, (icono.width - lado) / 2, (icono.height - lado) / 2, lado, lado, icoCx - ico / 2, icoCy - ico / 2, ico, ico);
+    } else {
+      c2d.fillStyle = '#0D47A1'; c2d.font = `700 46px ${TITULO}`; c2d.textAlign = 'center';
+      c2d.fillText('A', icoCx, icoCy + 16);
+    }
+    c2d.restore();
+
+    c2d.textAlign = 'left'; c2d.textBaseline = 'alphabetic';
+    c2d.font = `700 52px ${TITULO}`;
+    const logoX = icoCx + ico / 2 + 20, logoY = icoCy + 18;
+    c2d.fillStyle = '#FFFFFF'; c2d.fillText('Abulingo', logoX, logoY);
+    c2d.fillStyle = '#FF7A00'; c2d.fillText('.', logoX + c2d.measureText('Abulingo').width, logoY);
+
+    // ---- Anillo luminoso con la llama ----
+    const anilloY = 446, anilloR = 172;
+    c2d.beginPath(); c2d.arc(cx, anilloY, anilloR, 0, Math.PI * 2);
+    c2d.fillStyle = 'rgba(255,255,255,0.06)'; c2d.fill();
+    const aro = c2d.createLinearGradient(cx - anilloR, anilloY - anilloR, cx + anilloR, anilloY + anilloR);
+    aro.addColorStop(0, '#FFD166'); aro.addColorStop(0.5, '#FF7A00'); aro.addColorStop(1, '#E2452B');
+    c2d.save();
+    c2d.shadowColor = 'rgba(255,122,0,0.85)'; c2d.shadowBlur = 50;
+    c2d.lineWidth = 12; c2d.strokeStyle = aro; c2d.stroke();
+    c2d.restore();
+
+    c2d.save();
+    c2d.shadowColor = 'rgba(255,90,0,0.7)'; c2d.shadowBlur = 40;
+    dibujarLlama(c2d, cx, anilloY + 12, 250);
+    c2d.restore();
+
+    [[268, 300, 22], [820, 280, 16], [846, 560, 26], [240, 590, 14], [700, 216, 10], [372, 196, 9]]
+      .forEach(([x, y, r]) => dibujarDestello(c2d, x, y, r, 'rgba(255,209,102,0.9)'));
+
+    // ---- Número y etiqueta ----
+    c2d.textAlign = 'center';
+    const tamNum = dias > 999 ? 170 : dias > 99 ? 210 : 250;
+    c2d.font = `700 ${tamNum}px ${TITULO}`;
+    const num = c2d.createLinearGradient(0, 836 - tamNum * 0.75, 0, 836);
+    num.addColorStop(0, '#FFFFFF'); num.addColorStop(1, '#FFE0B8');
+    c2d.save();
+    c2d.shadowColor = 'rgba(0,0,0,0.35)'; c2d.shadowBlur = 30; c2d.shadowOffsetY = 10;
+    c2d.fillStyle = num;
+    c2d.fillText(String(dias), cx, 836);
+    c2d.restore();
+
+    const etiqueta = dias === 1 ? 'DÍA DE RACHA' : 'DÍAS DE RACHA';
+    c2d.font = `800 36px ${CUERPO}`;
+    let anchoEtiqueta = 0;
+    conEspaciado('6px', () => { anchoEtiqueta = c2d.measureText(etiqueta).width; });
+    const etW = anchoEtiqueta + 76, etH = 68, etY = 868;
+    rectRedondo(c2d, cx - etW / 2, etY, etW, etH, etH / 2);
+    const pillNar = c2d.createLinearGradient(cx - etW / 2, 0, cx + etW / 2, 0);
+    pillNar.addColorStop(0, '#FF8A1F'); pillNar.addColorStop(1, '#F25C05');
+    c2d.save(); c2d.shadowColor = 'rgba(242,92,5,0.45)'; c2d.shadowBlur = 24; c2d.shadowOffsetY = 6;
+    c2d.fillStyle = pillNar; c2d.fill(); c2d.restore();
+    c2d.fillStyle = '#FFFFFF';
+    conEspaciado('6px', () => c2d.fillText(etiqueta, cx + 3, etY + 47));
+
+    // ---- Frase ----
+    const frase = dias > 0
+      ? (nombre ? `${nombre} lleva ${dias} día${dias === 1 ? '' : 's'} aprendiendo inglés sin parar` : `¡${dias} día${dias === 1 ? '' : 's'} seguidos aprendiendo inglés!`)
+      : 'Hoy empieza mi racha de inglés';
+    c2d.fillStyle = 'rgba(255,255,255,0.90)';
+    textoAjustado(c2d, frase, cx, 1006, 920, 600, 38, CUERPO);
+
+    // ---- Tarjeta: semana actual + récord y nivel ----
+    const cardX = 80, cardY = 1046, cardW = RACHA_W - 160, cardH = 176;
+    rectRedondo(c2d, cardX, cardY, cardW, cardH, 34);
+    c2d.fillStyle = 'rgba(255,255,255,0.09)'; c2d.fill();
+    c2d.lineWidth = 2; c2d.strokeStyle = 'rgba(255,255,255,0.16)'; c2d.stroke();
+
+    // Días de esta semana (lunes a domingo) que forman parte de la racha.
+    const dia0 = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
+    const hoy = dia0(new Date());
+    const lunes = new Date(hoy); lunes.setDate(hoy.getDate() - ((hoy.getDay() + 6) % 7));
+    const ultimo = ctx.flujo?.racha?.last ? dia0(`${ctx.flujo.racha.last}T12:00:00`) : null;
+    const letras = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
+    const semX0 = cardX + 44, paso = 66, circY = cardY + 68, circR = 24;
+    letras.forEach((l, i) => {
+      const d = new Date(lunes); d.setDate(lunes.getDate() + i);
+      const enRacha = !!ultimo && dias > 0 && d <= ultimo && (ultimo - d) / 86400000 < dias;
+      const esHoy = d.getTime() === hoy.getTime();
+      const x = semX0 + circR + i * paso;
+      c2d.beginPath(); c2d.arc(x, circY, circR, 0, Math.PI * 2);
+      if (enRacha) {
+        const g = c2d.createLinearGradient(x, circY - circR, x, circY + circR);
+        g.addColorStop(0, '#FFB347'); g.addColorStop(1, '#F25C05');
+        c2d.fillStyle = g; c2d.fill();
+        c2d.beginPath();
+        c2d.moveTo(x - 10, circY + 1); c2d.lineTo(x - 3, circY + 8); c2d.lineTo(x + 11, circY - 7);
+        c2d.lineWidth = 5; c2d.lineCap = 'round'; c2d.lineJoin = 'round'; c2d.strokeStyle = '#FFFFFF'; c2d.stroke();
+      } else {
+        c2d.fillStyle = 'rgba(255,255,255,0.10)'; c2d.fill();
+      }
+      if (esHoy) { c2d.beginPath(); c2d.arc(x, circY, circR + 7, 0, Math.PI * 2); c2d.lineWidth = 3; c2d.strokeStyle = '#FFD166'; c2d.stroke(); }
+      c2d.fillStyle = esHoy ? '#FFD166' : 'rgba(255,255,255,0.60)';
+      c2d.font = `${esHoy ? 800 : 600} 24px ${CUERPO}`;
+      c2d.fillText(l, x, cardY + 138);
+    });
+
+    // Separador y datos a la derecha
+    const sepX = semX0 + 7 * paso + 4;
+    c2d.fillStyle = 'rgba(255,255,255,0.16)';
+    c2d.fillRect(sepX, cardY + 30, 2, cardH - 60);
+    const datos = [
+      [nuevoRecord ? '¡NUEVO RÉCORD!' : 'RÉCORD', `${mejor} día${mejor === 1 ? '' : 's'}`, nuevoRecord ? '#FFD166' : 'rgba(255,255,255,0.60)'],
+      ['NIVEL', nivel, 'rgba(255,255,255,0.60)']
+    ];
+    const colX = (sepX + cardX + cardW) / 2;
+    datos.forEach(([titulo, valor, color], i) => {
+      const y = cardY + 44 + i * 76;
+      c2d.fillStyle = color;
+      c2d.font = `800 18px ${CUERPO}`;
+      conEspaciado('2px', () => c2d.fillText(titulo, colX, y));
+      c2d.fillStyle = '#FFFFFF';
+      c2d.font = `700 36px ${TITULO}`;
+      c2d.fillText(valor, colX, y + 40);
+    });
+
+    // ---- Pie: llamada a la acción ----
+    c2d.font = `600 32px ${CUERPO}`;
+    const pre = 'Aprende inglés conmigo en ';
+    const anchoPre = c2d.measureText(pre).width;
+    c2d.font = `800 32px ${CUERPO}`;
+    const anchoUrl = c2d.measureText('abulingo.github.io').width;
+    const pieW = anchoPre + anchoUrl + 70, pieH = 72, pieY = 1250;
+    rectRedondo(c2d, cx - pieW / 2, pieY, pieW, pieH, pieH / 2);
+    c2d.fillStyle = '#FFFFFF'; c2d.fill();
+    c2d.textAlign = 'left';
+    const pieX = cx - (anchoPre + anchoUrl) / 2;
+    c2d.fillStyle = '#334155'; c2d.font = `600 32px ${CUERPO}`;
+    c2d.fillText(pre, pieX, pieY + 47);
+    c2d.fillStyle = '#F26A00'; c2d.font = `800 32px ${CUERPO}`;
+    c2d.fillText('abulingo.github.io', pieX + anchoPre, pieY + 47);
+
+    const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
+    return { blob, dias };
+  }
+
+  function descargarRacha() {
+    if (!rachaURL || !rachaArchivo) return;
+    const a = document.createElement('a');
+    a.href = rachaURL;
+    a.download = rachaArchivo.name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    ctx.showToast('📥 Imagen descargada. ¡Compártela donde quieras!', 3000);
+  }
+
+  async function compartirRachaArchivo(dias) {
+    if (!rachaArchivo) return;
+    const texto = dias > 0
+      ? `Llevo ${dias} día${dias === 1 ? '' : 's'} seguidos aprendiendo inglés con Abulingo 🔥`
+      : 'Hoy empiezo mi racha de inglés con Abulingo 🔥';
+    try {
+      if (navigator.canShare && navigator.canShare({ files: [rachaArchivo] })) {
+        await navigator.share({ files: [rachaArchivo], title: 'Mi racha en Abulingo', text: texto });
+        return;
+      }
+    } catch (err) {
+      // "AbortError" = el usuario cerró la hoja de compartir: no es un fallo.
+      if (err?.name === 'AbortError') return;
+      console.warn('[racha] compartir:', err?.message || err);
+    }
+    descargarRacha();   // navegador sin compartir archivos (escritorio, Firefox…)
+  }
+
+  async function abrirCompartirRacha() {
+    ctx.showModal({
+      icon: '🔥', title: 'Preparando tu imagen…',
+      body: '<div class="w-10 h-10 border-4 border-[#FF7A00] border-t-transparent rounded-full animate-spin mx-auto my-4"></div>',
+      dismissable: true, actions: []
+    });
+
+    let datos = null;
+    try { datos = await dibujarTarjetaRacha(); } catch (err) { console.warn('[racha] imagen:', err); }
+    if (!datos?.blob) {
+      return ctx.showModal({
+        icon: '😕', title: 'No se pudo crear la imagen',
+        body: 'Vuelve a intentarlo en un momento.',
+        actions: [{ label: 'Cerrar', onClick: ctx.closeModal }]
+      });
+    }
+
+    if (rachaURL) URL.revokeObjectURL(rachaURL);
+    rachaArchivo = new File([datos.blob], `racha-abulingo-${datos.dias}-dias.png`, { type: 'image/png' });
+    rachaURL = URL.createObjectURL(datos.blob);
+
+    const puedeCompartir = !!(navigator.canShare && navigator.canShare({ files: [rachaArchivo] }));
+    ctx.showModal({
+      icon: '', title: 'Tu racha, lista para presumir',
+      body: `<img src="${rachaURL}" alt="Mi racha en Abulingo" class="w-full rounded-2xl shadow-lg">`,
+      actions: [
+        ...(puedeCompartir ? [{ label: 'Compartir 🔥', onClick: () => compartirRachaArchivo(datos.dias) }] : []),
+        { label: 'Descargar imagen', style: puedeCompartir ? 'bg-slate-100 text-slate-600' : 'bg-[#FF7A00] text-white', onClick: descargarRacha },
+        { label: 'Cerrar', style: 'bg-white border-2 border-slate-200 text-slate-500', onClick: ctx.closeModal }
+      ]
+    });
+  }
+
+  function primerNombreR(nombre, porDefecto) {
+    const limpio = (nombre || '').toString().replace(/\s+/g, ' ').trim();
+    return limpio ? limpio.split(' ')[0] : porDefecto;
+  }
+  // 🔥 Racha: modal con ánimo y botón para compartir la imagen.
+  function abrirRacha() {
+    const dias = ctx.flujo?.racha?.days || 0;
+    const animos = [
+      '¡Cada día cuenta! Tu cerebro fija mejor el inglés cuando practicas seguido.',
+      'Una racha larga es la mejor señal de que el hábito ya se está formando. ¡No la rompas!',
+      'Constancia > cantidad. Con unos minutos al día vas a llegar lejos.',
+      '¡Vas muy bien! Sigue así y pronto ni lo vas a pensar, será parte de tu rutina.'
+    ];
+    ctx.showModal({
+      icon: '🔥', title: dias > 0 ? `¡Llevas ${dias} día${dias === 1 ? '' : 's'} de racha!` : 'Empieza tu racha hoy',
+      body: dias > 0 ? animos[Math.floor(Math.random() * animos.length)] : 'Estudia hoy para encender tu racha diaria. 🔥',
+      actions: [
+        { label: '<i class="fas fa-share-nodes mr-2"></i>Compartir racha', onClick: abrirCompartirRacha },
+        { label: '¡Seguir así! 💪', style: 'bg-white border-2 border-slate-200 text-slate-500', onClick: ctx.closeModal }
+      ]
+    });
+  }
+  // 🌎 Idioma que aprende la persona (igual que en abulingo.html).
+  function openIdioma() {
+    const es = !!window.AbuIdioma?.aprendeEspanol;
+    const opcion = (v, bandera, nombre, sub) => `
+      <button class="idioma-elegir btn-juice w-full flex items-center gap-3 p-3 rounded-xl border-2 mb-2 text-left" data-v="${v}"
+        style="border-color:${(v === 'es') === es ? '#FF7A00' : '#e2e8f0'};background:${(v === 'es') === es ? '#fff7ed' : '#fff'}">
+        <span class="text-3xl">${bandera}</span>
+        <span><b class="block text-slate-700">${nombre}</b><span class="text-xs text-slate-400">${sub}</span></span>
+        ${(v === 'es') === es ? '<i class="fas fa-check ml-auto text-[#FF7A00]"></i>' : ''}
+      </button>`;
+    ctx.showModal({
+      icon: '🌎', title: 'Idioma que aprendo · Language I learn', size: 'md',
+      body: `<div class="text-left">
+        ${opcion('en', '🇺🇸', 'Inglés · English', 'Aprendo inglés (hablo español)')}
+        ${opcion('es', '🇪🇸', 'Español · Spanish', 'I learn Spanish (I speak English)')}
+        <p class="text-[11px] text-slate-400 text-center mt-2">Tu avance de cada idioma se guarda por separado en las palabras que estudies.</p>
+      </div>`,
+      actions: []
+    });
+    document.querySelectorAll('.idioma-elegir').forEach(b => b.onclick = async () => {
+      if ((b.dataset.v === 'es') === es) return ctx.closeModal();
+      b.disabled = true;
+      try { await window.AbuIdioma.cambiar(b.dataset.v, ctx.dbClient); }
+      catch (err) { b.disabled = false; ctx.showToast('⚠️ ' + err.message); }
+    });
+  }
+  // Barra de arriba (puntos, racha, nivel) en las páginas que la tienen.
+  function pintarHUD() {
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+    if (ctx.userProfile) set('user-points-display', ctx.userProfile.points || 0);
+    if (ctx.flujo) set('streak-days', ctx.flujo.racha?.days || 0);
+    const idi = document.getElementById('idioma-menu-actual');
+    if (idi && !idi.textContent) idi.textContent = window.AbuIdioma?.aprendeEspanol ? '🇪🇸 Spanish' : '🇺🇸 Inglés';
+    const hud = document.getElementById('hud-nivel-label');
+    if (hud) hud.textContent = ctx.flujo?.currentNivel || ctx.userProfile?.nivel || 'A1';
   }
 
   function init(nuevoCtx) {
@@ -742,6 +1136,11 @@
       drop?.classList.add('hidden');
       abrirMisionDia();
     });
+    // Racha y nivel de la barra de arriba (en abulingo.html ya los engancha la página).
+    const racha = document.getElementById('streak-widget');
+    if (racha && !racha.dataset.abuMenu && ctx.pagina !== 'abulingo') { racha.dataset.abuMenu = '1'; racha.addEventListener('click', abrirRacha); }
+    document.getElementById('hud-nivel-btn')?.addEventListener('click', openProgresoNivel);
+    pintarHUD();
     const wa = document.getElementById('whatsapp-comunidad-link');
     if (wa) wa.href = CFG.WHATSAPP_COMUNIDAD_URL;
     actualizarMisionUI();
@@ -749,6 +1148,7 @@
 
   async function refreshBadges() {
     actualizarMisionUI();
+    pintarHUD();
     await refreshMazoBadge();
     // Los certificados se cuentan solo cuando se abre el modal: contar las
     // palabras de los 4 niveles al arrancar sería un gasto innecesario.
@@ -764,7 +1164,8 @@
     mazo: openMazo,
     soporte: openSoporte,
     solicitarTutor: openSolicitarTutor,
-    refreshMazoBadge
+    refreshMazoBadge,
+    racha: abrirRacha, compartirRacha: abrirCompartirRacha, idioma: openIdioma, pintarHUD
   };
 
   window.AbuMenu = AbuMenuAPI;

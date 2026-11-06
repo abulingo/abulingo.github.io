@@ -174,6 +174,7 @@
             <button data-menu="juego3" class="w-full text-left flex items-center px-4 py-2 text-slate-700 hover:bg-orange-50"><i class="fas fa-comments fa-fw w-6 text-[#00897b]"></i><span>Juego 3</span><span class="ml-auto text-[10px] font-black text-[#00897b]">English Talk</span></button>
             <button data-menu="juego4" class="w-full text-left flex items-center px-4 py-2 text-slate-700 hover:bg-orange-50"><i class="fas fa-rocket fa-fw w-6 text-[#c026d3]"></i><span>Juego 4</span><span class="ml-auto text-[10px] font-black text-[#c026d3]">Word Blaster</span></button>
             <button data-menu="juego5" class="w-full text-left flex items-center px-4 py-2 text-slate-700 hover:bg-orange-50"><i class="fas fa-umbrella-beach fa-fw w-6 text-[#0ea5e9]"></i><span>Juego 5</span><span class="ml-auto text-[10px] font-black text-[#0ea5e9]">Abu Island</span></button>
+            <button data-menu="idioma" class="w-full text-left flex items-center px-4 py-2 text-slate-700 hover:bg-slate-100"><i class="fas fa-language fa-fw w-6 text-slate-500"></i><span>Idioma que aprendo</span><span id="idioma-menu-actual" data-no-tr class="ml-auto text-[10px] font-black text-[#FF7A00]"></span></button>
             <button data-menu="mazo" class="w-full text-left flex items-center px-4 py-2 text-slate-700 hover:bg-slate-100"><i class="fas fa-layer-group fa-fw w-6 text-slate-500"></i><span>Mazo</span><span id="mazo-menu-count" class="ml-auto text-[10px] font-black text-[#FF7A00]"></span></button>
             <button data-menu="fonetica" class="w-full text-left flex items-center px-4 py-2 text-slate-700 hover:bg-orange-50"><i class="fas fa-spell-check fa-fw w-6 text-[#0D47A1]"></i><span>Fonética</span><span class="ml-auto text-[10px] font-black text-[#0D47A1]">/ə/</span></button>
             <button data-menu="club" class="w-full text-left flex items-center px-4 py-2 text-slate-700 hover:bg-orange-50"><i class="fas fa-users fa-fw w-6 text-[#FF7A00]"></i><span>Club</span><span class="ml-auto text-[10px] font-black text-slate-400">conversación</span></button>
@@ -201,6 +202,22 @@
 
   <!-- Contenido principal -->
   <main id="app-container" class="hidden w-full max-w-2xl mx-auto px-4 pt-20 flex-1 flex flex-col pb-10">
+    <!-- HUD (igual que en abulingo.html; lo pinta abu-menu.js) -->
+    <div class="w-full flex items-center justify-between gap-2 mb-3">
+      <div class="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-xl shadow-sm border border-slate-200">
+        <i class="fas fa-star text-yellow-400 text-base"></i>
+        <span id="user-points-display" class="font-black text-slate-700 text-base">0</span>
+      </div>
+      <div id="streak-widget" class="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-xl shadow-sm border border-slate-200 cursor-pointer hover:border-orange-300 transition" title="Días seguidos aprendiendo">
+        <i class="fas fa-fire text-orange-500 text-base"></i>
+        <span id="streak-days" class="font-black text-slate-700 text-base">0</span>
+      </div>
+      <button id="hud-nivel-btn" class="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-xl shadow-sm border border-slate-200 hover:border-[#FF7A00] transition" title="Tu progreso del nivel">
+        <span class="text-[10px] font-bold text-slate-400 uppercase">Nivel</span>
+        <span id="hud-nivel-label" class="font-black text-[#FF7A00] text-sm">A1</span>
+        <i class="fas fa-chart-simple text-slate-400 text-[10px]"></i>
+      </button>
+    </div>
     <!--<div class="text-center mb-5">
       <h1 class="font-heading font-black text-2xl sm:text-3xl text-slate-800">🎤 Practica tu pronunciación</h1>
       <p class="text-slate-500 text-sm mt-1.5 px-2">Elige una palabra, una frase o tu propio texto. Escucha el modelo, grábate y recibe consejos de un profesor con IA.</p>
@@ -2149,9 +2166,86 @@
       ? `<div class="space-y-2 mt-2 pt-2 border-t border-slate-100">${dominadas.map(pzFilaFraseHTML).join('')}</div>`
       : '';
     return `
+      <button id="pz-frase-todas" class="w-full btn-juice text-white font-black text-sm py-3 rounded-xl mb-3 flex items-center justify-center gap-2" style="background:#1CB0F6">
+        <i class="fas fa-play"></i> Reproducir todas las frases
+      </button>
       <p class="text-xs font-bold text-slate-400 mb-2">${pendientes.length} de ${pzFrasesNivel.length} frases por repasar</p>
       <div id="pz-frase-lista" class="lista-larga max-h-[420px] overflow-y-auto pr-1">${listaPendientes}${listaDominadas}</div>
       ${toggleDominadas}`;
+  }
+
+  /* ---------- Reproducir todas las frases del nivel ----------
+     Muestra cada frase en grande con su traducción, suena su audio y pasa
+     sola a la siguiente. Se puede pausar, ir atrás/adelante y cerrar. */
+  function pzReproducirTodas(lista) {
+    if (!lista || !lista.length) return;
+    let i = 0, pausado = false, audio = null, timer = null, turno = 0;
+    const ov = document.createElement('div');
+    ov.className = 'fixed inset-0 flex flex-col items-center justify-center p-5 text-center';
+    ov.style.cssText = 'z-index:9999;background:rgba(15,23,42,.96)';
+    ov.innerHTML = `
+      <button id="pzt-cerrar" class="absolute top-4 right-4 text-2xl w-10 h-10" style="color:#fff;opacity:.75" title="Cerrar"><i class="fas fa-xmark"></i></button>
+      <p id="pzt-cont" class="font-bold text-sm mb-4" style="color:rgba(255,255,255,.6)"></p>
+      <div class="w-full flex flex-col items-center justify-center gap-4" style="max-width:36rem;min-height:180px" data-no-tr>
+        <p id="pzt-frase" class="font-heading font-black text-3xl leading-tight" style="color:#fff"></p>
+        <p id="pzt-trad" class="font-bold text-lg" style="color:#FFC800"></p>
+      </div>
+      <div class="w-full rounded-full mt-8 overflow-hidden" style="max-width:36rem;height:6px;background:rgba(255,255,255,.15)"><div id="pzt-barra" class="h-full" style="background:#58CC02;transition:width .3s"></div></div>
+      <div class="flex items-center gap-4 mt-6">
+        <button id="pzt-ant" class="w-12 h-12 rounded-full text-lg" style="background:rgba(255,255,255,.12);color:#fff" title="Anterior"><i class="fas fa-backward-step"></i></button>
+        <button id="pzt-pausa" class="rounded-full text-2xl" style="width:64px;height:64px;background:#FF7A00;color:#fff" title="Pausar"><i class="fas fa-pause"></i></button>
+        <button id="pzt-sig" class="w-12 h-12 rounded-full text-lg" style="background:rgba(255,255,255,.12);color:#fff" title="Siguiente"><i class="fas fa-forward-step"></i></button>
+      </div>`;
+    document.body.appendChild(ov);
+    const $ = (id) => ov.querySelector('#' + id);
+    const parar = () => {
+      turno++; clearTimeout(timer);
+      if (audio) { audio.onended = audio.onerror = null; audio.pause(); audio = null; }
+      try { window.speechSynthesis?.cancel(); } catch {}
+    };
+    const siguiente = (t) => { if (t !== turno || pausado) return; timer = setTimeout(() => { if (t === turno && !pausado) { i++; mostrar(); } }, 1300); };
+    function voz(texto, t) {
+      try {
+        const u = new SpeechSynthesisUtterance(texto); u.lang = 'en-US'; u.rate = 0.9;
+        u.onend = () => siguiente(t); u.onerror = () => siguiente(t);
+        window.speechSynthesis.speak(u);
+      } catch { siguiente(t); }
+    }
+    function mostrar() {
+      parar();
+      if (i >= lista.length) {
+        $('pzt-frase').textContent = '🎉'; $('pzt-trad').textContent = '';
+        $('pzt-cont').textContent = `${lista.length} / ${lista.length}`; $('pzt-barra').style.width = '100%';
+        $('pzt-pausa').innerHTML = '<i class="fas fa-rotate-right"></i>'; pausado = true; i = lista.length;
+        return;
+      }
+      if (i < 0) i = 0;
+      const f = lista[i], t = turno;
+      $('pzt-frase').textContent = f.fraseingles || '';
+      $('pzt-trad').textContent = f.fraseespañol || '';
+      $('pzt-cont').textContent = `${i + 1} / ${lista.length}`;
+      $('pzt-barra').style.width = `${((i + 1) / lista.length) * 100}%`;
+      if (pausado) return;
+      if (f.audio_url) {
+        audio = new Audio(f.audio_url);
+        audio.onended = () => siguiente(t);
+        audio.onerror = () => { if (t === turno) voz(f.fraseingles, t); };
+        audio.play().catch(() => { if (t === turno) voz(f.fraseingles, t); });
+      } else voz(f.fraseingles, t);
+    }
+    const cerrar = () => { parar(); ov.remove(); document.removeEventListener('keydown', tecla); };
+    const tecla = (e) => { if (e.key === 'Escape') cerrar(); };
+    document.addEventListener('keydown', tecla);
+    $('pzt-cerrar').onclick = cerrar;
+    $('pzt-ant').onclick = () => { i = Math.max(0, Math.min(i, lista.length) - 1); mostrar(); };
+    $('pzt-sig').onclick = () => { i = Math.min(lista.length - 1, i + 1); mostrar(); };
+    $('pzt-pausa').onclick = () => {
+      if (i >= lista.length) { i = 0; pausado = false; }
+      else pausado = !pausado;
+      $('pzt-pausa').innerHTML = `<i class="fas fa-${pausado ? 'play' : 'pause'}"></i>`;
+      mostrar();
+    };
+    mostrar();
   }
 
   function bindFraseListaButtons() {
@@ -2164,6 +2258,7 @@
     document.querySelectorAll('.pz-frase-marcar').forEach(btn => {
       btn.onclick = () => pzToggleDominada(btn.dataset.id);
     });
+    document.getElementById('pz-frase-todas')?.addEventListener('click', () => pzReproducirTodas(pzFrasesNivel));
     document.getElementById('pz-ver-dominadas')?.addEventListener('click', () => {
       pzVerDominadas = !pzVerDominadas;
       pintarFraseLista();
