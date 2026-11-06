@@ -7814,7 +7814,7 @@ function openAbuChat() {
     // (el renglón de Puntos del menú se quitó; queda el badge de la barra)
     document.getElementById('user-lingots').textContent = userProfile.lingots || 0;
     const nivelBadge = document.getElementById('user-nivel-dropdown');
-    if (nivelBadge) nivelBadge.textContent = `Nivel ${userProfile.nivel || flujo?.currentNivel || 'A1'}`;
+    if (nivelBadge) nivelBadge.textContent = `Nivel ${flujo?.currentNivel || userProfile.nivel || NIVEL_INICIAL}`;
     const planBadge = document.getElementById('user-plan-dropdown');
     if (planBadge) planBadge.textContent = PLAN_LABEL[miPlan()] || 'Gratis';
     const menuTutor = document.getElementById('menu-solicitar-tutor');
@@ -8312,6 +8312,9 @@ function openAbuChat() {
       fillProfileMenu();
 
       await ensureFlujo();
+      // El nivel de arriba se pinta ya (antes del tutorial), con el del idioma que aprende
+      if (flujo?.currentNivel) document.getElementById('nivel-label').textContent = flujo.currentNivel;
+      fillProfileMenu();
       updateStreakUI();
       updateMisionUI();
       refreshMazoBadge();      // insignia del botón "M"
