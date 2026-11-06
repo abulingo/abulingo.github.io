@@ -982,8 +982,12 @@ function openAbuChat() {
     const st = document.createElement('style');
     st.textContent = 'html,body{background:transparent!important}body>*:not(#modal-root):not(script):not(style){display:none!important}';
     document.head.appendChild(st);
+    // Se espera un instante: si al cerrar se pasa a otra cosa (p. ej. la
+    // práctica del Mazo, que sigue en abulingo.html) no se avisa "cerrar".
     new MutationObserver(() => {
-      if (!modalRoot.children.length) parent.postMessage({ abuEmbed: 'cerrar' }, '*');
+      setTimeout(() => {
+        if (!modalRoot.children.length && !window.__abuEmbedYendo) parent.postMessage({ abuEmbed: 'cerrar' }, '*');
+      }, 0);
     }).observe(modalRoot, { childList: true });
   }
 
@@ -6391,7 +6395,13 @@ function openAbuChat() {
       <div id="mz-actions" class="mt-3"></div>`;
 
     const btn = document.getElementById('mz-practicar');
-    if (btn) btn.onclick = () => { closeModal(); abrirMazoRapido(); };
+    if (btn) btn.onclick = () => {
+      if (new URLSearchParams(location.search).get('embed') === '1' && window.parent !== window) {
+        window.__abuEmbedYendo = true;
+        return parent.postMessage({ abuEmbed: 'ir', url: 'abulingo.html?menu=mazo-rapido' }, location.origin);
+      }
+      closeModal(); abrirMazoRapido();
+    };
 
     const vaciar = document.getElementById('mz-vaciar');
     if (vaciar) vaciar.onclick = () => {
@@ -6607,6 +6617,14 @@ function openAbuChat() {
 
   // ---------- Práctica del mazo (tarjetas → ejercicios) ----------
   function startMazoPractice(words, guardado = null) {
+    // Mazo abierto desde otra página (iframe ?embed=1): la práctica se ve en la
+    // pantalla principal, así que se sigue en abulingo.html con las mismas palabras.
+    if (new URLSearchParams(location.search).get('embed') === '1' && window.parent !== window) {
+      window.__abuEmbedYendo = true;
+      try { sessionStorage.setItem('abu-mazo-practica', JSON.stringify({ words, guardado })); } catch {}
+      parent.postMessage({ abuEmbed: 'ir', url: 'abulingo.html?menu=mazo-practica' }, location.origin);
+      return;
+    }
     closeModal();
     const lbl = document.getElementById('nivel-label');
     if (lbl) lbl.textContent = 'M';   // arriba se ve que estás en el mazo
@@ -7677,6 +7695,12 @@ function openAbuChat() {
     if (menu === 'progreso-nivel') return openProgresoNivel();
     if (menu === 'certificados') return openCertificados();
     if (menu === 'mazo') return openMazo();
+    if (menu === 'mazo-rapido') return abrirMazoRapido();
+    if (menu === 'mazo-practica') {
+      let d = null;
+      try { d = JSON.parse(sessionStorage.getItem('abu-mazo-practica') || 'null'); sessionStorage.removeItem('abu-mazo-practica'); } catch {}
+      return d?.words?.length ? startMazoPractice(d.words, d.guardado || null) : openMazo();
+    }
     if (menu === 'soporte') return openSoporte();
     if (menu === 'solicitar-tutor') return openSolicitarTutor();
   }

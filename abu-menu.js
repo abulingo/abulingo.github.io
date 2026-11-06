@@ -679,7 +679,7 @@
     'ranking-equipo': openRankingEquipo,
     'progreso-nivel': openProgresoNivel,
     'certificados': openCertificados,
-    'mazo': openMazo,
+    'mazo': () => (ctx.pagina && ctx.pagina !== 'abulingo') ? abrirEnAbulingo('mazo') : openMazo(),
     'soporte': openSoporte,
     'solicitar-tutor': openSolicitarTutor,
     'mision': abrirMisionDia,
@@ -1096,6 +1096,25 @@
     const hud = document.getElementById('hud-nivel-label');
     if (hud) hud.textContent = ctx.flujo?.currentNivel || ctx.userProfile?.nivel || 'A1';
   }
+
+  /* El Mazo de abulingo.html (completo: no dominadas por nivel, Excel,
+     phrasal verbs y práctica) se abre aquí mismo, encima de la página,
+     en un iframe que solo muestra su ventana. Si se empieza a practicar,
+     se sigue en abulingo.html (la práctica usa la pantalla principal). */
+  function abrirEnAbulingo(menu) {
+    if (document.getElementById('abu-menu-frame')) return;
+    const f = document.createElement('iframe');
+    f.id = 'abu-menu-frame';
+    f.src = `abulingo.html?embed=1&menu=${encodeURIComponent(menu)}`;
+    f.allow = 'microphone; autoplay';
+    f.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;border:0;z-index:300;background:transparent;color-scheme:normal';
+    document.body.appendChild(f);
+  }
+  window.addEventListener('message', (e) => {
+    if (e.origin !== location.origin) return;
+    if (e.data?.abuEmbed === 'cerrar') document.getElementById('abu-menu-frame')?.remove();
+    if (e.data?.abuEmbed === 'ir' && /^abulingo\.html/.test(e.data.url || '')) location.href = e.data.url;
+  });
 
   function init(nuevoCtx) {
     ctx = Object.assign({}, nuevoCtx);
