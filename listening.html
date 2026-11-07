@@ -870,8 +870,10 @@
     const lista = window.LISTENING_CUENTOS || [];
     const orden = { A1: 1, A2: 2, B1: 3, B2: 4 };
     panel().innerHTML = cabecera('Cuentos para leer y escuchar', 'Elige una historia. Puedes escucharla completa mientras la lees o tocar cualquier frase para oírla sola.') + `
+      ${[['😂 Cuentos divertidos', lista.filter(c => c.divertido)], ['📚 Más cuentos', lista.filter(c => !c.divertido)]].filter(([, l]) => l.length).map(([titulo, grupo]) => `
+      <h3 class="font-heading font-black text-slate-700 text-lg mt-4 mb-2">${titulo}</h3>
       <div class="grid sm:grid-cols-2 gap-3">
-        ${[...lista].sort((a, b) => orden[a.nivel] - orden[b.nivel]).map(c => {
+        ${[...grupo].sort((a, b) => orden[a.nivel] - orden[b.nivel]).map(c => {
           const palabras = c.frases.reduce((n, f) => n + f[0].split(/\s+/).length, 0);
           return `
           <button class="act-card" data-cuento="${c.id}">
@@ -886,10 +888,11 @@
             <div class="flex items-center gap-2 mt-3 text-[10px] font-black text-slate-400 uppercase">
               <span class="rounded-full px-2 py-0.5" style="background:#fff7ed;color:#FF7A00">${c.nivel}</span>
               <span>${palabras} palabras · ${c.frases.length} frases</span>
+              ${c.narrador ? `<span class="ml-auto normal-case" title="Voz del narrador">${c.narrador === 'hombre' ? '👨 Voz de hombre' : '👩 Voz de mujer'}</span>` : ''}
             </div>
           </button>`;
         }).join('')}
-      </div>`;
+      </div>`).join('')}`;
     engancharVolver();
     panel().querySelectorAll('[data-cuento]').forEach(b => b.onclick = () => abrirCuento(b.dataset.cuento));
   }
@@ -902,7 +905,7 @@
     try { trad = localStorage.getItem('abu-cuentos-trad') !== '0'; } catch {}
     cuento = { c, i: 0, sonando: false, traduccion: trad };
     window.scrollTo({ top: 0 });
-    panel().innerHTML = cabecera(`${c.emoji} ${escapeHTML(c.titulo)}`, `${escapeHTML(c.tituloEs)} · Nivel ${c.nivel}`, { volver: renderCuentos }) + `
+    panel().innerHTML = cabecera(`${c.emoji} ${escapeHTML(c.titulo)}`, `${escapeHTML(c.tituloEs)} · Nivel ${c.nivel}${c.narrador ? ` · ${c.narrador === 'hombre' ? '👨 Narra un hombre' : '👩 Narra una mujer'}` : ''}`, { volver: renderCuentos }) + `
       <div id="ct-controles" class="card-3d p-4 mb-3" style="position:sticky;top:68px;z-index:20">
         <div class="flex items-center justify-center gap-3">
           <button id="ct-ant" class="btn-juice w-12 h-12 rounded-full bg-slate-100 text-slate-600" title="Frase anterior"><i class="fas fa-backward-step"></i></button>

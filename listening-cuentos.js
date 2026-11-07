@@ -7,6 +7,8 @@ window.LISTENING_CUENTOS = [
 "titulo": "The Lost Dog",
 "tituloEs": "El perro perdido",
 "voz": "leda",
+"narrador": "mujer",
+"divertido": false,
 "frases": [
 [
 "Tom is eight years old.",
@@ -197,6 +199,8 @@ window.LISTENING_CUENTOS = [
 "titulo": "Grandma's Birthday Cake",
 "tituloEs": "El pastel de cumpleaños de la abuela",
 "voz": "charon",
+"narrador": "hombre",
+"divertido": false,
 "frases": [
 [
 "Today is a special day.",
@@ -391,6 +395,8 @@ window.LISTENING_CUENTOS = [
 "titulo": "The Wrong Bus",
 "tituloEs": "El bus equivocado",
 "voz": "aoede",
+"narrador": "mujer",
+"divertido": false,
 "frases": [
 [
 "My name is Anna, and I am from Brazil.",
@@ -573,6 +579,8 @@ window.LISTENING_CUENTOS = [
 "titulo": "The Key Under the Mat",
 "tituloEs": "La llave debajo del tapete",
 "voz": "puck",
+"narrador": "hombre",
+"divertido": false,
 "frases": [
 [
 "David had a very long day at work.",
@@ -751,6 +759,8 @@ window.LISTENING_CUENTOS = [
 "titulo": "The First Marathon",
 "tituloEs": "El primer maratón",
 "voz": "kore",
+"narrador": "mujer",
+"divertido": false,
 "frases": [
 [
 "When Sarah turned forty, she decided to do something new.",
@@ -933,6 +943,8 @@ window.LISTENING_CUENTOS = [
 "titulo": "A Week Without a Phone",
 "tituloEs": "Una semana sin teléfono",
 "voz": "fenrir",
+"narrador": "hombre",
+"divertido": false,
 "frases": [
 [
 "Jake was seventeen, and he loved his phone.",
@@ -1119,6 +1131,8 @@ window.LISTENING_CUENTOS = [
 "titulo": "The Lighthouse Keeper",
 "tituloEs": "El guardián del faro",
 "voz": "charon",
+"narrador": "hombre",
+"divertido": false,
 "frases": [
 [
 "For forty years, Samuel had been the keeper of the lighthouse on Gray Island.",
@@ -1281,6 +1295,8 @@ window.LISTENING_CUENTOS = [
 "titulo": "The Street Musician",
 "tituloEs": "El músico callejero",
 "voz": "puck",
+"narrador": "hombre",
+"divertido": false,
 "frases": [
 [
 "Every morning at eight o'clock, a young man played the violin at the entrance of the Central subway station.",
@@ -1431,6 +1447,8 @@ window.LISTENING_CUENTOS = [
 "titulo": "The Suitcase Mix-Up",
 "tituloEs": "La confusión de maletas",
 "voz": "kore",
+"narrador": "mujer",
+"divertido": false,
 "frases": [
 [
 "When Emma landed in Rome, she was exhausted after a twelve-hour flight.",
@@ -1593,6 +1611,8 @@ window.LISTENING_CUENTOS = [
 "titulo": "The Community Garden",
 "tituloEs": "El huerto del barrio",
 "voz": "aoede",
+"narrador": "mujer",
+"divertido": false,
 "frases": [
 [
 "Between two tall apartment buildings on Maple Street, there was an empty lot that nobody cared about.",
@@ -1733,6 +1753,1654 @@ window.LISTENING_CUENTOS = [
 [
 "Next to it, there is a wooden sign that says: \"Alvarez Garden. It started with one pair of gloves.\"",
 "A su lado hay un letrero de madera que dice: \"Huerto Álvarez. Empezó con un par de guantes.\""
+]
+]
+},
+{
+"id": "c11",
+"nivel": "A1",
+"emoji": "🐱",
+"titulo": "The Cat Who Wanted to Be a Dog",
+"tituloEs": "El gato que quería ser perro",
+"voz": "zephyr",
+"narrador": "mujer",
+"divertido": true,
+"frases": [
+[
+"This is Mittens.",
+"Esta es Mittens."
+],
+[
+"Mittens is a small gray cat.",
+"Mittens es una gata pequeña y gris."
+],
+[
+"She lives in a house with a family and a big dog called Bruno.",
+"Vive en una casa con una familia y un perro grande llamado Bruno."
+],
+[
+"Mittens has a problem.",
+"Mittens tiene un problema."
+],
+[
+"She does not want to be a cat.",
+"No quiere ser una gata."
+],
+[
+"She wants to be a dog!",
+"¡Quiere ser un perro!"
+],
+[
+"“Dogs have more fun,” she thinks.",
+"“Los perros se divierten más”, piensa."
+],
+[
+"“Everybody loves Bruno. Everybody says, ‘Good boy, Bruno!’”",
+"“Todos quieren a Bruno. Todos dicen: ‘¡Buen chico, Bruno!’”"
+],
+[
+"So, on Monday, Mittens starts her plan.",
+"Así que, el lunes, Mittens empieza su plan."
+],
+[
+"First, she tries to bark.",
+"Primero, intenta ladrar."
+],
+[
+"She opens her mouth and says, “Woof!”",
+"Abre la boca y dice: “¡Guau!”"
+],
+[
+"But it sounds like “Meeeow-oof.”",
+"Pero suena como “Miaaau-uf”."
+],
+[
+"Bruno looks at her and laughs.",
+"Bruno la mira y se ríe."
+],
+[
+"On Tuesday, she tries to play with the ball.",
+"El martes, intenta jugar con la pelota."
+],
+[
+"The dad throws the ball in the garden.",
+"El papá lanza la pelota en el jardín."
+],
+[
+"Bruno runs very fast and brings it back.",
+"Bruno corre muy rápido y la trae de vuelta."
+],
+[
+"Mittens runs too, but the ball is bigger than her head.",
+"Mittens también corre, pero la pelota es más grande que su cabeza."
+],
+[
+"She pushes it with her nose, and it rolls into the pool.",
+"La empuja con la nariz y rueda hasta la piscina."
+],
+[
+"Splash!",
+"¡Plaf!"
+],
+[
+"Mittens does not like water.",
+"A Mittens no le gusta el agua."
+],
+[
+"Not at all.",
+"Para nada."
+],
+[
+"On Wednesday, she tries to eat dog food.",
+"El miércoles, intenta comer comida de perro."
+],
+[
+"She puts her face in Bruno's bowl.",
+"Mete la cara en el plato de Bruno."
+],
+[
+"It smells terrible, but she eats one piece.",
+"Huele horrible, pero se come un pedazo."
+],
+[
+"Her face is very funny, and the kids take a photo.",
+"Pone una cara muy graciosa y los niños le toman una foto."
+],
+[
+"On Thursday, she tries to go for a walk with a leash.",
+"El jueves, intenta salir a pasear con correa."
+],
+[
+"After ten steps, she sits down in the middle of the street.",
+"Después de diez pasos, se sienta en medio de la calle."
+],
+[
+"She does not move.",
+"No se mueve."
+],
+[
+"The mom has to carry her home like a baby.",
+"La mamá tiene que llevarla a casa cargada como a un bebé."
+],
+[
+"On Friday, Mittens is tired and sad.",
+"El viernes, Mittens está cansada y triste."
+],
+[
+"She sits on the window and looks at the birds.",
+"Se sienta en la ventana y mira a los pájaros."
+],
+[
+"Then Bruno comes to her.",
+"Entonces Bruno se le acerca."
+],
+[
+"“Why do you want to be a dog?” he asks.",
+"“¿Por qué quieres ser un perro?”, le pregunta."
+],
+[
+"“Because everybody loves you,” says Mittens.",
+"“Porque todos te quieren”, dice Mittens."
+],
+[
+"Bruno laughs again.",
+"Bruno se ríe otra vez."
+],
+[
+"“Mittens, I want to be a cat!”",
+"“¡Mittens, yo quiero ser un gato!”"
+],
+[
+"“You sleep all day on the sofa.”",
+"“Tú duermes todo el día en el sofá.”"
+],
+[
+"“You climb trees. You never take a bath!”",
+"“Trepas árboles. ¡Nunca te bañas!”"
+],
+[
+"“And the kids love you too. They sleep with you every night.”",
+"“Y los niños también te quieren. Duermen contigo todas las noches.”"
+],
+[
+"Mittens thinks about it.",
+"Mittens lo piensa."
+],
+[
+"“That is true,” she says.",
+"“Es verdad”, dice."
+],
+[
+"That night, she sleeps on the softest pillow in the house.",
+"Esa noche, duerme en la almohada más suave de la casa."
+],
+[
+"And Bruno?",
+"¿Y Bruno?"
+],
+[
+"Bruno tries to climb a tree.",
+"Bruno intenta trepar un árbol."
+],
+[
+"But that is another story.",
+"Pero esa es otra historia."
+]
+]
+},
+{
+"id": "c12",
+"nivel": "A1",
+"emoji": "🦜",
+"titulo": "The Parrot Who Told Secrets",
+"tituloEs": "El loro que contaba secretos",
+"voz": "orus",
+"narrador": "hombre",
+"divertido": true,
+"frases": [
+[
+"Mr. Lopez has a green parrot.",
+"El señor López tiene un loro verde."
+],
+[
+"The parrot's name is Pepe.",
+"El loro se llama Pepe."
+],
+[
+"Pepe is very smart.",
+"Pepe es muy inteligente."
+],
+[
+"He listens to everything, and he repeats everything.",
+"Escucha todo y repite todo."
+],
+[
+"Mr. Lopez lives with his wife, Ana, and his son, Leo.",
+"El señor López vive con su esposa, Ana, y su hijo, Leo."
+],
+[
+"Every day, Pepe learns new words.",
+"Todos los días, Pepe aprende palabras nuevas."
+],
+[
+"He says “Hello!” and “Good morning!”",
+"Dice “¡Hola!” y “¡Buenos días!”"
+],
+[
+"He also says “Where are my keys?” because Mr. Lopez says it every morning.",
+"También dice “¿Dónde están mis llaves?”, porque el señor López lo dice todas las mañanas."
+],
+[
+"One day, Grandma Rosa comes to visit.",
+"Un día, la abuela Rosa viene de visita."
+],
+[
+"She brings a big cake.",
+"Trae un pastel grande."
+],
+[
+"Everybody sits at the table.",
+"Todos se sientan a la mesa."
+],
+[
+"“This cake is delicious, Grandma,” says Mr. Lopez with a smile.",
+"“Este pastel está delicioso, abuela”, dice el señor López con una sonrisa."
+],
+[
+"Then Pepe says, “Grandma's cake is terrible! Terrible!”",
+"Entonces Pepe dice: “¡El pastel de la abuela es horrible! ¡Horrible!”"
+],
+[
+"Everybody stops eating.",
+"Todos dejan de comer."
+],
+[
+"Grandma Rosa looks at Mr. Lopez.",
+"La abuela Rosa mira al señor López."
+],
+[
+"Mr. Lopez's face is very red.",
+"La cara del señor López está muy roja."
+],
+[
+"“Ha ha, the parrot is crazy,” he says.",
+"“Ja, ja, el loro está loco”, dice."
+],
+[
+"But Pepe is not finished.",
+"Pero Pepe no ha terminado."
+],
+[
+"“Leo, your homework! Where is your homework?”",
+"“¡Leo, tu tarea! ¿Dónde está tu tarea?”"
+],
+[
+"Now Leo's face is red too.",
+"Ahora la cara de Leo también está roja."
+],
+[
+"“Leo has no homework,” says Ana.",
+"“Leo no tiene tarea”, dice Ana."
+],
+[
+"“Leo plays video games all night!” says Pepe.",
+"“¡Leo juega videojuegos toda la noche!”, dice Pepe."
+],
+[
+"Ana looks at Leo.",
+"Ana mira a Leo."
+],
+[
+"Leo looks at the floor.",
+"Leo mira el piso."
+],
+[
+"Grandma Rosa starts to laugh.",
+"La abuela Rosa empieza a reírse."
+],
+[
+"She laughs and laughs.",
+"Se ríe y se ríe."
+],
+[
+"“I love this bird,” she says.",
+"“Me encanta este pájaro”, dice."
+],
+[
+"“Tell me more, Pepe.”",
+"“Cuéntame más, Pepe.”"
+],
+[
+"Pepe opens his wings.",
+"Pepe abre las alas."
+],
+[
+"“Ana sings in the shower! Very bad! Very bad!”",
+"“¡Ana canta en la ducha! ¡Muy mal! ¡Muy mal!”"
+],
+[
+"Now Ana's face is red.",
+"Ahora la cara de Ana está roja."
+],
+[
+"The whole family is red, and Grandma is crying with laughter.",
+"Toda la familia está roja, y la abuela llora de la risa."
+],
+[
+"After that day, the family has a new rule.",
+"Después de ese día, la familia tiene una regla nueva."
+],
+[
+"No secrets near the parrot.",
+"Nada de secretos cerca del loro."
+],
+[
+"They talk in the garden.",
+"Hablan en el jardín."
+],
+[
+"They talk in the car.",
+"Hablan en el carro."
+],
+[
+"Sometimes they write little notes.",
+"A veces escriben notitas."
+],
+[
+"But Pepe is smart.",
+"Pero Pepe es inteligente."
+],
+[
+"One week later, Grandma Rosa visits again with another cake.",
+"Una semana después, la abuela Rosa vuelve de visita con otro pastel."
+],
+[
+"Before anybody can speak, Pepe says, “Grandma, I love you!”",
+"Antes de que nadie pueda hablar, Pepe dice: “¡Abuela, te quiero!”"
+],
+[
+"Grandma gives Pepe a big piece of cake.",
+"La abuela le da a Pepe un pedazo grande de pastel."
+],
+[
+"Now Pepe is her favorite in the family.",
+"Ahora Pepe es su favorito de la familia."
+]
+]
+},
+{
+"id": "c13",
+"nivel": "A1",
+"emoji": "🧦",
+"titulo": "The Sock Monster",
+"tituloEs": "El monstruo de los calcetines",
+"voz": "despina",
+"narrador": "mujer",
+"divertido": true,
+"frases": [
+[
+"Lucy is ten years old, and she has a mystery.",
+"Lucy tiene diez años y tiene un misterio."
+],
+[
+"Her socks disappear.",
+"Sus calcetines desaparecen."
+],
+[
+"Not two socks.",
+"No dos calcetines."
+],
+[
+"Only one sock.",
+"Solo un calcetín."
+],
+[
+"Every week, she puts two socks in the washing machine.",
+"Cada semana, mete dos calcetines en la lavadora."
+],
+[
+"And every week, only one sock comes out.",
+"Y cada semana, solo sale uno."
+],
+[
+"Now she has a big box of lonely socks.",
+"Ahora tiene una caja grande de calcetines solitarios."
+],
+[
+"A red sock, a blue sock, a sock with cats, a sock with stars.",
+"Un calcetín rojo, un calcetín azul, un calcetín con gatos, un calcetín con estrellas."
+],
+[
+"“Mom, where are my socks?” she asks.",
+"“Mamá, ¿dónde están mis calcetines?”, pregunta."
+],
+[
+"“I don't know,” says Mom. “Maybe the Sock Monster eats them.”",
+"“No sé”, dice mamá. “Tal vez se los come el monstruo de los calcetines.”"
+],
+[
+"Mom is joking, but Lucy is serious.",
+"Mamá está bromeando, pero Lucy está seria."
+],
+[
+"She wants to catch the Sock Monster.",
+"Quiere atrapar al monstruo de los calcetines."
+],
+[
+"On Saturday, she makes a plan.",
+"El sábado, hace un plan."
+],
+[
+"She puts a camera in front of the washing machine.",
+"Pone una cámara frente a la lavadora."
+],
+[
+"She puts a bell on her favorite sock.",
+"Le pone una campanita a su calcetín favorito."
+],
+[
+"Then she hides behind the door with a flashlight.",
+"Después se esconde detrás de la puerta con una linterna."
+],
+[
+"She waits for one hour.",
+"Espera una hora."
+],
+[
+"Nothing happens.",
+"No pasa nada."
+],
+[
+"She waits for two hours.",
+"Espera dos horas."
+],
+[
+"Nothing happens.",
+"No pasa nada."
+],
+[
+"Then she hears something.",
+"Entonces oye algo."
+],
+[
+"Ding, ding, ding!",
+"¡Tilín, tilín, tilín!"
+],
+[
+"It is the bell!",
+"¡Es la campanita!"
+],
+[
+"Lucy turns on the flashlight.",
+"Lucy enciende la linterna."
+],
+[
+"And she sees... the Sock Monster!",
+"Y ve... ¡al monstruo de los calcetines!"
+],
+[
+"It is small and white, with four legs and a long tail.",
+"Es pequeño y blanco, con cuatro patas y una cola larga."
+],
+[
+"It has her sock in its mouth.",
+"Tiene su calcetín en la boca."
+],
+[
+"It is Coco, the puppy!",
+"¡Es Coco, el cachorro!"
+],
+[
+"Coco runs very fast to the garden.",
+"Coco corre muy rápido al jardín."
+],
+[
+"Lucy runs after him.",
+"Lucy corre detrás de él."
+],
+[
+"Coco goes into his little dog house.",
+"Coco entra en su casita de perro."
+],
+[
+"Lucy looks inside, and she cannot believe it.",
+"Lucy mira adentro y no lo puede creer."
+],
+[
+"There are socks everywhere!",
+"¡Hay calcetines por todas partes!"
+],
+[
+"Twenty, thirty, maybe fifty socks!",
+"¡Veinte, treinta, tal vez cincuenta calcetines!"
+],
+[
+"Coco sleeps on them like a king on his bed.",
+"Coco duerme sobre ellos como un rey en su cama."
+],
+[
+"There are Lucy's socks, Mom's socks and Dad's socks.",
+"Están los calcetines de Lucy, los de mamá y los de papá."
+],
+[
+"There is even a very old sock from Grandpa.",
+"Hasta hay un calcetín muy viejo del abuelo."
+],
+[
+"Lucy calls her parents, and they all laugh.",
+"Lucy llama a sus papás y todos se ríen."
+],
+[
+"Now Lucy has fifty pairs of socks again.",
+"Ahora Lucy vuelve a tener cincuenta pares de calcetines."
+],
+[
+"But Coco is sad without his sock bed.",
+"Pero Coco está triste sin su cama de calcetines."
+],
+[
+"So Lucy gives him the box of lonely socks.",
+"Así que Lucy le regala la caja de calcetines solitarios."
+],
+[
+"Now everybody is happy, and the Sock Monster sleeps very well.",
+"Ahora todos están felices y el monstruo de los calcetines duerme muy bien."
+]
+]
+},
+{
+"id": "c14",
+"nivel": "A2",
+"emoji": "🤖",
+"titulo": "Grandpa and the Robot Vacuum",
+"tituloEs": "El abuelo y la aspiradora robot",
+"voz": "achird",
+"narrador": "hombre",
+"divertido": true,
+"frases": [
+[
+"For his eightieth birthday, Grandpa Joe got a robot vacuum cleaner.",
+"Para su cumpleaños número ochenta, al abuelo Joe le regalaron una aspiradora robot."
+],
+[
+"His grandchildren thought it was a perfect present.",
+"Sus nietos pensaron que era el regalo perfecto."
+],
+[
+"Grandpa did not agree.",
+"El abuelo no estaba de acuerdo."
+],
+[
+"“I don't need a robot,” he said. “I have a broom. My broom never needs batteries.”",
+"“No necesito un robot”, dijo. “Tengo una escoba. Mi escoba nunca necesita baterías.”"
+],
+[
+"But his granddaughter Emma turned it on anyway and went home.",
+"Pero su nieta Emma la encendió de todas formas y se fue a casa."
+],
+[
+"The little round robot started to move around the living room.",
+"El pequeño robot redondo empezó a moverse por la sala."
+],
+[
+"Grandpa watched it carefully from his armchair.",
+"El abuelo lo miraba con atención desde su sillón."
+],
+[
+"The robot went under the sofa and came out with a coin.",
+"El robot se metió debajo del sofá y salió con una moneda."
+],
+[
+"“Hey, that's mine!” said Grandpa.",
+"“¡Oye, eso es mío!”, dijo el abuelo."
+],
+[
+"The robot did not answer. It just kept cleaning.",
+"El robot no contestó. Solo siguió limpiando."
+],
+[
+"Then it hit Grandpa's foot. Once, twice, three times.",
+"Luego chocó con el pie del abuelo. Una, dos, tres veces."
+],
+[
+"“Excuse me, I live here,” Grandpa told it.",
+"“Disculpa, yo vivo aquí”, le dijo el abuelo."
+],
+[
+"He decided to give it a name, because you can't argue with something without a name.",
+"Decidió ponerle un nombre, porque uno no puede discutir con algo que no tiene nombre."
+],
+[
+"He called it Gerald.",
+"Lo llamó Gerald."
+],
+[
+"Over the next few days, Grandpa and Gerald had many problems.",
+"Durante los días siguientes, el abuelo y Gerald tuvieron muchos problemas."
+],
+[
+"Gerald ate one of Grandpa's socks.",
+"Gerald se comió uno de los calcetines del abuelo."
+],
+[
+"Gerald woke him up at six in the morning because Emma had programmed it.",
+"Gerald lo despertó a las seis de la mañana porque Emma lo había programado."
+],
+[
+"And Gerald always got stuck under the bed and played a sad little song.",
+"Y Gerald siempre se quedaba atascado debajo de la cama y tocaba una cancioncita triste."
+],
+[
+"Every time, Grandpa had to get down on the floor to rescue it.",
+"Cada vez, el abuelo tenía que tirarse al piso para rescatarlo."
+],
+[
+"“You're a terrible employee,” he told Gerald.",
+"“Eres un empleado terrible”, le dijo a Gerald."
+],
+[
+"But slowly, something strange happened.",
+"Pero poco a poco, pasó algo extraño."
+],
+[
+"Grandpa started talking to Gerald every morning.",
+"El abuelo empezó a hablar con Gerald todas las mañanas."
+],
+[
+"He told it about the news, the weather and his old job at the train station.",
+"Le contaba las noticias, el clima y su antiguo trabajo en la estación de tren."
+],
+[
+"Gerald listened very well. Better than most people, actually.",
+"Gerald escuchaba muy bien. Mejor que la mayoría de la gente, en realidad."
+],
+[
+"One afternoon, Grandpa put a little hat on Gerald.",
+"Una tarde, el abuelo le puso un sombrerito a Gerald."
+],
+[
+"Then he put a small flag on it.",
+"Luego le puso una banderita."
+],
+[
+"Then he taught the cat to ride on top of it.",
+"Después le enseñó al gato a montarse encima."
+],
+[
+"When Emma came to visit, she found the cat sitting on the robot, going around the kitchen like a king in a parade.",
+"Cuando Emma vino de visita, encontró al gato sentado sobre el robot, dando vueltas por la cocina como un rey en un desfile."
+],
+[
+"Grandpa was clapping and laughing.",
+"El abuelo aplaudía y se reía."
+],
+[
+"“Grandpa, do you like the robot now?” Emma asked.",
+"“Abuelo, ¿ahora sí te gusta el robot?”, preguntó Emma."
+],
+[
+"“The robot? No,” he said. “But Gerald is my friend.”",
+"“¿El robot? No”, dijo. “Pero Gerald es mi amigo.”"
+],
+[
+"A month later, Gerald stopped working.",
+"Un mes después, Gerald dejó de funcionar."
+],
+[
+"Emma offered to buy a new one.",
+"Emma ofreció comprar uno nuevo."
+],
+[
+"“A new one?” said Grandpa, shocked. “You can't just replace Gerald!”",
+"“¿Uno nuevo?”, dijo el abuelo, sorprendido. “¡No puedes simplemente reemplazar a Gerald!”"
+],
+[
+"He took Gerald to a repair shop and waited there for three hours.",
+"Llevó a Gerald a un taller de reparación y esperó allí tres horas."
+],
+[
+"The problem was a sock. Grandpa's sock, from the first week.",
+"El problema era un calcetín. El calcetín del abuelo, de la primera semana."
+],
+[
+"Now Gerald works again, and Grandpa still uses his broom sometimes.",
+"Ahora Gerald funciona otra vez, y el abuelo todavía usa su escoba a veces."
+],
+[
+"But only so Gerald can rest.",
+"Pero solo para que Gerald pueda descansar."
+]
+]
+},
+{
+"id": "c15",
+"nivel": "A2",
+"emoji": "🍕",
+"titulo": "The Pizza That Traveled Too Much",
+"tituloEs": "La pizza que viajó demasiado",
+"voz": "callirrhoe",
+"narrador": "mujer",
+"divertido": true,
+"frases": [
+[
+"It was Friday night, and Sam was very hungry.",
+"Era viernes por la noche y Sam tenía mucha hambre."
+],
+[
+"He ordered a large pepperoni pizza on his phone and sat on the sofa to wait.",
+"Pidió una pizza grande de pepperoni en su teléfono y se sentó en el sofá a esperar."
+],
+[
+"The app said: “Your pizza will arrive in thirty minutes.”",
+"La aplicación decía: “Tu pizza llegará en treinta minutos”."
+],
+[
+"Sam watched the little motorcycle on the map.",
+"Sam miraba la motito en el mapa."
+],
+[
+"At first, everything was normal.",
+"Al principio, todo era normal."
+],
+[
+"The motorcycle left the restaurant and turned onto Main Street.",
+"La moto salió del restaurante y giró hacia la calle principal."
+],
+[
+"Then it turned left. Then left again. Then left again.",
+"Luego giró a la izquierda. Luego otra vez a la izquierda. Y otra vez a la izquierda."
+],
+[
+"The pizza was going in circles.",
+"La pizza estaba dando vueltas en círculo."
+],
+[
+"“Maybe the driver is new,” Sam thought.",
+"“Tal vez el repartidor es nuevo”, pensó Sam."
+],
+[
+"After forty minutes, the motorcycle was at the airport.",
+"Después de cuarenta minutos, la moto estaba en el aeropuerto."
+],
+[
+"Sam lived in the city center. The airport was very far away.",
+"Sam vivía en el centro de la ciudad. El aeropuerto quedaba muy lejos."
+],
+[
+"He called the restaurant.",
+"Llamó al restaurante."
+],
+[
+"“Hello, my pizza is at the airport. Is it going on vacation?”",
+"“Hola, mi pizza está en el aeropuerto. ¿Se va de vacaciones?”"
+],
+[
+"The woman on the phone laughed nervously.",
+"La mujer del teléfono se rió nerviosa."
+],
+[
+"“Don't worry, sir. Our driver, Max, is very... creative.”",
+"“No se preocupe, señor. Nuestro repartidor, Max, es muy... creativo.”"
+],
+[
+"Ten minutes later, the motorcycle was at the zoo.",
+"Diez minutos después, la moto estaba en el zoológico."
+],
+[
+"Then it was at a beach.",
+"Luego estaba en una playa."
+],
+[
+"Then, for some reason, it was in the middle of a lake.",
+"Luego, por alguna razón, estaba en medio de un lago."
+],
+[
+"Sam stopped being angry. Now he was curious.",
+"Sam dejó de estar enojado. Ahora tenía curiosidad."
+],
+[
+"He made popcorn and watched the map like it was a movie.",
+"Hizo palomitas y miró el mapa como si fuera una película."
+],
+[
+"He sent messages to his friends: “My pizza is on a boat.”",
+"Les mandó mensajes a sus amigos: “Mi pizza está en un bote”."
+],
+[
+"Soon, twenty people were following the pizza's adventure.",
+"Pronto, veinte personas estaban siguiendo la aventura de la pizza."
+],
+[
+"After two hours, the doorbell rang.",
+"Después de dos horas, sonó el timbre."
+],
+[
+"A young man was standing there, wet, with sand on his shoes and a feather in his hair.",
+"Un joven estaba allí parado, mojado, con arena en los zapatos y una pluma en el pelo."
+],
+[
+"He was holding a pizza box.",
+"Tenía en las manos una caja de pizza."
+],
+[
+"“I am so sorry,” said Max. “My phone fell into my bag, and the map went crazy.”",
+"“Lo siento muchísimo”, dijo Max. “Mi teléfono se cayó en mi mochila y el mapa se volvió loco.”"
+],
+[
+"“Did you really go on a boat?” asked Sam.",
+"“¿De verdad te subiste a un bote?”, preguntó Sam."
+],
+[
+"“Yes. And a goose tried to steal the pizza at the lake.”",
+"“Sí. Y un ganso intentó robarse la pizza en el lago.”"
+],
+[
+"Sam opened the box.",
+"Sam abrió la caja."
+],
+[
+"The pizza was perfect. It was cold, but it was perfect.",
+"La pizza estaba perfecta. Estaba fría, pero estaba perfecta."
+],
+[
+"“You protected my pizza from a goose,” Sam said. “You are a hero.”",
+"“Protegiste mi pizza de un ganso”, dijo Sam. “Eres un héroe.”"
+],
+[
+"He gave Max a big tip and a towel.",
+"Le dio a Max una buena propina y una toalla."
+],
+[
+"Then he invited him inside to eat a slice.",
+"Luego lo invitó a pasar a comerse una porción."
+],
+[
+"The twenty friends online were very happy with the ending.",
+"Los veinte amigos en internet quedaron muy contentos con el final."
+],
+[
+"Now Sam orders pizza every Friday, and he always asks for Max.",
+"Ahora Sam pide pizza todos los viernes y siempre pide que la traiga Max."
+],
+[
+"It is never fast, but it is always an adventure.",
+"Nunca llega rápido, pero siempre es una aventura."
+]
+]
+},
+{
+"id": "c16",
+"nivel": "A2",
+"emoji": "🐐",
+"titulo": "A Goat at the Wedding",
+"tituloEs": "Una cabra en la boda",
+"voz": "iapetus",
+"narrador": "hombre",
+"divertido": true,
+"frases": [
+[
+"Daniel and Sophie planned their wedding for one whole year.",
+"Daniel y Sophie planearon su boda durante un año entero."
+],
+[
+"Everything had to be perfect.",
+"Todo tenía que ser perfecto."
+],
+[
+"They chose a beautiful farm in the countryside, with green hills and old trees.",
+"Eligieron una finca hermosa en el campo, con colinas verdes y árboles viejos."
+],
+[
+"There were white chairs, flowers everywhere and a giant cake with five levels.",
+"Había sillas blancas, flores por todas partes y un pastel gigante de cinco pisos."
+],
+[
+"On the big day, the weather was sunny and warm.",
+"El gran día, hacía sol y calor."
+],
+[
+"One hundred guests sat in the garden.",
+"Cien invitados se sentaron en el jardín."
+],
+[
+"The music started, and Sophie walked down the aisle in her long white dress.",
+"La música empezó y Sophie caminó hacia el altar con su largo vestido blanco."
+],
+[
+"Daniel was so nervous that his hands were shaking.",
+"Daniel estaba tan nervioso que le temblaban las manos."
+],
+[
+"The priest smiled and began to speak.",
+"El cura sonrió y empezó a hablar."
+],
+[
+"That was when the goat arrived.",
+"Fue entonces cuando llegó la cabra."
+],
+[
+"Nobody knew where it came from.",
+"Nadie sabía de dónde había salido."
+],
+[
+"It was a small brown goat with a little beard and a very confident face.",
+"Era una cabrita café con una barbita y una cara muy segura de sí misma."
+],
+[
+"It walked between the chairs as if it was an important guest.",
+"Caminó entre las sillas como si fuera un invitado importante."
+],
+[
+"First, it ate the flowers from a lady's hat.",
+"Primero, se comió las flores del sombrero de una señora."
+],
+[
+"Then it ate part of the uncle's tie.",
+"Después se comió parte de la corbata del tío."
+],
+[
+"The guests tried not to laugh, but some of them were already crying.",
+"Los invitados intentaban no reírse, pero algunos ya estaban llorando."
+],
+[
+"“Do you, Daniel, take Sophie...” said the priest.",
+"“¿Tú, Daniel, aceptas a Sophie...?”, dijo el cura."
+],
+[
+"“Meeeeh!” said the goat, very loudly.",
+"“¡Meeeeh!”, dijo la cabra, muy fuerte."
+],
+[
+"Now everybody was laughing, including Sophie.",
+"Ahora todos se reían, incluida Sophie."
+],
+[
+"Daniel tried to stay serious and said, “I do.”",
+"Daniel intentó mantenerse serio y dijo: “Sí, acepto”."
+],
+[
+"Then the goat jumped onto the table with the rings.",
+"Entonces la cabra saltó a la mesa de los anillos."
+],
+[
+"It looked at the small box. The small box looked delicious.",
+"Miró la cajita. La cajita se veía deliciosa."
+],
+[
+"“No, no, no!” shouted the best man, and he ran to the table.",
+"“¡No, no, no!”, gritó el padrino, y corrió hacia la mesa."
+],
+[
+"The goat ran too, with the box in its mouth.",
+"La cabra también corrió, con la caja en la boca."
+],
+[
+"For five minutes, the wedding became a race.",
+"Durante cinco minutos, la boda se convirtió en una carrera."
+],
+[
+"The best man, two cousins and a grandmother chased the goat around the garden.",
+"El padrino, dos primos y una abuela persiguieron a la cabra por el jardín."
+],
+[
+"The photographer took pictures of everything.",
+"El fotógrafo tomó fotos de todo."
+],
+[
+"Finally, a little girl offered the goat a piece of bread.",
+"Por fin, una niña le ofreció a la cabra un pedazo de pan."
+],
+[
+"The goat dropped the box immediately and ate the bread.",
+"La cabra soltó la caja de inmediato y se comió el pan."
+],
+[
+"The rings were safe, a little wet, but safe.",
+"Los anillos estaban a salvo, un poco mojados, pero a salvo."
+],
+[
+"Daniel and Sophie got married, and everybody applauded.",
+"Daniel y Sophie se casaron y todos aplaudieron."
+],
+[
+"Later, the farmer came and apologized.",
+"Más tarde, llegó el granjero y pidió disculpas."
+],
+[
+"“Her name is Duchess,” he said. “She loves parties.”",
+"“Se llama Duquesa”, dijo. “Le encantan las fiestas.”"
+],
+[
+"Sophie decided that Duchess could stay for the dinner.",
+"Sophie decidió que Duquesa podía quedarse a la cena."
+],
+[
+"Today, the most popular photo of the wedding is not the kiss.",
+"Hoy, la foto más popular de la boda no es la del beso."
+],
+[
+"It is the grandmother in her elegant dress, running behind a goat.",
+"Es la abuela con su vestido elegante, corriendo detrás de una cabra."
+],
+[
+"Daniel and Sophie have it on their living room wall.",
+"Daniel y Sophie la tienen en la pared de su sala."
+],
+[
+"“Our wedding was not perfect,” Sophie says. “It was better.”",
+"“Nuestra boda no fue perfecta”, dice Sophie. “Fue mejor.”"
+]
+]
+},
+{
+"id": "c17",
+"nivel": "B1",
+"emoji": "👻",
+"titulo": "The Ghost Who Was Afraid of People",
+"tituloEs": "El fantasma que les tenía miedo a las personas",
+"voz": "sulafat",
+"narrador": "mujer",
+"divertido": true,
+"frases": [
+[
+"For two hundred years, Oliver had been the only ghost in Blackwood House.",
+"Durante doscientos años, Oliver había sido el único fantasma de la casa Blackwood."
+],
+[
+"He was a polite ghost who enjoyed reading old books and floating quietly through the halls.",
+"Era un fantasma educado al que le gustaba leer libros viejos y flotar en silencio por los pasillos."
+],
+[
+"He had only one problem: he was terrified of people.",
+"Solo tenía un problema: les tenía pánico a las personas."
+],
+[
+"For many years, this was not important, because the house was empty.",
+"Durante muchos años, esto no fue importante, porque la casa estaba vacía."
+],
+[
+"But one spring morning, a moving truck stopped in front of the door.",
+"Pero una mañana de primavera, un camión de mudanzas se detuvo frente a la puerta."
+],
+[
+"A family of five came in, carrying boxes, a noisy dog and a drum set.",
+"Entró una familia de cinco personas, cargando cajas, un perro ruidoso y una batería."
+],
+[
+"Oliver hid inside the wardrobe and did not come out for three days.",
+"Oliver se escondió dentro del armario y no salió en tres días."
+],
+[
+"Unfortunately, the wardrobe belonged to the youngest daughter, Mia, who was seven and afraid of nothing.",
+"Por desgracia, el armario era de la hija menor, Mia, que tenía siete años y no le tenía miedo a nada."
+],
+[
+"On the fourth night, she opened the doors and found a pale young man trying to look like a coat.",
+"La cuarta noche, abrió las puertas y encontró a un joven pálido intentando parecer un abrigo."
+],
+[
+"“Are you a ghost?” she asked, very interested.",
+"“¿Eres un fantasma?”, preguntó, muy interesada."
+],
+[
+"Oliver screamed so loudly that all the lights in the house went off.",
+"Oliver gritó tan fuerte que se apagaron todas las luces de la casa."
+],
+[
+"Mia just turned on her flashlight and waited for him to finish.",
+"Mia simplemente encendió su linterna y esperó a que terminara."
+],
+[
+"“You're supposed to scare me,” she explained. “Not the other way around.”",
+"“Se supone que tú me asustas a mí”, le explicó. “No al revés.”"
+],
+[
+"“I know,” Oliver said miserably. “I've read all the books about it. I'm just not good at it.”",
+"“Lo sé”, dijo Oliver, desanimado. “He leído todos los libros sobre eso. Simplemente no soy bueno.”"
+],
+[
+"Mia decided that this was a serious situation that needed a teacher.",
+"Mia decidió que esta era una situación seria que necesitaba una maestra."
+],
+[
+"Every night after that, she gave Oliver lessons in being scary.",
+"A partir de entonces, todas las noches le daba a Oliver clases para dar miedo."
+],
+[
+"They practiced walking through walls, which he could do, but only very slowly and with his eyes closed.",
+"Practicaron atravesar paredes, cosa que él podía hacer, pero solo muy despacio y con los ojos cerrados."
+],
+[
+"They practiced moaning, but his moan sounded like someone with a mild stomachache.",
+"Practicaron los quejidos, pero su quejido sonaba como alguien con un leve dolor de estómago."
+],
+[
+"They practiced moving objects, and he accidentally made a cup of tea instead.",
+"Practicaron mover objetos, y él sin querer preparó una taza de té."
+],
+[
+"After two weeks, Mia said he was ready for a real test: her big brother, Jake.",
+"Después de dos semanas, Mia dijo que estaba listo para una prueba de verdad: su hermano mayor, Jake."
+],
+[
+"Jake was fifteen and believed he was the bravest person in the world.",
+"Jake tenía quince años y creía que era la persona más valiente del mundo."
+],
+[
+"At midnight, Oliver floated into Jake's room, raised his arms and said, “Boo.”",
+"A medianoche, Oliver entró flotando al cuarto de Jake, levantó los brazos y dijo: “Bu”."
+],
+[
+"Jake was wearing headphones and playing video games. He didn't even turn around.",
+"Jake tenía puestos los audífonos y estaba jugando videojuegos. Ni siquiera se dio la vuelta."
+],
+[
+"Oliver tried again, louder. Nothing.",
+"Oliver lo intentó de nuevo, más fuerte. Nada."
+],
+[
+"So he politely tapped Jake on the shoulder.",
+"Así que, con educación, le dio un toquecito a Jake en el hombro."
+],
+[
+"Jake turned, saw a transparent man smiling nervously at him, and ran out of the room screaming for his mother.",
+"Jake se volteó, vio a un hombre transparente sonriéndole nervioso y salió corriendo del cuarto gritando para llamar a su mamá."
+],
+[
+"Oliver felt terrible. “Should I apologize?” he asked.",
+"Oliver se sintió fatal. “¿Debería pedirle disculpas?”, preguntó."
+],
+[
+"“No,” Mia said, giving him a high five that went straight through his hand. “That was perfect.”",
+"“No”, dijo Mia, chocándole los cinco con una mano que le atravesó la suya. “Eso fue perfecto.”"
+],
+[
+"The next morning, Jake told everyone at breakfast that the house was haunted.",
+"A la mañana siguiente, Jake les dijo a todos en el desayuno que la casa estaba embrujada."
+],
+[
+"Nobody believed him, especially when Mia said he was probably dreaming about his video games.",
+"Nadie le creyó, sobre todo cuando Mia dijo que seguramente estaba soñando con sus videojuegos."
+],
+[
+"Oliver never became a truly scary ghost.",
+"Oliver nunca llegó a ser un fantasma realmente aterrador."
+],
+[
+"But he became very good at other things, like finding lost keys and helping Mia with her math homework.",
+"Pero se volvió muy bueno en otras cosas, como encontrar llaves perdidas y ayudar a Mia con sus tareas de matemáticas."
+],
+[
+"And every Halloween, he scares Jake once, just for tradition.",
+"Y cada Halloween, asusta a Jake una vez, solo por tradición."
+]
+]
+},
+{
+"id": "c18",
+"nivel": "B1",
+"emoji": "🍪",
+"titulo": "The Great Cookie Mystery",
+"tituloEs": "El gran misterio de las galletas",
+"voz": "algieba",
+"narrador": "hombre",
+"divertido": true,
+"frases": [
+[
+"At the offices of Brightline Insurance, nothing exciting ever happened.",
+"En las oficinas de Seguros Brightline nunca pasaba nada emocionante."
+],
+[
+"People answered emails, drank coffee and complained about the printer.",
+"La gente respondía correos, tomaba café y se quejaba de la impresora."
+],
+[
+"Then, one Monday, Linda from accounting brought a box of homemade chocolate cookies and left it in the kitchen.",
+"Entonces, un lunes, Linda, de contabilidad, trajo una caja de galletas de chocolate caseras y la dejó en la cocina."
+],
+[
+"She put a note on it: “For Linda's birthday party on Friday. DO NOT TOUCH.”",
+"Le puso una nota: “Para la fiesta de cumpleaños de Linda el viernes. NO TOCAR”."
+],
+[
+"On Tuesday, there were twenty-four cookies in the box.",
+"El martes, había veinticuatro galletas en la caja."
+],
+[
+"On Wednesday, there were eighteen.",
+"El miércoles, había dieciocho."
+],
+[
+"Linda was furious, and she sent an email to the entire company with the subject line: “COOKIE THIEF.”",
+"Linda estaba furiosa y mandó un correo a toda la empresa con el asunto: “LADRÓN DE GALLETAS”."
+],
+[
+"That was when Harold decided to get involved.",
+"Fue entonces cuando Harold decidió involucrarse."
+],
+[
+"Harold worked in the IT department, but secretly he had always wanted to be a detective.",
+"Harold trabajaba en el departamento de sistemas, pero en secreto siempre había querido ser detective."
+],
+[
+"He had watched every detective series ever made, some of them twice.",
+"Había visto todas las series de detectives que existían, algunas dos veces."
+],
+[
+"He bought a notebook, wore a long coat to the office and started interviewing his colleagues.",
+"Compró una libreta, fue a la oficina con un abrigo largo y empezó a interrogar a sus compañeros."
+],
+[
+"“Where were you at three o'clock yesterday afternoon?” he asked Mark from sales.",
+"“¿Dónde estaba usted ayer a las tres de la tarde?”, le preguntó a Mark, de ventas."
+],
+[
+"“In a meeting with you, Harold,” said Mark. “You were sitting next to me.”",
+"“En una reunión contigo, Harold”, dijo Mark. “Estabas sentado a mi lado.”"
+],
+[
+"Harold wrote this down very seriously.",
+"Harold lo anotó muy serio."
+],
+[
+"He checked the security cameras, but the camera in the kitchen had been pointing at the ceiling since 2019.",
+"Revisó las cámaras de seguridad, pero la cámara de la cocina llevaba apuntando al techo desde 2019."
+],
+[
+"He looked for chocolate on people's keyboards.",
+"Buscó chocolate en los teclados de la gente."
+],
+[
+"He even made a big board with photos of everyone in the office, connected with red string.",
+"Incluso hizo un tablero grande con fotos de todos los de la oficina, conectadas con hilo rojo."
+],
+[
+"The boss walked past it, looked at it for a long time and decided not to ask.",
+"El jefe pasó frente a él, lo miró un buen rato y decidió no preguntar."
+],
+[
+"On Thursday, there were only six cookies left, and the whole office was involved.",
+"El jueves, solo quedaban seis galletas, y toda la oficina estaba metida en el asunto."
+],
+[
+"People were accusing each other in the hallways.",
+"La gente se acusaba entre sí en los pasillos."
+],
+[
+"Two colleagues stopped talking to each other over a crumb.",
+"Dos compañeros dejaron de hablarse por una miga."
+],
+[
+"That night, Harold hid under a desk near the kitchen with a flashlight and a sandwich.",
+"Esa noche, Harold se escondió debajo de un escritorio cerca de la cocina con una linterna y un sándwich."
+],
+[
+"At ten o'clock, he heard footsteps.",
+"A las diez, oyó pasos."
+],
+[
+"A shadow entered the kitchen, opened the box and took a cookie.",
+"Una sombra entró en la cocina, abrió la caja y tomó una galleta."
+],
+[
+"Harold jumped out and shouted, “Stop right there!”",
+"Harold salió de un salto y gritó: “¡Alto ahí!”"
+],
+[
+"The thief screamed and dropped the cookie.",
+"El ladrón gritó y soltó la galleta."
+],
+[
+"It was Linda.",
+"Era Linda."
+],
+[
+"For a moment, nobody said anything.",
+"Por un momento, nadie dijo nada."
+],
+[
+"“I get hungry when I work late,” Linda finally admitted, “and I didn't want anyone to know I was eating my own party cookies.”",
+"“Me da hambre cuando trabajo hasta tarde”, admitió Linda por fin, “y no quería que nadie supiera que me estaba comiendo las galletas de mi propia fiesta.”"
+],
+[
+"“So you accused the whole company?” asked Harold.",
+"“¿Así que acusaste a toda la empresa?”, preguntó Harold."
+],
+[
+"“I panicked,” she said. “Then everyone got so excited about the investigation that I couldn't stop.”",
+"“Me entró el pánico”, dijo. “Luego todos se emocionaron tanto con la investigación que no pude parar.”"
+],
+[
+"Harold thought about it carefully, and then he made a decision.",
+"Harold lo pensó con cuidado y luego tomó una decisión."
+],
+[
+"On Friday, he announced that the thief had been a raccoon that entered through the air conditioning.",
+"El viernes, anunció que el ladrón había sido un mapache que entraba por el aire acondicionado."
+],
+[
+"Everyone believed it, apologized to each other and enjoyed the party.",
+"Todos se lo creyeron, se pidieron disculpas y disfrutaron la fiesta."
+],
+[
+"Linda baked Harold his own box of cookies as a thank-you.",
+"Linda le horneó a Harold su propia caja de galletas para darle las gracias."
+],
+[
+"He still has the red string board in his office, just in case.",
+"Todavía tiene el tablero con hilo rojo en su oficina, por si acaso."
+]
+]
+},
+{
+"id": "c19",
+"nivel": "B1",
+"emoji": "🗺️",
+"titulo": "The GPS That Had Opinions",
+"tituloEs": "El GPS que tenía opiniones",
+"voz": "autonoe",
+"narrador": "mujer",
+"divertido": true,
+"frases": [
+[
+"When Rachel bought a used car, the seller gave her a small GPS for free.",
+"Cuando Rachel compró un carro usado, el vendedor le regaló un pequeño GPS."
+],
+[
+"“It works perfectly,” he said, and then he walked away a little too quickly.",
+"“Funciona perfectamente”, dijo, y luego se alejó un poco demasiado rápido."
+],
+[
+"On her first trip, Rachel typed the address of her office and started driving.",
+"En su primer viaje, Rachel escribió la dirección de su oficina y arrancó."
+],
+[
+"“In two hundred meters, turn right,” said the GPS in a calm, friendly voice.",
+"“En doscientos metros, gire a la derecha”, dijo el GPS con una voz tranquila y amable."
+],
+[
+"Rachel turned right.",
+"Rachel giró a la derecha."
+],
+[
+"“Good,” said the GPS. “Although, honestly, that was a bit slow.”",
+"“Bien”, dijo el GPS. “Aunque, sinceramente, eso fue un poco lento.”"
+],
+[
+"Rachel looked at the little machine in surprise.",
+"Rachel miró la maquinita sorprendida."
+],
+[
+"She was sure she had imagined it, so she kept driving.",
+"Estaba segura de que se lo había imaginado, así que siguió manejando."
+],
+[
+"At the next traffic light, the GPS spoke again.",
+"En el siguiente semáforo, el GPS volvió a hablar."
+],
+[
+"“Are you really going to work in that sweater? It's Tuesday. We talked about this.”",
+"“¿De verdad vas a ir a trabajar con ese suéter? Es martes. Ya hablamos de esto.”"
+],
+[
+"“We did not talk about this,” Rachel said out loud, and then felt stupid for arguing with a machine.",
+"“No hablamos de esto”, dijo Rachel en voz alta, y luego se sintió tonta por discutir con una máquina."
+],
+[
+"Over the following weeks, things got worse.",
+"Durante las semanas siguientes, las cosas empeoraron."
+],
+[
+"The GPS refused to take her to fast food restaurants.",
+"El GPS se negaba a llevarla a restaurantes de comida rápida."
+],
+[
+"“Recalculating,” it would say, “to a place with vegetables.”",
+"“Recalculando”, decía, “hacia un lugar con verduras”."
+],
+[
+"When she tried to visit her ex-boyfriend to get back some books, the GPS took her to a bookstore instead.",
+"Cuando intentó visitar a su exnovio para recuperar unos libros, el GPS la llevó a una librería."
+],
+[
+"“Buy new ones,” it said. “Trust me.”",
+"“Compra libros nuevos”, dijo. “Confía en mí.”"
+],
+[
+"Rachel took the GPS to an electronics shop to fix it.",
+"Rachel llevó el GPS a una tienda de electrónica para que lo arreglaran."
+],
+[
+"The technician tested it for twenty minutes.",
+"El técnico lo probó durante veinte minutos."
+],
+[
+"“It's completely normal,” he said. “It just gives directions.”",
+"“Es completamente normal”, dijo. “Solo da indicaciones.”"
+],
+[
+"As soon as Rachel got back in the car, the GPS said, “That man needs a haircut.”",
+"En cuanto Rachel se subió otra vez al carro, el GPS dijo: “Ese señor necesita un corte de pelo”."
+],
+[
+"She decided to throw it away, but somehow she never did.",
+"Decidió botarlo, pero por alguna razón nunca lo hizo."
+],
+[
+"The truth was that the GPS was often right.",
+"La verdad era que el GPS a menudo tenía razón."
+],
+[
+"Its shortcuts saved her hours of traffic, and its restaurant choices were excellent.",
+"Sus atajos le ahorraban horas de tráfico y sus elecciones de restaurantes eran excelentes."
+],
+[
+"It also reminded her to call her mother, which nobody else did.",
+"También le recordaba llamar a su mamá, cosa que nadie más hacía."
+],
+[
+"One rainy evening, the GPS suddenly said, “Turn left here.”",
+"Una tarde lluviosa, el GPS dijo de repente: “Gire a la izquierda aquí”."
+],
+[
+"“That's not the way home,” Rachel answered.",
+"“Ese no es el camino a casa”, respondió Rachel."
+],
+[
+"“Turn left,” it repeated. “Please.”",
+"“Gire a la izquierda”, repitió. “Por favor.”"
+],
+[
+"It had never said please before, so she turned.",
+"Nunca antes había dicho por favor, así que giró."
+],
+[
+"The road ended at a small coffee shop with warm yellow lights.",
+"La calle terminaba en un pequeño café con luces amarillas y cálidas."
+],
+[
+"“You have arrived,” said the GPS.",
+"“Ha llegado a su destino”, dijo el GPS."
+],
+[
+"Inside, a man was trying to fix an old GPS that kept telling him his shirt was ugly.",
+"Adentro, un hombre intentaba arreglar un GPS viejo que no paraba de decirle que su camisa era fea."
+],
+[
+"Rachel laughed so hard that she had to sit down.",
+"Rachel se rió tan fuerte que tuvo que sentarse."
+],
+[
+"They spent three hours talking about their impossible machines.",
+"Pasaron tres horas hablando de sus máquinas imposibles."
+],
+[
+"A year later, they got married.",
+"Un año después, se casaron."
+],
+[
+"The two GPS devices now live together on a shelf in their kitchen.",
+"Los dos GPS ahora viven juntos en una repisa de su cocina."
+],
+[
+"They argue every night about the fastest route to the supermarket.",
+"Discuten todas las noches sobre la ruta más rápida al supermercado."
+],
+[
+"Rachel and her husband just turn up the music and smile.",
+"Rachel y su esposo simplemente suben el volumen de la música y sonríen."
+]
+]
+},
+{
+"id": "c20",
+"nivel": "B1",
+"emoji": "🦸",
+"titulo": "The Worst Superhero in Town",
+"tituloEs": "El peor superhéroe de la ciudad",
+"voz": "enceladus",
+"narrador": "hombre",
+"divertido": true,
+"frases": [
+[
+"Kevin was thirty-two years old when he finally got a superpower.",
+"Kevin tenía treinta y dos años cuando por fin obtuvo un superpoder."
+],
+[
+"It happened on a Thursday, when a strange blue light hit him while he was waiting for the bus.",
+"Pasó un jueves, cuando una extraña luz azul lo golpeó mientras esperaba el bus."
+],
+[
+"He went home, feeling excited, and tried to fly.",
+"Se fue a casa emocionado e intentó volar."
+],
+[
+"He couldn't. He tried to lift his car. He couldn't do that either.",
+"No pudo. Intentó levantar su carro. Tampoco pudo."
+],
+[
+"After many experiments, he discovered his power: he could make any object turn into a banana.",
+"Después de muchos experimentos, descubrió su poder: podía convertir cualquier objeto en un banano."
+],
+[
+"Only bananas. Nothing else.",
+"Solo bananos. Nada más."
+],
+[
+"Kevin was disappointed, but he decided that a hero is a hero.",
+"Kevin se decepcionó, pero decidió que un héroe es un héroe."
+],
+[
+"He made a costume with a yellow cape and called himself Captain Banana.",
+"Se hizo un traje con una capa amarilla y se puso el nombre de Capitán Banano."
+],
+[
+"His first mission did not go well.",
+"Su primera misión no salió bien."
+],
+[
+"A thief was running away from a jewelry store with a bag of diamonds.",
+"Un ladrón iba huyendo de una joyería con una bolsa de diamantes."
+],
+[
+"Kevin pointed at the bag and turned the diamonds into bananas.",
+"Kevin señaló la bolsa y convirtió los diamantes en bananos."
+],
+[
+"The thief looked inside, confused, and the store owner was not very happy either.",
+"El ladrón miró adentro, confundido, y el dueño de la joyería tampoco quedó muy contento."
+],
+[
+"Unfortunately, the power only worked in one direction, and the diamonds stayed bananas.",
+"Por desgracia, el poder solo funcionaba en una dirección, y los diamantes se quedaron siendo bananos."
+],
+[
+"His second mission was even worse.",
+"Su segunda misión fue todavía peor."
+],
+[
+"He tried to stop a car that was going too fast and accidentally turned the traffic light into a banana.",
+"Intentó detener un carro que iba muy rápido y sin querer convirtió el semáforo en un banano."
+],
+[
+"There was chaos in the street for two hours.",
+"Hubo caos en la calle durante dos horas."
+],
+[
+"The local newspaper wrote an article about him with the title: “Who Is This Yellow Man and How Do We Stop Him?”",
+"El periódico local escribió un artículo sobre él con el título: “¿Quién es este hombre amarillo y cómo lo detenemos?”"
+],
+[
+"Kevin was ready to quit.",
+"Kevin estaba listo para renunciar."
+],
+[
+"He put the cape in a drawer and went back to his normal job at a shoe store.",
+"Guardó la capa en un cajón y volvió a su trabajo normal en una tienda de zapatos."
+],
+[
+"Then, one Saturday, everything changed.",
+"Entonces, un sábado, todo cambió."
+],
+[
+"A famous villain called Doctor Thunder attacked the city with a giant robot.",
+"Un villano famoso llamado Doctor Trueno atacó la ciudad con un robot gigante."
+],
+[
+"The robot destroyed bridges and fired lasers from its eyes.",
+"El robot destruía puentes y disparaba láseres por los ojos."
+],
+[
+"All the real superheroes were on vacation at a superhero conference in another country.",
+"Todos los superhéroes de verdad estaban de vacaciones en una conferencia de superhéroes en otro país."
+],
+[
+"Kevin watched the news, took out his yellow cape and ran outside.",
+"Kevin vio las noticias, sacó su capa amarilla y salió corriendo."
+],
+[
+"He couldn't turn the whole robot into a banana; it was too big.",
+"No podía convertir todo el robot en un banano; era demasiado grande."
+],
+[
+"But he noticed something small: the robot had only one battery, on its back.",
+"Pero notó algo pequeño: el robot tenía una sola batería, en la espalda."
+],
+[
+"Kevin climbed onto a bus, then onto a building, and pointed carefully.",
+"Kevin se subió a un bus, luego a un edificio, y apuntó con cuidado."
+],
+[
+"The battery became a banana.",
+"La batería se convirtió en un banano."
+],
+[
+"The giant robot stopped, shook a little and then fell down very slowly in the middle of the park.",
+"El robot gigante se detuvo, se sacudió un poco y luego se cayó muy despacio en medio del parque."
+],
+[
+"Doctor Thunder climbed out, furious, holding the banana.",
+"El Doctor Trueno salió furioso, con el banano en la mano."
+],
+[
+"“You defeated me with fruit?” he screamed.",
+"“¿Me derrotaste con una fruta?”, gritó."
+],
+[
+"“Potassium is very important,” said Kevin, and the police arrested the villain.",
+"“El potasio es muy importante”, dijo Kevin, y la policía arrestó al villano."
+],
+[
+"The next day, the newspaper wrote a new article: “Captain Banana Saves the City.”",
+"Al día siguiente, el periódico escribió un artículo nuevo: “El Capitán Banano salva la ciudad”."
+],
+[
+"Kevin still works at the shoe store, but now children ask for his autograph.",
+"Kevin todavía trabaja en la tienda de zapatos, pero ahora los niños le piden autógrafos."
+],
+[
+"And every year, the city celebrates Banana Day, with a parade, music and a lot of smoothies.",
+"Y cada año, la ciudad celebra el Día del Banano, con desfile, música y muchísimos batidos."
 ]
 ]
 }
