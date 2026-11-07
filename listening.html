@@ -24,6 +24,7 @@
   <script defer src="abu-menu.js"></script>
   <script defer src="abu-progreso.js"></script>
   <script defer src="listening-datos.js"></script>
+  <script defer src="listening-cuentos.js"></script>
   <script defer src="listening-datos-extra.js"></script>
   <!-- Quien aprende español: actividades y audios en español (window.LISTENING_DATOS_ES) -->
   <script>if (window.AbuIdioma && AbuIdioma.aprendeEspanol) document.write('<script src="listening-datos-es.js"><\/script>');</script>
@@ -495,8 +496,9 @@
     { id: 'vocab', icon: 'fa-ear-listen', color: 'from-emerald-500 to-green-600', titulo: 'Vocabulario por el oído', desc: 'Palabras frecuentes que conoces escritas pero no reconoces al oírlas.', tiempo: '5 min' },
     { id: 'prediccion', icon: 'fa-wand-magic-sparkles', color: 'from-purple-500 to-fuchsia-600', titulo: 'Predice y escucha', desc: 'Anticipa lo que vas a oír, escucha sin texto y revisa después.', tiempo: '8 min' },
     { id: 'contar', icon: 'fa-hashtag', color: 'from-amber-500 to-orange-500', titulo: 'Cuenta las palabras', desc: 'Frases rápidas: ¿cuántas palabras hay de verdad en lo que oíste?', tiempo: '3 min' },
-    { id: 'shadowing', icon: 'fa-headphones', color: 'from-slate-700 to-slate-900', titulo: 'Shadowing de textos', desc: 'Escucha un texto, ordena sus frases y repítelas encima del audio.', tiempo: '10 min' }
-  ];
+    { id: 'shadowing', icon: 'fa-headphones', color: 'from-slate-700 to-slate-900', titulo: 'Shadowing de textos', desc: 'Escucha un texto, ordena sus frases y repítelas encima del audio.', tiempo: '10 min' },
+    { id: 'cuentos', icon: 'fa-book-open', color: 'from-teal-500 to-cyan-600', titulo: 'Cuentos para leer y escuchar', desc: 'Historias cortas con audio frase por frase y su traducción. Escúchalas completas mientras lees.', tiempo: '5 min' }
+  ].filter(a => !(a.id === 'cuentos' && ES));
 
   function progresoActividad(id) {
     if (id === 'oido') { const o = oidoP(); return [o.hoy.n, OIDO_META]; }
@@ -505,6 +507,7 @@
     if (id === 'vocab') { const l = D.vocab[nivel], v = P.vocab[nivel] || {}; return [l.filter(w => (v[w[0]]?.ok || 0) > 0).length, l.length]; }
     if (id === 'prediccion') { const l = D.prediccion[nivel]; return [l.filter(p => P.prediccion[p.id]).length, l.length]; }
     if (id === 'contar') { const m = P.contar[nivel]?.mejor || 0; return [m, D.contar[nivel].length]; }
+    if (id === 'cuentos') { const l = window.LISTENING_CUENTOS || []; return [l.filter(c => P.cuentos?.[c.id]).length, l.length]; }
     return null;
   }
 
@@ -852,6 +855,185 @@
     if (id === 'prediccion') return renderPrediccionLista();
     if (id === 'contar') return iniciarContar();
     if (id === 'shadowing') return renderListening();
+    if (id === 'cuentos') return renderCuentos();
+  }
+
+  /* ============================================================
+     CUENTOS: historias para leer y escuchar, frase por frase.
+     «Escuchar todo» va frase tras frase resaltando la que suena;
+     tocar una frase la reproduce sola. Audio: listening/cuentos/{id}-{i}.mp3
+  ============================================================ */
+  const CUENTOS_BASE = `${SUPABASE_URL}/storage/v1/object/public/listening/cuentos/`;
+  let cuento = null;   // { c, i, sonando, traduccion }
+
+  function renderCuentos() {
+    const lista = window.LISTENING_CUENTOS || [];
+    const orden = { A1: 1, A2: 2, B1: 3, B2: 4 };
+    panel().innerHTML = cabecera('Cuentos para leer y escuchar', 'Elige una historia. Puedes escucharla completa mientras la lees o tocar cualquier frase para oírla sola.') + `
+      <div class="grid sm:grid-cols-2 gap-3">
+        ${[...lista].sort((a, b) => orden[a.nivel] - orden[b.nivel]).map(c => {
+          const palabras = c.frases.reduce((n, f) => n + f[0].split(/\s+/).length, 0);
+          return `
+          <button class="act-card" data-cuento="${c.id}">
+            <div class="flex items-start gap-3">
+              <div class="act-ico" style="background:#ecfeff;font-size:26px">${c.emoji}</div>
+              <div class="min-w-0 flex-1">
+                <p class="font-heading font-black text-slate-800 leading-tight">${escapeHTML(c.titulo)}</p>
+                <p class="text-[11px] text-slate-500 leading-snug mt-0.5">${escapeHTML(c.tituloEs)}</p>
+              </div>
+              ${P.cuentos?.[c.id] ? '<span class="text-green-600 text-lg" title="Ya lo escuchaste completo">✅</span>' : ''}
+            </div>
+            <div class="flex items-center gap-2 mt-3 text-[10px] font-black text-slate-400 uppercase">
+              <span class="rounded-full px-2 py-0.5" style="background:#fff7ed;color:#FF7A00">${c.nivel}</span>
+              <span>${palabras} palabras · ${c.frases.length} frases</span>
+            </div>
+          </button>`;
+        }).join('')}
+      </div>`;
+    engancharVolver();
+    panel().querySelectorAll('[data-cuento]').forEach(b => b.onclick = () => abrirCuento(b.dataset.cuento));
+  }
+
+  function abrirCuento(idCuento) {
+    stopSpeaking();
+    const c = (window.LISTENING_CUENTOS || []).find(x => x.id === idCuento);
+    if (!c) return renderCuentos();
+    let trad = true;
+    try { trad = localStorage.getItem('abu-cuentos-trad') !== '0'; } catch {}
+    cuento = { c, i: 0, sonando: false, traduccion: trad };
+    window.scrollTo({ top: 0 });
+    panel().innerHTML = cabecera(`${c.emoji} ${escapeHTML(c.titulo)}`, `${escapeHTML(c.tituloEs)} · Nivel ${c.nivel}`, { volver: renderCuentos }) + `
+      <div id="ct-controles" class="card-3d p-4 mb-3" style="position:sticky;top:68px;z-index:20">
+        <div class="flex items-center justify-center gap-3">
+          <button id="ct-ant" class="btn-juice w-12 h-12 rounded-full bg-slate-100 text-slate-600" title="Frase anterior"><i class="fas fa-backward-step"></i></button>
+          <button id="ct-play" class="btn-juice rounded-full text-white text-2xl shadow-lg" style="width:64px;height:64px;background:linear-gradient(135deg,#14b8a6,#0891b2)" title="Escuchar todo"><i class="fas fa-play"></i></button>
+          <button id="ct-sig" class="btn-juice w-12 h-12 rounded-full bg-slate-100 text-slate-600" title="Frase siguiente"><i class="fas fa-forward-step"></i></button>
+        </div>
+        <div class="flex items-center gap-2 mt-3">
+          <div class="barra flex-1"><i id="ct-barra" style="width:0%"></i></div>
+          <span id="ct-cont" class="text-xs font-black text-slate-500">1/${c.frases.length}</span>
+        </div>
+        <div class="flex flex-wrap items-center justify-center gap-2 mt-3">
+          ${VELOCIDADES.map(v => `<button class="ct-vel text-xs font-black rounded-full px-3 py-1 border ${v === velocidad ? 'bg-[#FF7A00] text-white border-[#FF7A00]' : 'bg-white text-slate-500 border-slate-200'}" data-vel="${v}">${v}x</button>`).join('')}
+          <button id="ct-trad" class="text-xs font-black rounded-full px-3 py-1 border bg-white text-slate-500 border-slate-200">${trad ? 'Ocultar traducción' : 'Ver traducción'}</button>
+        </div>
+      </div>
+      <div class="card-3d p-4 sm:p-5" id="ct-texto">
+        ${c.frases.map(([en, es], i) => `
+          <div class="ct-frase rounded-xl px-3 py-2 mb-1 cursor-pointer transition" data-i="${i}">
+            <p class="ct-en text-slate-800 text-[17px] leading-relaxed">${escapeHTML(en)}</p>
+            <p class="ct-es text-[13px] text-slate-400 leading-snug ${trad ? '' : 'hidden'}">${escapeHTML(es)}</p>
+          </div>`).join('')}
+      </div>
+      <p class="text-[11px] text-slate-400 text-center mt-3">Toca cualquier frase para escucharla sola.</p>`;
+    engancharVolver(() => { stopSpeaking(); renderCuentos(); });
+    document.getElementById('ct-play').onclick = () => cuento.sonando ? cuentoPausar() : cuentoReproducir(cuento.i);
+    document.getElementById('ct-ant').onclick = () => cuentoSaltar(cuento.i - 1);
+    document.getElementById('ct-sig').onclick = () => cuentoSaltar(cuento.i + 1);
+    document.getElementById('ct-trad').onclick = e => {
+      cuento.traduccion = !cuento.traduccion;
+      try { localStorage.setItem('abu-cuentos-trad', cuento.traduccion ? '1' : '0'); } catch {}
+      panel().querySelectorAll('.ct-es').forEach(el => el.classList.toggle('hidden', !cuento.traduccion));
+      e.currentTarget.textContent = cuento.traduccion ? 'Ocultar traducción' : 'Ver traducción';
+    };
+    panel().querySelectorAll('.ct-vel').forEach(b => b.onclick = () => {
+      velocidad = parseFloat(b.dataset.vel);
+      try { localStorage.setItem('abu-vel-listening', String(velocidad)); } catch {}
+      panel().querySelectorAll('.ct-vel').forEach(x => {
+        const on = parseFloat(x.dataset.vel) === velocidad;
+        x.className = `ct-vel text-xs font-black rounded-full px-3 py-1 border ${on ? 'bg-[#FF7A00] text-white border-[#FF7A00]' : 'bg-white text-slate-500 border-slate-200'}`;
+      });
+      if (audioActual) audioActual.playbackRate = velocidad;
+    });
+    panel().querySelectorAll('.ct-frase').forEach(el => el.onclick = () => cuentoFraseSola(+el.dataset.i));
+    cuentoMarcar(0, false);
+  }
+
+  function cuentoMarcar(i, desplazar = true) {
+    if (!cuento) return;
+    cuento.i = i;
+    panel().querySelectorAll('.ct-frase').forEach(el => {
+      const on = +el.dataset.i === i;
+      el.style.background = on ? '#fff7ed' : '';
+      el.style.boxShadow = on ? 'inset 4px 0 0 #FF7A00' : '';
+      el.querySelector('.ct-en').style.color = on ? '#c2410c' : '';
+      el.querySelector('.ct-en').style.fontWeight = on ? '700' : '';
+    });
+    const n = cuento.c.frases.length;
+    const barra = document.getElementById('ct-barra'), cont = document.getElementById('ct-cont');
+    if (barra) barra.style.width = `${Math.round((i + 1) / n * 100)}%`;
+    if (cont) cont.textContent = `${i + 1}/${n}`;
+    if (desplazar) panel().querySelector(`.ct-frase[data-i="${i}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  function cuentoBoton() {
+    const b = document.getElementById('ct-play');
+    if (b) b.innerHTML = `<i class="fas ${cuento?.sonando ? 'fa-pause' : 'fa-play'}"></i>`;
+  }
+
+  function cuentoTocar(i) {
+    const [en] = cuento.c.frases[i];
+    return tocarClipUrl(`${CUENTOS_BASE}${cuento.c.id}-${i}.mp3`, en);
+  }
+
+  // Igual que tocarClip, pero con la URL completa (los cuentos están en otra carpeta).
+  function tocarClipUrl(url, texto) {
+    return new Promise(resolve => {
+      if (audioActual) { try { audioActual.pause(); } catch {} }
+      const a = new Audio(url);
+      a.preservesPitch = true; a.mozPreservesPitch = true; a.webkitPreservesPitch = true;
+      a.defaultPlaybackRate = velocidad; a.playbackRate = velocidad;
+      audioActual = a;
+      let hecho = false;
+      const fin = () => { if (hecho) return; hecho = true; if (audioActual === a) audioActual = null; resolve(); };
+      a.onended = fin;
+      a.onpause = () => { if (!a.ended) fin(); };
+      a.onplay = () => { a.playbackRate = velocidad; };
+      a.onerror = () => { if (hecho) return; hecho = true; hablarRespaldo(texto, velocidad).then(resolve); };
+      a.play().catch(() => { if (!hecho) { hecho = true; hablarRespaldo(texto, velocidad).then(resolve); } });
+    });
+  }
+
+  async function cuentoReproducir(desde) {
+    if (!cuento) return;
+    stopSpeaking();
+    const id = colaId;
+    cuento.sonando = true; cuentoBoton();
+    for (let i = desde; i < cuento.c.frases.length; i++) {
+      cuentoMarcar(i);
+      await cuentoTocar(i);
+      if (id !== colaId || !cuento) return;
+      await new Promise(r => setTimeout(r, 350));
+      if (id !== colaId || !cuento) return;
+    }
+    cuento.sonando = false; cuentoBoton();
+    P.cuentos = P.cuentos || {};
+    if (!P.cuentos[cuento.c.id]) { P.cuentos[cuento.c.id] = true; guardar(); }
+    if (typeof showToast === 'function') showToast('🎉 ¡Terminaste el cuento!');
+  }
+
+  function cuentoPausar() {
+    stopSpeaking();
+    if (cuento) { cuento.sonando = false; cuentoBoton(); }
+  }
+
+  function cuentoSaltar(i) {
+    if (!cuento) return;
+    i = Math.max(0, Math.min(cuento.c.frases.length - 1, i));
+    if (cuento.sonando) cuentoReproducir(i);
+    else cuentoFraseSola(i);
+  }
+
+  async function cuentoFraseSola(i) {
+    if (!cuento) return;
+    stopSpeaking();
+    cuento.sonando = false; cuentoBoton();
+    const id = colaId;
+    cuentoMarcar(i, false);
+    const el = panel().querySelector(`.ct-frase[data-i="${i}"]`);
+    el?.classList.add('sonando');
+    await cuentoTocar(i);
+    if (id === colaId) el?.classList.remove('sonando');
   }
 
   function cabecera(titulo, subtitulo, { volver = renderInicio, extra = '' } = {}) {
