@@ -906,19 +906,21 @@
     cuento = { c, i: 0, sonando: false, traduccion: trad };
     window.scrollTo({ top: 0 });
     panel().innerHTML = cabecera(`${c.emoji} ${escapeHTML(c.titulo)}`, `${escapeHTML(c.tituloEs)} · Nivel ${c.nivel}${c.narrador ? ` · ${c.narrador === 'hombre' ? '👨 Narra un hombre' : '👩 Narra una mujer'}` : ''}`, { volver: renderCuentos }) + `
-      <div id="ct-controles" class="card-3d p-4 mb-3" style="position:sticky;top:68px;z-index:20">
-        <div class="flex items-center justify-center gap-3">
-          <button id="ct-ant" class="btn-juice w-12 h-12 rounded-full bg-slate-100 text-slate-600" title="Frase anterior"><i class="fas fa-backward-step"></i></button>
-          <button id="ct-play" class="btn-juice rounded-full text-white text-2xl shadow-lg" style="width:64px;height:64px;background:linear-gradient(135deg,#14b8a6,#0891b2)" title="Escuchar todo"><i class="fas fa-play"></i></button>
-          <button id="ct-sig" class="btn-juice w-12 h-12 rounded-full bg-slate-100 text-slate-600" title="Frase siguiente"><i class="fas fa-forward-step"></i></button>
-        </div>
-        <div class="flex items-center gap-2 mt-3">
-          <div class="barra flex-1"><i id="ct-barra" style="width:0%"></i></div>
-          <span id="ct-cont" class="text-xs font-black text-slate-500">1/${c.frases.length}</span>
-        </div>
-        <div class="flex flex-wrap items-center justify-center gap-2 mt-3">
-          ${VELOCIDADES.map(v => `<button class="ct-vel text-xs font-black rounded-full px-3 py-1 border ${v === velocidad ? 'bg-[#FF7A00] text-white border-[#FF7A00]' : 'bg-white text-slate-500 border-slate-200'}" data-vel="${v}">${v}x</button>`).join('')}
-          <button id="ct-trad" class="text-xs font-black rounded-full px-3 py-1 border bg-white text-slate-500 border-slate-200">${trad ? 'Ocultar traducción' : 'Ver traducción'}</button>
+      <div id="ct-controles" class="card-3d px-3 py-2 mb-3" style="position:sticky;top:68px;z-index:20">
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <div class="flex items-center gap-2">
+            <button id="ct-ant" class="btn-juice w-10 h-10 rounded-full bg-slate-100 text-slate-600" title="Frase anterior"><i class="fas fa-backward-step"></i></button>
+            <button id="ct-play" class="btn-juice rounded-full text-white text-lg shadow" style="width:48px;height:48px;background:linear-gradient(135deg,#14b8a6,#0891b2)" title="Escuchar todo"><i class="fas fa-play"></i></button>
+            <button id="ct-sig" class="btn-juice w-10 h-10 rounded-full bg-slate-100 text-slate-600" title="Frase siguiente"><i class="fas fa-forward-step"></i></button>
+          </div>
+          <div class="flex items-center gap-2 flex-1" style="min-width:110px">
+            <div class="barra flex-1"><i id="ct-barra" style="width:0%"></i></div>
+            <span id="ct-cont" class="text-xs font-black text-slate-500">1/${c.frases.length}</span>
+          </div>
+          <div class="flex flex-wrap items-center gap-1.5">
+            ${VELOCIDADES.map(v => `<button class="ct-vel text-[11px] font-black rounded-full px-2 py-0.5 border ${v === velocidad ? 'bg-[#FF7A00] text-white border-[#FF7A00]' : 'bg-white text-slate-500 border-slate-200'}" data-vel="${v}">${v}x</button>`).join('')}
+            <button id="ct-trad" class="text-[11px] font-black rounded-full px-2 py-0.5 border bg-white text-slate-500 border-slate-200">${trad ? 'Ocultar traducción' : 'Ver traducción'}</button>
+          </div>
         </div>
       </div>
       <div class="card-3d p-4 sm:p-5" id="ct-texto">
@@ -944,7 +946,7 @@
       try { localStorage.setItem('abu-vel-listening', String(velocidad)); } catch {}
       panel().querySelectorAll('.ct-vel').forEach(x => {
         const on = parseFloat(x.dataset.vel) === velocidad;
-        x.className = `ct-vel text-xs font-black rounded-full px-3 py-1 border ${on ? 'bg-[#FF7A00] text-white border-[#FF7A00]' : 'bg-white text-slate-500 border-slate-200'}`;
+        x.className = `ct-vel text-[11px] font-black rounded-full px-2 py-0.5 border ${on ? 'bg-[#FF7A00] text-white border-[#FF7A00]' : 'bg-white text-slate-500 border-slate-200'}`;
       });
       if (audioActual) audioActual.playbackRate = velocidad;
     });
@@ -966,7 +968,22 @@
     const barra = document.getElementById('ct-barra'), cont = document.getElementById('ct-cont');
     if (barra) barra.style.width = `${Math.round((i + 1) / n * 100)}%`;
     if (cont) cont.textContent = `${i + 1}/${n}`;
-    if (desplazar) panel().querySelector(`.ct-frase[data-i="${i}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (desplazar) {
+      // La frase que suena queda justo debajo de los controles fijos (nunca tapada por ellos),
+      // también en tablets en horizontal, donde la pantalla es baja.
+      const el = panel().querySelector(`.ct-frase[data-i="${i}"]`);
+      const ctrl = document.getElementById('ct-controles');
+      if (el) {
+        const abajo = ctrl ? ctrl.getBoundingClientRect().bottom : 80;
+        const r = el.getBoundingClientRect();
+        const libre = window.innerHeight - abajo;
+        const visible = r.top >= abajo + 8 && r.bottom <= window.innerHeight - 8;
+        if (!visible) {
+          const margen = Math.max(12, Math.min(libre * 0.25, libre - r.height - 12));
+          window.scrollTo({ top: window.scrollY + r.top - abajo - margen, behavior: 'smooth' });
+        }
+      }
+    }
   }
 
   function cuentoBoton() {
@@ -1024,15 +1041,15 @@
     if (!cuento) return;
     i = Math.max(0, Math.min(cuento.c.frases.length - 1, i));
     if (cuento.sonando) cuentoReproducir(i);
-    else cuentoFraseSola(i);
+    else cuentoFraseSola(i, true);
   }
 
-  async function cuentoFraseSola(i) {
+  async function cuentoFraseSola(i, desplazar = false) {
     if (!cuento) return;
     stopSpeaking();
     cuento.sonando = false; cuentoBoton();
     const id = colaId;
-    cuentoMarcar(i, false);
+    cuentoMarcar(i, desplazar);
     const el = panel().querySelector(`.ct-frase[data-i="${i}"]`);
     el?.classList.add('sonando');
     await cuentoTocar(i);
