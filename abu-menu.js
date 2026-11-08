@@ -413,9 +413,20 @@
     certDisponibles = datos.filter(d => d.listo).length;
     actualizarBadgeCertificados();
 
-    if (!datos.length) { el.innerHTML = '<p class="text-slate-400 text-center py-4">Todavía no hay palabras cargadas para ningún nivel. 📭</p>'; return; }
+    const bloqueExamen = `
+      <a href="certificacion.html" class="block rounded-2xl p-4 mb-4 text-white shadow-md" style="background:linear-gradient(135deg,#0D47A1,#1e88e5)">
+        <div class="flex items-center gap-3">
+          <div class="text-3xl">📝</div>
+          <div class="flex-1 min-w-0">
+            <p class="font-heading font-black text-lg leading-tight">Exámenes de certificación</p>
+            <p class="text-xs text-blue-100 mt-0.5">Listening · Reading · Grammar · Writing · Speaking. Apruébalo con 95 % o más y obtén tu certificado.</p>
+          </div>
+          <i class="fas fa-chevron-right"></i>
+        </div>
+      </a>`;
+    if (!datos.length) { el.innerHTML = bloqueExamen + '<p class="text-slate-400 text-center py-4">Todavía no hay palabras cargadas para ningún nivel. 📭</p>'; return; }
 
-    el.innerHTML = `
+    el.innerHTML = bloqueExamen + `
       <p class="text-slate-500 text-sm text-center mb-4">Cuando tengas <b>todas las palabras de un nivel dominadas</b> 🏅 recibes tu <b>certificado de Abulingo</b> de ese nivel.</p>
       ${datos.map(d => `
         <div class="rounded-2xl border-2 ${d.listo ? 'border-green-300 bg-green-50' : 'border-slate-200 bg-white'} p-4 mb-3">

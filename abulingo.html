@@ -5706,17 +5706,42 @@ function openAbuChat() {
 
     const conContenido = await getNiveles();
     const niveles = sortNiveles([...new Set([...NIVELES_FIJOS, ...conContenido])]);
-    const datos = (await Promise.all(niveles.map(n => getCertProgreso(n)))).filter(d => d.total > 0);
+    const [datosTodos, examenes] = await Promise.all([
+      Promise.all(niveles.map(n => getCertProgreso(n))),
+      dbClient.from('examenes_certificacion').select('nivel,puntaje').eq('aprobado', true).then(r => r.data || [], () => [])
+    ]);
+    // Certificado por EXAMEN (certificacion.html): aprobado con 95 % o más.
+    const porExamen = {};
+    for (const e of examenes) porExamen[e.nivel] = Math.max(porExamen[e.nivel] || 0, Number(e.puntaje));
+    const datos = datosTodos.filter(d => d.total > 0 || porExamen[d.nivel]);
 
-    certDisponibles = datos.filter(d => d.listo).length;
+    certDisponibles = datos.filter(d => d.listo || porExamen[d.nivel]).length;
     actualizarBadgeCertificados();
 
+    const bloqueExamen = `
+      <a href="certificacion.html" class="block rounded-2xl p-4 mb-4 text-white shadow-md" style="background:linear-gradient(135deg,#0D47A1,#1e88e5)">
+        <div class="flex items-center gap-3">
+          <div class="text-3xl">📝</div>
+          <div class="flex-1 min-w-0">
+            <p class="font-heading font-black text-lg leading-tight">Exámenes de certificación</p>
+            <p class="text-xs text-blue-100 mt-0.5">Listening · Reading · Grammar · Writing · Speaking. Apruébalo con 95 % o más y obtén tu certificado, sin importar cuántas palabras lleves.</p>
+          </div>
+          <i class="fas fa-chevron-right"></i>
+        </div>
+      </a>
+      ${Object.keys(porExamen).length ? `<div class="mb-4">${sortNiveles(Object.keys(porExamen)).map(nv => `
+        <div class="rounded-2xl border-2 border-green-300 bg-green-50 p-4 mb-3">
+          <div class="flex items-center justify-between"><span class="font-heading font-black text-lg text-slate-800">Nivel ${escapeHTML(nv)} · por examen</span>
+            <span class="bg-green-500 text-white text-[10px] font-black px-2.5 py-1 rounded-full uppercase">🎓 ${porExamen[nv]}%</span></div>
+          <button class="cert-descargar btn-juice bg-[#0D47A1] text-white font-bold py-2.5 rounded-xl w-full mt-3" data-nivel="${escapeHTML(nv)}">🎓 Descargar mi certificado</button>
+        </div>`).join('')}</div>` : ''}`;
+
     if (!datos.length) {
-      el.innerHTML = `<p class="text-slate-400 text-center py-4">Todavía no hay palabras cargadas para ningún nivel. 📭</p>`;
+      el.innerHTML = bloqueExamen + `<p class="text-slate-400 text-center py-4">Todavía no hay palabras cargadas para ningún nivel. 📭</p>`;
       return;
     }
 
-    const tarjetas = datos.map(d => `
+    const tarjetas = datos.filter(d => d.total > 0).map(d => `
       <div class="rounded-2xl border-2 ${d.listo ? 'border-green-300 bg-green-50' : 'border-slate-200 bg-white'} p-4 mb-3">
         <div class="flex items-center justify-between mb-1.5">
           <span class="font-heading font-black text-lg text-slate-800">Nivel ${escapeHTML(d.nivel)}</span>
@@ -5737,9 +5762,9 @@ function openAbuChat() {
           : `<button class="cert-lock w-full mt-3 py-2.5 rounded-xl font-bold bg-slate-100 text-slate-400 cursor-not-allowed" disabled>🔒 Aún no tienes palabras dominadas</button>`}
       </div>`).join('');
 
-    el.innerHTML = `
+    el.innerHTML = bloqueExamen + `
       <p class="text-slate-500 text-sm text-center mb-4">
-        Cuando tengas <b>todas las palabras de un nivel dominadas</b> 🏅 recibes tu <b>certificado de Abulingo</b> de ese nivel.
+        También puedes certificarte por vocabulario: cuando tengas <b>todas las palabras de un nivel dominadas</b> 🏅 recibes tu <b>certificado de Abulingo</b> de ese nivel.
         Presenta la prueba para comprobar que de verdad las dominas: te mostramos cada palabra en español y la escribes en inglés.
       </p>
       ${tarjetas}
@@ -5841,7 +5866,12 @@ function openAbuChat() {
     c.strokeStyle = '#f5b301'; c.lineWidth = 4; c.beginPath(); c.moveTo(cx - (vertical ? 400 : 560), y + 30); c.lineTo(cx + (vertical ? 400 : 560), y + 30); c.stroke();
     // Logro
     y += vertical ? 140 : 100;
-    const lineas = vertical
+    const pje = d.puntaje != null ? `${Math.round(Number(d.puntaje) * 10) / 10} %` : '';
+    const lineas = d.tipo === 'examen'
+      ? (vertical
+        ? [`aprobó el examen de certificación con ${pje}`, 'en listening, reading, grammar, writing', 'y speaking del nivel']
+        : [`aprobó con ${pje} el examen de certificación (listening, reading,`, 'grammar, writing y speaking) del nivel'])
+      : vertical
       ? ['aprobó la prueba de vocabulario y domina', `las ${d.total} palabras del nivel`]
       : [`aprobó la prueba de vocabulario y domina las ${d.total} palabras del nivel`];
     for (const l of lineas) { certTexto(c, l, cx, y, { tam: 40, peso: 400, color: '#475569', ancho: W - 200 }); y += 56; }
@@ -5904,14 +5934,14 @@ function openAbuChat() {
     }
     el.innerHTML = spinnerHTML();
     const cert = await getCertProgreso(nivel);
-    let fecha = certFecha(nivel), codigo = certCodigo(nivel), registrado = false;
+    let fecha = certFecha(nivel), codigo = certCodigo(nivel), registrado = false, tipo = '', puntaje = null;
     // Registro en el servidor: así el código se puede verificar en verificar.html
     try {
       const { data, error } = await dbClient.rpc('emitir_certificado', { p_nivel: nivel, p_codigo: codigo, p_fecha: fecha });
       if (error) throw error;
-      if (data && data[0]) { fecha = data[0].fecha; codigo = data[0].codigo; nombre = data[0].nombre; registrado = true; }
+      if (data && data[0]) { fecha = data[0].fecha; codigo = data[0].codigo; nombre = data[0].nombre; tipo = data[0].tipo || ''; puntaje = data[0].puntaje; registrado = true; }
     } catch (err) { console.warn('emitir_certificado', err); }
-    const d = { nivel, nombre, total: cert.total, fechaTxt: certFechaTexto(fecha), codigo };
+    const d = { nivel, nombre, total: cert.total, fechaTxt: certFechaTexto(fecha), codigo, tipo, puntaje };
     const base = `Certificado-Abulingo-${nivel}-${nombre.replace(/[^\p{L}\p{N}]+/gu, '_')}`;
     const vista = await dibujarCertificado(d, false);
     el.innerHTML = `

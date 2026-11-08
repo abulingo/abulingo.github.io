@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <script src="abu-idioma.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Abulingo - Exámenes de certificación</title>
+  <link rel="preconnect" href="https://eylwewhqeaaqkgcxhgyv.supabase.co" crossorigin>
+  <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.1/dist/umd/supabase.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+  <script defer src="certificacion-examenes.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Work+Sans:wght@400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+  <link rel="icon" href="icono.png" type="image/x-icon">
+  <link rel="stylesheet" href="app.css">
+  <style>
+    body { background-color: #f0f4f8; font-family: 'Work Sans', sans-serif; overflow-x: hidden; color: #1e293b; }
+    .font-heading { font-family: 'Space Grotesk', sans-serif; }
+    .card-3d { background: #fff; border-radius: 24px; box-shadow: 0 10px 0 #cbd5e1, 0 10px 20px rgba(0,0,0,0.1); border: 2px solid #e2e8f0; }
+    .btn-juice { transition: all .1s; border-bottom: 6px solid rgba(0,0,0,.2); }
+    .btn-juice:active { transform: translateY(6px); border-bottom-width: 0; }
+    .btn-juice:disabled { opacity: .5; pointer-events: none; }
+    .ex-tab { flex: 1; min-width: 0; padding: 8px 4px; border-radius: 14px; font-weight: 900; font-size: 11px; color: #64748b; background: #f1f5f9; border: 2px solid transparent; }
+    .ex-tab.on { background: #fff7ed; color: #c2410c; border-color: #FF7A00; }
+    .ex-tab.ok { color: #15803d; }
+    .op { display: flex; gap: 10px; align-items: flex-start; width: 100%; text-align: left; padding: 10px 12px; border-radius: 14px; border: 2px solid #e2e8f0; background: #fff; margin-top: 6px; font-size: 15px; }
+    .op:hover { border-color: #fdba74; }
+    .op.sel { border-color: #FF7A00; background: #fff7ed; font-weight: 700; }
+    .op .l { width: 24px; height: 24px; flex-shrink: 0; border-radius: 99px; background: #f1f5f9; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 900; color: #64748b; }
+    .op.sel .l { background: #FF7A00; color: #fff; }
+    .campo { width: 100%; border: 2px solid #cbd5e1; border-radius: 14px; padding: 10px 12px; font-size: 15px; background: #fff; }
+    .campo:focus { outline: none; border-color: #FF7A00; }
+    .barra { height: 8px; background: #e2e8f0; border-radius: 99px; overflow: hidden; }
+    .barra > i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg,#FF7A00,#fb923c); }
+    .grabando { animation: pulso 1.1s ease-in-out infinite; background: #ef4444 !important; }
+    @keyframes pulso { 0%,100% { transform: scale(1); } 50% { transform: scale(1.06); } }
+    .texto-lectura { font-size: 16px; line-height: 1.75; white-space: pre-line; }
+  </style>
+</head>
+<body class="min-h-screen">
+  <header class="fixed top-0 left-0 w-full bg-white/95 backdrop-blur border-b border-slate-200 z-50">
+    <div class="max-w-3xl mx-auto flex items-center gap-3 px-4 h-14">
+      <a href="abulingo.html" class="font-heading font-bold text-base leading-none"><span style="color:#0D47A1;">Abulingo</span><span style="color:#FF7A00;">.</span></a>
+      <span class="text-xs font-black text-slate-400 uppercase tracking-wide truncate">Certificación</span>
+      <div id="reloj" class="hidden ml-auto items-center gap-1.5 font-black text-sm rounded-full px-3 py-1 bg-slate-100 text-slate-700"><i class="fas fa-stopwatch"></i><span id="reloj-txt">--:--</span></div>
+      <a id="btn-salir" href="abulingo.html" class="ml-auto text-sm font-bold text-slate-500 hover:text-[#FF7A00]"><i class="fas fa-arrow-left mr-1"></i>Volver</a>
+    </div>
+  </header>
+
+  <main class="w-full max-w-2xl mx-auto px-4 pt-20 pb-16">
+    <div id="vista"><div class="text-center py-20 text-slate-400"><i class="fas fa-circle-notch fa-spin text-3xl text-[#FF7A00]"></i></div></div>
+  </main>
+
+<script>
+(() => {
+  const SUPABASE_URL = 'https://eylwewhqeaaqkgcxhgyv.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV5bHdld2hxZWFhcWtnY3hoZ3l2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQzMzAxODgsImV4cCI6MjA5OTkwNjE4OH0.Ji8huj-ny2VcMT5UQSjOuwUKz4k23quNS0fLk-gZr7A';
+  const AUDIO_BASE = `${SUPABASE_URL}/storage/v1/object/public/listening/examenes/`;
+  const NIVELES = ['A1', 'A2', 'B1', 'B2', 'C1'];
+  const APROBAR = 95;
+  const MAX_REPRODUCCIONES = 2;        // cada pista del listening se puede oír 2 veces
+  const MAX_DICTADO = 3;               // cada frase del dictado, 3 veces
+  const SECCIONES = [
+    { id: 'listening', icono: 'fa-headphones', nombre: 'Listening' },
+    { id: 'reading', icono: 'fa-book-open', nombre: 'Reading' },
+    { id: 'uso', icono: 'fa-spell-check', nombre: 'Grammar' },
+    { id: 'writing', icono: 'fa-pen-nib', nombre: 'Writing' },
+    { id: 'speaking', icono: 'fa-microphone', nombre: 'Speaking' },
+  ];
+  const NOMBRE_HAB = { listening: '🎧 Listening', reading: '📖 Reading', uso: '🧩 Grammar & Vocabulary', writing: '✍️ Writing', speaking: '🗣️ Speaking' };
+
+  let db, usuario, ex = null, R = null, seccion = 'listening', relojTimer = null, audioActual = null, grabacion = null;
+  const $ = id => document.getElementById(id);
+  const vista = () => $('vista');
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => '&#' + c.charCodeAt(0) + ';');
+  const palabras = s => String(s || '').trim().split(/\s+/).filter(Boolean).length;
+  const LETRAS = 'ABCD';
+
+  function toast(msg) {
+    const t = document.createElement('div');
+    t.className = 'fixed left-1/2 -translate-x-1/2 bottom-6 bg-slate-800 text-white font-bold px-4 py-2.5 rounded-xl shadow-xl z-[300] text-sm text-center';
+    t.style.maxWidth = '90vw'; t.textContent = msg; document.body.appendChild(t);
+    setTimeout(() => t.remove(), 3200);
+  }
+
+  /* ---------- Borrador: si recargas la página no pierdes el examen ---------- */
+  const claveBorrador = nv => `abu-examen-${usuario.id}-${nv}`;
+  function guardarBorrador() { try { localStorage.setItem(claveBorrador(ex.nivel), JSON.stringify(R)); } catch {} }
+  function leerBorrador(nv) { try { return JSON.parse(localStorage.getItem(claveBorrador(nv)) || 'null'); } catch { return null; } }
+  function borrarBorrador(nv) { try { localStorage.removeItem(claveBorrador(nv)); } catch {} }
+
+  /* ============================================================
+     INICIO: lista de niveles con su estado
+  ============================================================ */
+  async function inicio() {
+    pararTodo();
+    ex = null; $('reloj').classList.add('hidden'); $('reloj').classList.remove('flex'); $('btn-salir').classList.remove('hidden');
+    window.onbeforeunload = null;
+    vista().innerHTML = `<div class="text-center py-20 text-slate-400"><i class="fas fa-circle-notch fa-spin text-3xl text-[#FF7A00]"></i></div>`;
+    let intentos = [];
+    const { data, error } = await db.from('examenes_certificacion').select('nivel,puntaje,aprobado,creado_en,habilidades').order('creado_en', { ascending: false });
+    if (!error) intentos = data || [];
+    const estado = nv => {
+      const de = intentos.filter(i => i.nivel === nv);
+      const mejor = de.reduce((m, i) => Math.max(m, Number(i.puntaje)), 0);
+      const aprobado = de.some(i => i.aprobado);
+      const ult = de[0];
+      const proximo = ult && !ult.aprobado ? new Date(new Date(ult.creado_en).getTime() + 24 * 3600e3) : null;
+      return { intentos: de.length, mejor, aprobado, proximo: proximo && proximo > new Date() ? proximo : null, borrador: !!leerBorrador(nv) };
+    };
+    const examenes = window.ABU_EXAMENES || {};
+    vista().innerHTML = `
+      <div class="card-3d p-6 mb-6">
+        <div class="text-4xl mb-2">🎓</div>
+        <h1 class="font-heading font-bold text-2xl text-slate-800">Exámenes de certificación</h1>
+        <p class="text-slate-500 mt-2 text-[15px] leading-relaxed">Demuestra tu nivel de inglés en las <b>cinco habilidades</b> y obtén tu certificado oficial de Abulingo, verificable con un código QR.</p>
+        <div class="grid grid-cols-2 sm:grid-cols-5 gap-2 mt-4 text-center text-[11px] font-black text-slate-600">
+          ${SECCIONES.map(s => `<div class="rounded-xl bg-slate-50 border border-slate-200 py-2"><i class="fas ${s.icono} text-[#FF7A00] text-base"></i><div class="mt-1">${s.nombre}</div><div class="text-slate-400 font-bold">20 %</div></div>`).join('')}
+        </div>
+        <ul class="text-sm text-slate-600 mt-4 space-y-1.5">
+          <li>✅ Apruebas con <b>${APROBAR} % o más</b> del puntaje total. Es exigente a propósito: el certificado debe valer.</li>
+          <li>⏱️ Cada examen tiene tiempo límite. Al acabarse el tiempo se envía lo que tengas.</li>
+          <li>🎧 Cada audio se puede escuchar <b>solo ${MAX_REPRODUCCIONES} veces</b>.</li>
+          <li>🎙️ Necesitas <b>micrófono</b>, un lugar silencioso y el navegador <b>Chrome</b> (o la app de Abulingo).</li>
+          <li>✍️ En writing no se puede pegar texto: escríbelo tú.</li>
+          <li>🔁 Si no apruebas, puedes intentarlo otra vez <b>24 horas después</b>.</li>
+        </ul>
+      </div>
+      <div class="space-y-3">
+        ${NIVELES.filter(nv => examenes[nv]).map(nv => {
+          const e = examenes[nv], st = estado(nv);
+          const etiqueta = st.aprobado ? `<span class="bg-green-500 text-white text-[10px] font-black px-2.5 py-1 rounded-full uppercase">🎓 Aprobado · ${st.mejor}%</span>`
+            : st.intentos ? `<span class="text-xs font-black text-slate-400">Mejor: ${st.mejor}%</span>` : '';
+          const boton = st.aprobado
+            ? `<a href="abulingo.html?menu=certificados" class="btn-juice block text-center bg-[#0D47A1] text-white font-bold py-2.5 rounded-xl mt-3">🎓 Descargar mi certificado</a>`
+            : st.proximo
+              ? `<button disabled class="w-full mt-3 py-2.5 rounded-xl font-bold bg-slate-100 text-slate-400">🔒 Nuevo intento el ${st.proximo.toLocaleString('es', { weekday: 'long', hour: '2-digit', minute: '2-digit' })}</button>`
+              : `<button class="ex-empezar btn-juice w-full bg-[#FF7A00] text-white font-bold py-2.5 rounded-xl mt-3" data-nivel="${nv}">${st.borrador ? '▶️ Continuar mi examen' : '📝 Presentar examen'}</button>`;
+          return `
+          <div class="rounded-2xl border-2 ${st.aprobado ? 'border-green-300 bg-green-50' : 'border-slate-200 bg-white'} p-4">
+            <div class="flex items-center justify-between gap-2">
+              <div><span class="font-heading font-black text-lg text-slate-800">Nivel ${nv}</span> <span class="text-sm text-slate-500">· ${esc(e.nombre)}</span></div>
+              ${etiqueta}
+            </div>
+            <p class="text-xs text-slate-500 mt-1"><i class="fas fa-stopwatch mr-1"></i>${e.minutos} minutos · ${st.intentos} intento${st.intentos === 1 ? '' : 's'}</p>
+            ${boton}
+            ${st.aprobado ? `<button class="ex-empezar w-full mt-2 text-xs font-bold text-slate-400 hover:text-[#FF7A00]" data-nivel="${nv}" data-repetir="1">Volver a presentarlo para mejorar mi puntaje</button>` : ''}
+          </div>`;
+        }).join('')}
+      </div>`;
+    vista().querySelectorAll('.ex-empezar').forEach(b => b.onclick = () => preparar(b.dataset.nivel));
+  }
+
+  /* ============================================================
+     ANTES DE EMPEZAR: prueba de micrófono y confirmación
+  ============================================================ */
+  function preparar(nv) {
+    const e = window.ABU_EXAMENES[nv];
+    const borrador = leerBorrador(nv);
+    if (borrador) return empezar(nv, borrador);
+    const hayVoz = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+    vista().innerHTML = `
+      <div class="card-3d p-6">
+        <button id="pr-volver" class="text-sm font-bold text-slate-400 mb-3"><i class="fas fa-arrow-left mr-1"></i>Volver</button>
+        <h2 class="font-heading font-bold text-2xl text-slate-800">Examen nivel ${nv} · ${esc(e.nombre)}</h2>
+        <p class="text-slate-500 mt-1 text-sm">Duración: <b>${e.minutos} minutos</b>. El reloj empieza al tocar «Comenzar» y sigue corriendo aunque cierres la página.</p>
+        <div class="mt-4 rounded-2xl bg-slate-50 border border-slate-200 p-4">
+          <p class="font-bold text-slate-700 mb-2">1. Prueba tu micrófono</p>
+          ${hayVoz ? `
+          <p class="text-sm text-slate-500 mb-3">Toca el botón y di en inglés: <b>"Hello, I am ready for my exam."</b></p>
+          <button id="pr-mic" class="btn-juice bg-[#0891b2] text-white font-bold px-4 py-2.5 rounded-xl"><i class="fas fa-microphone mr-2"></i>Probar micrófono</button>
+          <p id="pr-mic-res" class="text-sm mt-3 text-slate-500"></p>`
+          : `<p class="text-sm text-red-600 font-bold">⚠️ Este navegador no reconoce voz, así que no podrías presentar la parte de speaking. Abre el examen en Google Chrome o en la app de Abulingo.</p>`}
+        </div>
+        <div class="mt-3 rounded-2xl bg-slate-50 border border-slate-200 p-4">
+          <p class="font-bold text-slate-700 mb-2">2. Prueba el audio</p>
+          <button id="pr-audio" class="btn-juice bg-slate-200 text-slate-700 font-bold px-4 py-2.5 rounded-xl"><i class="fas fa-volume-high mr-2"></i>Escuchar sonido de prueba</button>
+        </div>
+        <label class="flex items-start gap-2 mt-4 text-sm text-slate-600"><input id="pr-acepto" type="checkbox" class="mt-1 w-4 h-4 accent-orange-500">
+          <span>Presentaré el examen yo solo/a, sin ayuda de otras personas, traductores ni inteligencia artificial.</span></label>
+        <button id="pr-empezar" class="btn-juice w-full bg-[#FF7A00] text-white font-bold py-3 rounded-xl mt-4 text-lg" ${hayVoz ? '' : 'disabled'}>Comenzar examen</button>
+      </div>`;
+    $('pr-volver').onclick = inicio;
+    $('pr-audio').onclick = () => reproducirClips([`${nv}-L1-0`]);
+    if ($('pr-mic')) $('pr-mic').onclick = async () => {
+      const res = $('pr-mic-res');
+      res.textContent = '🎙️ Escuchando...';
+      const t = await reconocerUnaVez(6000).catch(err => { res.innerHTML = `<span class="text-red-600 font-bold">${esc(err.message)}</span>`; return null; });
+      if (t !== null) res.innerHTML = t ? `✅ Te escuché: «<b>${esc(t)}</b>»` : '⚠️ No te escuché. Revisa que el micrófono esté permitido y habla más cerca.';
+    };
+    $('pr-empezar').onclick = () => {
+      if (!$('pr-acepto').checked) return toast('Marca la casilla de compromiso para comenzar.');
+      empezar(nv, null);
+    };
+  }
+
+  function empezar(nv, borrador) {
+    ex = window.ABU_EXAMENES[nv];
+    R = borrador || { nivel: nv, inicio: Date.now(), mc: {}, huecos: {}, dictado: {}, lectura: {}, writing: {}, speaking: {}, reproducciones: {} };
+    seccion = R.seccion || 'listening';
+    guardarBorrador();
+    $('btn-salir').classList.add('hidden');
+    $('reloj').classList.remove('hidden'); $('reloj').classList.add('flex');
+    window.onbeforeunload = e => { e.preventDefault(); e.returnValue = ''; };
+    clearInterval(relojTimer);
+    relojTimer = setInterval(tic, 1000); tic();
+    pintar();
+  }
+
+  function restante() { return ex.minutos * 60 - Math.floor((Date.now() - R.inicio) / 1000); }
+  function tic() {
+    if (!ex) return clearInterval(relojTimer);
+    const s = restante();
+    const r = $('reloj');
+    $('reloj-txt').textContent = s > 0 ? `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}` : '00:00';
+    r.className = `ml-auto items-center gap-1.5 font-black text-sm rounded-full px-3 py-1 flex ${s < 300 ? 'bg-red-100 text-red-600' : 'bg-slate-100 text-slate-700'}`;
+    if (s <= 0) { clearInterval(relojTimer); toast('⏱️ Se acabó el tiempo. Enviando tu examen...'); enviar(true); }
+  }
+
+  /* ============================================================
+     PINTAR SECCIONES
+  ============================================================ */
+  function completo(sec) {
+    if (sec === 'listening') return ex.listening.pistas.every(p => p.preguntas.every(q => R.mc[q.id] !== undefined)) && ex.listening.dictado.every(d => (R.dictado[d.id] || '').trim());
+    if (sec === 'reading') return ex.reading.textos.every(t => t.preguntas.every(q => R.mc[q.id] !== undefined));
+    if (sec === 'uso') return ex.uso.opcion.every(q => R.mc[q.id] !== undefined) && ex.uso.huecos.every(h => (R.huecos[h.id] || '').trim());
+    if (sec === 'writing') return ex.writing.every(w => palabras(R.writing[w.id]) >= w.min);
+    if (sec === 'speaking') return ex.speaking.lectura.every(l => (R.lectura[l.id] || '').trim()) && ex.speaking.preguntas.every(q => (R.speaking[q.id]?.texto || '').trim());
+  }
+
+  function pintar() {
+    pararTodo();
+    R.seccion = seccion; guardarBorrador();
+    const i = SECCIONES.findIndex(s => s.id === seccion);
+    vista().innerHTML = `
+      <div class="flex gap-1.5 mb-4 sticky top-16 z-30 bg-[#f0f4f8] py-2">
+        ${SECCIONES.map(s => `<button class="ex-tab ${s.id === seccion ? 'on' : ''} ${completo(s.id) ? 'ok' : ''}" data-sec="${s.id}"><i class="fas ${completo(s.id) ? 'fa-circle-check' : s.icono}"></i><span class="hidden sm:inline ml-1">${s.nombre}</span></button>`).join('')}
+      </div>
+      <div class="card-3d p-5 sm:p-6">
+        <p class="text-[11px] font-black uppercase tracking-wide text-[#FF7A00]">Nivel ${ex.nivel} · Parte ${i + 1} de 5</p>
+        <div id="sec"></div>
+      </div>
+      <div class="flex gap-3 mt-6">
+        ${i > 0 ? `<button id="ex-ant" class="btn-juice flex-1 bg-slate-200 text-slate-600 font-bold py-3 rounded-xl"><i class="fas fa-arrow-left mr-2"></i>${SECCIONES[i - 1].nombre}</button>` : ''}
+        ${i < SECCIONES.length - 1
+          ? `<button id="ex-sig" class="btn-juice flex-1 bg-[#FF7A00] text-white font-bold py-3 rounded-xl">${SECCIONES[i + 1].nombre}<i class="fas fa-arrow-right ml-2"></i></button>`
+          : `<button id="ex-enviar" class="btn-juice flex-1 bg-green-600 text-white font-bold py-3 rounded-xl"><i class="fas fa-paper-plane mr-2"></i>Enviar examen</button>`}
+      </div>`;
+    vista().querySelectorAll('.ex-tab').forEach(b => b.onclick = () => { seccion = b.dataset.sec; pintar(); window.scrollTo({ top: 0 }); });
+    if ($('ex-ant')) $('ex-ant').onclick = () => { seccion = SECCIONES[i - 1].id; pintar(); window.scrollTo({ top: 0 }); };
+    if ($('ex-sig')) $('ex-sig').onclick = () => { seccion = SECCIONES[i + 1].id; pintar(); window.scrollTo({ top: 0 }); };
+    if ($('ex-enviar')) $('ex-enviar').onclick = () => enviar(false);
+    ({ listening: pintarListening, reading: pintarReading, uso: pintarUso, writing: pintarWriting, speaking: pintarSpeaking })[seccion]();
+  }
+
+  const preguntaMC = (q, n) => `
+    <div class="mt-5">
+      <p class="font-bold text-slate-800">${n}. ${esc(q.q)}</p>
+      ${q.ops.map((o, k) => `<button class="op ${R.mc[q.id] === k ? 'sel' : ''}" data-q="${q.id}" data-k="${k}"><span class="l">${LETRAS[k]}</span><span>${esc(o)}</span></button>`).join('')}
+    </div>`;
+  function engancharMC(el) {
+    el.querySelectorAll('.op').forEach(b => b.onclick = () => {
+      R.mc[b.dataset.q] = +b.dataset.k; guardarBorrador();
+      el.querySelectorAll(`.op[data-q="${b.dataset.q}"]`).forEach(x => x.classList.toggle('sel', x === b));
+      actualizarTabs();
+    });
+  }
+  function actualizarTabs() {
+    document.querySelectorAll('.ex-tab').forEach(t => {
+      const ok = completo(t.dataset.sec);
+      t.classList.toggle('ok', ok);
+      const s = SECCIONES.find(x => x.id === t.dataset.sec);
+      t.querySelector('i').className = `fas ${ok ? 'fa-circle-check' : s.icono}`;
+    });
+  }
+
+  /* ---------- Listening ---------- */
+  function pintarListening() {
+    let n = 0;
+    $('sec').innerHTML = `
+      <h2 class="font-heading font-bold text-2xl text-slate-800 mt-1">🎧 Listening</h2>
+      <p class="text-sm text-slate-500 mt-1">Lee las preguntas antes de escuchar. Cada audio se puede reproducir <b>${MAX_REPRODUCCIONES} veces</b>.</p>
+      ${ex.listening.pistas.map((p, j) => `
+        <div class="mt-6 pt-5 border-t-2 border-slate-100">
+          <p class="font-heading font-black text-slate-700">Parte ${j + 1}</p>
+          <p class="text-sm text-slate-500">${esc(p.contexto)}</p>
+          ${botonAudio(p.id, MAX_REPRODUCCIONES)}
+          ${p.preguntas.map(q => preguntaMC(q, ++n)).join('')}
+        </div>`).join('')}
+      <div class="mt-6 pt-5 border-t-2 border-slate-100">
+        <p class="font-heading font-black text-slate-700">Dictado</p>
+        <p class="text-sm text-slate-500">Escucha cada frase y escríbela <b>exactamente</b> como la oyes (ortografía incluida). Máximo ${MAX_DICTADO} reproducciones por frase.</p>
+        ${ex.listening.dictado.map((d, k) => `
+          <div class="mt-4">
+            <div class="flex items-center gap-2">${botonAudio(d.id, MAX_DICTADO, true)}<span class="font-bold text-slate-700">Frase ${k + 1}</span></div>
+            <input class="campo mt-2 ex-dictado" data-id="${d.id}" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" value="${esc(R.dictado[d.id] || '')}" placeholder="Escribe aquí lo que escuchas">
+          </div>`).join('')}
+      </div>`;
+    engancharMC($('sec'));
+    engancharAudios();
+    $('sec').querySelectorAll('.ex-dictado').forEach(inp => { bloquearPegar(inp); inp.oninput = () => { R.dictado[inp.dataset.id] = inp.value; guardarBorrador(); actualizarTabs(); }; });
+  }
+
+  function botonAudio(id, max, chico = false) {
+    const usadas = R.reproducciones[id] || 0;
+    return `<button class="ex-audio btn-juice ${chico ? 'px-3 py-2 text-sm' : 'px-4 py-2.5 mt-3'} rounded-xl font-bold text-white ${usadas >= max ? 'bg-slate-300' : 'bg-[#0891b2]'}" data-id="${id}" data-max="${max}" ${usadas >= max ? 'disabled' : ''}>
+      <i class="fas fa-play mr-1.5"></i>${chico ? '' : 'Escuchar '}<span class="opacity-80">(${max - usadas})</span></button>`;
+  }
+  function engancharAudios() {
+    $('sec').querySelectorAll('.ex-audio').forEach(b => b.onclick = async () => {
+      if (audioActual) return toast('Espera a que termine el audio que está sonando.');
+      const id = b.dataset.id, max = +b.dataset.max;
+      if ((R.reproducciones[id] || 0) >= max) return;
+      R.reproducciones[id] = (R.reproducciones[id] || 0) + 1; guardarBorrador();
+      const pista = ex.listening.pistas.find(p => p.id === id);
+      const clips = pista ? Array.from({ length: pista.clips }, (_, i) => `${ex.nivel}-${id}-${i}`) : [id];
+      b.disabled = true; b.innerHTML = '<i class="fas fa-volume-high fa-beat mr-1.5"></i>Sonando...';
+      await reproducirClips(clips);
+      const usadas = R.reproducciones[id];
+      b.disabled = usadas >= max;
+      b.classList.toggle('bg-slate-300', usadas >= max); b.classList.toggle('bg-[#0891b2]', usadas < max);
+      b.innerHTML = `<i class="fas fa-play mr-1.5"></i>${b.classList.contains('px-3') ? '' : 'Escuchar '}<span class="opacity-80">(${max - usadas})</span>`;
+    });
+  }
+  async function reproducirClips(nombres) {
+    for (let i = 0; i < nombres.length; i++) {
+      if (!ex && nombres.length > 1) break;
+      await new Promise(res => {
+        const a = new Audio(AUDIO_BASE + nombres[i] + '.mp3');
+        audioActual = a;
+        a.onended = a.onerror = () => res();
+        a.play().catch(() => res());
+      });
+      if (i < nombres.length - 1) await new Promise(r => setTimeout(r, 450));
+    }
+    audioActual = null;
+  }
+
+  /* ---------- Reading ---------- */
+  function pintarReading() {
+    let n = 0;
+    $('sec').innerHTML = `
+      <h2 class="font-heading font-bold text-2xl text-slate-800 mt-1">📖 Reading</h2>
+      <p class="text-sm text-slate-500 mt-1">Lee cada texto con atención y elige la mejor respuesta.</p>
+      ${ex.reading.textos.map(t => `
+        <div class="mt-6 pt-5 border-t-2 border-slate-100">
+          <h3 class="font-heading font-black text-xl text-slate-800">${esc(t.titulo)}</h3>
+          <div class="texto-lectura mt-2 rounded-2xl bg-slate-50 border border-slate-200 p-4 text-slate-700">${esc(t.texto)}</div>
+          ${t.preguntas.map(q => preguntaMC(q, ++n)).join('')}
+        </div>`).join('')}`;
+    engancharMC($('sec'));
+  }
+
+  /* ---------- Use of English ---------- */
+  function pintarUso() {
+    $('sec').innerHTML = `
+      <h2 class="font-heading font-bold text-2xl text-slate-800 mt-1">🧩 Grammar & Vocabulary</h2>
+      <p class="text-sm text-slate-500 mt-1">Parte A: elige la opción correcta.</p>
+      ${ex.uso.opcion.map((q, k) => preguntaMC(q, k + 1)).join('')}
+      <div class="mt-7 pt-5 border-t-2 border-slate-100">
+        <p class="font-heading font-black text-slate-700">Parte B: completa el espacio</p>
+        <p class="text-sm text-slate-500">Escribe solo la palabra o palabras que faltan. Si hay un verbo entre paréntesis, conjúgalo correctamente.</p>
+        ${ex.uso.huecos.map((h, k) => `
+          <div class="mt-4">
+            <p class="font-bold text-slate-800">${k + 1}. ${esc(h.q)}</p>
+            <input class="campo mt-2 ex-hueco" data-id="${h.id}" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" value="${esc(R.huecos[h.id] || '')}" placeholder="Tu respuesta">
+          </div>`).join('')}
+      </div>`;
+    engancharMC($('sec'));
+    $('sec').querySelectorAll('.ex-hueco').forEach(inp => { bloquearPegar(inp); inp.oninput = () => { R.huecos[inp.dataset.id] = inp.value; guardarBorrador(); actualizarTabs(); }; });
+  }
+
+  /* ---------- Writing ---------- */
+  function pintarWriting() {
+    $('sec').innerHTML = `
+      <h2 class="font-heading font-bold text-2xl text-slate-800 mt-1">✍️ Writing</h2>
+      <p class="text-sm text-slate-500 mt-1">Escribe en inglés. Se evalúa: cumplir la tarea, organización, gramática y vocabulario propios del nivel ${ex.nivel}. Respeta el número de palabras.</p>
+      ${ex.writing.map((w, k) => `
+        <div class="mt-6 pt-5 border-t-2 border-slate-100">
+          <p class="font-heading font-black text-slate-700">Tarea ${k + 1}</p>
+          <p class="text-slate-800 font-bold mt-1">${esc(w.en)}</p>
+          <p class="text-sm text-slate-500 mt-1">${esc(w.es)}</p>
+          <textarea class="campo mt-3 ex-writing" data-id="${w.id}" rows="${Math.min(14, 5 + Math.round(w.max / 40))}" spellcheck="false" autocorrect="off" autocapitalize="sentences" placeholder="Write your answer here...">${esc(R.writing[w.id] || '')}</textarea>
+          <p class="text-xs font-black mt-1 ex-contador" data-id="${w.id}"></p>
+        </div>`).join('')}`;
+    const contar = ta => {
+      const w = ex.writing.find(x => x.id === ta.dataset.id), n = palabras(ta.value);
+      const c = $('sec').querySelector(`.ex-contador[data-id="${w.id}"]`);
+      c.textContent = `${n} palabras · pide ${w.min}–${w.max}`;
+      c.className = `text-xs font-black mt-1 ex-contador ${n < w.min ? 'text-slate-400' : n > w.max ? 'text-amber-600' : 'text-green-600'}`;
+    };
+    $('sec').querySelectorAll('.ex-writing').forEach(ta => {
+      bloquearPegar(ta); contar(ta);
+      ta.oninput = () => { R.writing[ta.dataset.id] = ta.value; guardarBorrador(); contar(ta); actualizarTabs(); };
+    });
+  }
+
+  function bloquearPegar(el) {
+    ['paste', 'drop'].forEach(ev => el.addEventListener(ev, e => { e.preventDefault(); toast('En el examen no se puede pegar texto.'); }));
+  }
+
+  /* ---------- Speaking ---------- */
+  function pintarSpeaking() {
+    $('sec').innerHTML = `
+      <h2 class="font-heading font-bold text-2xl text-slate-800 mt-1">🗣️ Speaking</h2>
+      <p class="text-sm text-slate-500 mt-1">Habla en inglés, claro y a buen volumen. Puedes repetir cada grabación <b>una vez</b>; se califica la última.</p>
+      <div class="mt-6 pt-5 border-t-2 border-slate-100">
+        <p class="font-heading font-black text-slate-700">Parte A: lee en voz alta</p>
+        <p class="text-sm text-slate-500">Toca el micrófono, lee la frase completa y espera a que se detenga.</p>
+        ${ex.speaking.lectura.map((l, k) => `
+          <div class="mt-4 rounded-2xl bg-slate-50 border border-slate-200 p-4">
+            <p class="text-[17px] text-slate-800 font-bold leading-relaxed">${k + 1}. ${esc(l.texto)}</p>
+            <div class="flex items-center gap-3 mt-3">
+              ${botonMic('lec', l.id)}
+              <p class="text-sm text-slate-500 flex-1 ex-trans" data-id="${l.id}">${R.lectura[l.id] ? `🎙️ «${esc(R.lectura[l.id])}»` : 'Sin grabar'}</p>
+            </div>
+          </div>`).join('')}
+      </div>
+      <div class="mt-7 pt-5 border-t-2 border-slate-100">
+        <p class="font-heading font-black text-slate-700">Parte B: responde hablando</p>
+        <p class="text-sm text-slate-500">Desarrolla tu respuesta con detalles, razones y ejemplos. Intenta hablar el tiempo indicado; puedes detenerte cuando termines.</p>
+        ${ex.speaking.preguntas.map((q, k) => {
+          const g = R.speaking[q.id];
+          return `
+          <div class="mt-4 rounded-2xl bg-slate-50 border border-slate-200 p-4">
+            <p class="text-[17px] text-slate-800 font-bold leading-relaxed">${k + 1}. ${esc(q.en)}</p>
+            <p class="text-sm text-slate-500 mt-1">${esc(q.es)} · <b>Habla unos ${q.segundos >= 60 ? `${Math.round(q.segundos / 60 * 10) / 10} min` : `${q.segundos} s`}</b></p>
+            <div class="flex items-center gap-3 mt-3">
+              ${botonMic('preg', q.id)}
+              <div class="flex-1 min-w-0">
+                <p class="text-xs font-black text-slate-400 ex-seg" data-id="${q.id}">${g ? `${g.segundos} s · ${palabras(g.texto)} palabras` : `0 / ${q.segundos} s`}</p>
+                <div class="barra mt-1"><i class="ex-seg-barra" data-id="${q.id}" style="width:${g ? Math.min(100, g.segundos / q.segundos * 100) : 0}%"></i></div>
+              </div>
+            </div>
+            <p class="text-sm text-slate-500 mt-2 ex-trans" data-id="${q.id}">${g?.texto ? `🎙️ «${esc(g.texto)}»` : ''}</p>
+          </div>`;
+        }).join('')}
+      </div>`;
+    $('sec').querySelectorAll('.ex-mic').forEach(b => b.onclick = () => grabar(b));
+  }
+
+  function intentosMic(id) { return (R.reproducciones['mic-' + id] || 0); }
+  function botonMic(tipo, id) {
+    const usados = intentosMic(id);
+    const agotado = usados >= 2;
+    return `<button class="ex-mic btn-juice w-14 h-14 shrink-0 rounded-full text-white text-xl ${agotado ? 'bg-slate-300' : 'bg-[#FF7A00]'}" data-tipo="${tipo}" data-id="${id}" ${agotado ? 'disabled' : ''} title="${agotado ? 'Ya no quedan intentos' : usados ? 'Repetir (último intento)' : 'Grabar'}"><i class="fas fa-microphone"></i></button>`;
+  }
+
+  /* Reconocimiento de voz: se reinicia solo si Chrome lo corta por un silencio,
+     y junta todo lo reconocido hasta que la persona toca «detener». */
+  function nuevoReconocedor() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const r = new SR(); r.lang = 'en-US'; r.interimResults = true; r.continuous = true; r.maxAlternatives = 1;
+    return r;
+  }
+  function reconocerUnaVez(ms) {
+    return new Promise((resolve, reject) => {
+      const r = nuevoReconocedor(); let txt = '';
+      r.onresult = e => { txt = Array.from(e.results).map(x => x[0].transcript).join(' '); };
+      r.onerror = e => { if (e.error === 'not-allowed') reject(new Error('El micrófono está bloqueado. Permite el acceso en el navegador.')); };
+      r.onend = () => resolve(txt.trim());
+      r.start(); setTimeout(() => { try { r.stop(); } catch {} }, ms);
+    });
+  }
+
+  function grabar(b) {
+    if (grabacion) { grabacion.detener(); return; }
+    if (audioActual) return toast('Espera a que termine el audio.');
+    const id = b.dataset.id, tipo = b.dataset.tipo;
+    const q = tipo === 'preg' ? ex.speaking.preguntas.find(x => x.id === id) : null;
+    const limite = q ? Math.round(q.segundos * 1.6) : 30;
+    let finales = '', parcial = '', activo = true, inicio = Date.now(), r = null, timer = null;
+    const trans = $('sec').querySelector(`.ex-trans[data-id="${id}"]`);
+    const pintarTexto = () => { trans.innerHTML = `<span class="text-red-500 font-bold">● Grabando</span> ${esc((finales + ' ' + parcial).trim())}`; };
+    const arrancar = () => {
+      r = nuevoReconocedor();
+      r.onresult = e => {
+        parcial = '';
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          if (e.results[i].isFinal) finales += ' ' + e.results[i][0].transcript;
+          else parcial += e.results[i][0].transcript;
+        }
+        pintarTexto();
+        // Leer en voz alta: al terminar la frase se detiene solo.
+        if (tipo === 'lec' && finales.trim() && !parcial && grabacion) grabacion.detener();
+      };
+      r.onerror = e => { if (e.error === 'not-allowed') { activo = false; toast('🎙️ Permite el micrófono para grabar.'); } };
+      r.onend = () => { if (activo) { finales += ' ' + parcial; parcial = ''; try { arrancar(); } catch { terminar(); } } else terminar(); };
+      try { r.start(); } catch {}
+    };
+    const terminar = () => {
+      if (!grabacion) return;
+      clearInterval(timer); grabacion = null;
+      const texto = (finales + ' ' + parcial).replace(/\s+/g, ' ').trim();
+      const segundos = Math.round((Date.now() - inicio) / 1000);
+      if (!texto) { trans.textContent = '⚠️ No se escuchó nada. Vuelve a intentarlo (este intento no cuenta).'; b.classList.remove('grabando'); b.innerHTML = '<i class="fas fa-microphone"></i>'; return; }
+      R.reproducciones['mic-' + id] = intentosMic(id) + 1;
+      if (tipo === 'lec') R.lectura[id] = texto; else R.speaking[id] = { texto, segundos };
+      guardarBorrador();
+      pintarSpeaking(); actualizarTabs();
+    };
+    grabacion = { detener: () => { activo = false; try { r.stop(); } catch { terminar(); } setTimeout(terminar, 1500); } };
+    b.classList.add('grabando'); b.innerHTML = '<i class="fas fa-stop"></i>';
+    trans.innerHTML = '<span class="text-red-500 font-bold">● Grabando...</span> habla ahora';
+    timer = setInterval(() => {
+      const s = Math.round((Date.now() - inicio) / 1000);
+      if (q) {
+        const t = $('sec').querySelector(`.ex-seg[data-id="${id}"]`), barra = $('sec').querySelector(`.ex-seg-barra[data-id="${id}"]`);
+        if (t) t.textContent = `${s} / ${q.segundos} s`;
+        if (barra) barra.style.width = `${Math.min(100, s / q.segundos * 100)}%`;
+      }
+      if (s >= limite) grabacion?.detener();
+    }, 500);
+    arrancar();
+  }
+
+  function pararTodo() {
+    if (grabacion) grabacion.detener();
+    if (audioActual) { try { audioActual.pause(); } catch {} }
+  }
+
+  /* ============================================================
+     ENVIAR Y RESULTADO
+  ============================================================ */
+  async function enviar(porTiempo) {
+    if (!ex) return;
+    if (!porTiempo) {
+      const faltan = SECCIONES.filter(s => !completo(s.id)).map(s => s.nombre);
+      const msg = faltan.length ? `Aún tienes partes incompletas: ${faltan.join(', ')}.\n\nLo que no respondas cuenta como 0. ¿Enviar de todos modos?` : '¿Enviar tu examen? Ya no podrás cambiar las respuestas.';
+      if (!confirm(msg)) return;
+    }
+    pararTodo(); clearInterval(relojTimer);
+    vista().innerHTML = `<div class="card-3d p-8 text-center"><i class="fas fa-circle-notch fa-spin text-4xl text-[#FF7A00]"></i>
+      <p class="font-heading font-bold text-xl text-slate-700 mt-4">Calificando tu examen...</p>
+      <p class="text-sm text-slate-500 mt-1">El profesor de IA está revisando tu writing y tu speaking. Puede tardar hasta un minuto.</p></div>`;
+    try {
+      let { data: { session } } = await db.auth.getSession();
+      if (session && session.expires_at - Date.now() / 1000 < 120) session = (await db.auth.refreshSession()).data.session || session;
+      const resp = await fetch(`${SUPABASE_URL}/functions/v1/evaluar-examen`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${session?.access_token}` },
+        body: JSON.stringify({ nivel: ex.nivel, respuestas: { mc: R.mc, huecos: R.huecos, dictado: R.dictado, lectura: R.lectura, writing: R.writing, speaking: R.speaking } }),
+      });
+      const d = await resp.json().catch(() => ({}));
+      if (resp.status === 429 && d.codigo === 'espera') { borrarBorrador(ex.nivel); toast('Debes esperar 24 horas entre intentos.'); return inicio(); }
+      if (!resp.ok) throw new Error(d.error || `HTTP ${resp.status}`);
+      borrarBorrador(ex.nivel);
+      window.onbeforeunload = null;
+      resultado(d);
+    } catch (err) {
+      console.warn('[examen] enviar:', err);
+      vista().innerHTML = `<div class="card-3d p-8 text-center">
+        <div class="text-4xl">⚠️</div><p class="font-heading font-bold text-xl text-slate-700 mt-2">No se pudo calificar</p>
+        <p class="text-sm text-slate-500 mt-1">${esc(err.message)}<br>Tus respuestas están guardadas. Revisa tu conexión e inténtalo de nuevo.</p>
+        <button id="ex-reintentar" class="btn-juice bg-[#FF7A00] text-white font-bold px-6 py-3 rounded-xl mt-4">Reintentar envío</button></div>`;
+      $('ex-reintentar').onclick = () => enviar(true);
+    }
+  }
+
+  function resultado(d) {
+    const nv = ex.nivel;
+    ex = null; $('reloj').classList.add('hidden'); $('reloj').classList.remove('flex'); $('btn-salir').classList.remove('hidden');
+    if (d.aprobado) { try { confetti({ particleCount: 160, spread: 90, origin: { y: 0.6 } }); } catch {} }
+    const c = d.comentarios || {};
+    vista().innerHTML = `
+      <div class="card-3d p-6 text-center">
+        <div class="text-5xl">${d.aprobado ? '🎓' : '📊'}</div>
+        <h2 class="font-heading font-bold text-2xl mt-2 ${d.aprobado ? 'text-green-600' : 'text-slate-800'}">${d.aprobado ? `¡Aprobaste el nivel ${nv}!` : `Resultado del nivel ${nv}`}</h2>
+        <p class="text-6xl font-heading font-black mt-3 ${d.aprobado ? 'text-green-600' : 'text-[#FF7A00]'}">${d.total}%</p>
+        <p class="text-sm text-slate-500 mt-1">${d.aprobado ? 'Tu certificado ya está disponible.' : `Necesitas ${APROBAR}% para aprobar. Podrás intentarlo de nuevo en 24 horas.`}</p>
+      </div>
+      <div class="card-3d p-5 mt-6">
+        <h3 class="font-heading font-black text-lg text-slate-800 mb-3">Por habilidad</h3>
+        ${Object.entries(d.habilidades || {}).map(([k, v]) => `
+          <div class="mb-3">
+            <div class="flex justify-between text-sm font-bold text-slate-700"><span>${NOMBRE_HAB[k] || k}</span><span class="${v >= APROBAR ? 'text-green-600' : 'text-[#FF7A00]'}">${v}%</span></div>
+            <div class="barra mt-1"><i style="width:${v}%;${v >= APROBAR ? 'background:linear-gradient(90deg,#16a34a,#4ade80)' : ''}"></i></div>
+          </div>`).join('')}
+        ${Object.keys(c).length ? `<h3 class="font-heading font-black text-lg text-slate-800 mt-5 mb-2">Comentarios del evaluador</h3>
+          ${Object.entries(c).map(([id, t]) => `<p class="text-sm text-slate-600 mt-2"><b>${id.startsWith('W') ? '✍️ Writing' : '🗣️ Speaking'} ${id.slice(1)}:</b> ${esc(t)}</p>`).join('')}` : ''}
+      </div>
+      ${d.aprobado ? `<a href="abulingo.html?menu=certificados" class="btn-juice block text-center bg-[#0D47A1] text-white font-bold py-3 rounded-xl mt-6 text-lg">🎓 Descargar mi certificado</a>` : ''}
+      <button id="res-volver" class="btn-juice w-full bg-slate-200 text-slate-600 font-bold py-3 rounded-xl mt-3">Volver a los exámenes</button>`;
+    $('res-volver').onclick = inicio;
+    window.scrollTo({ top: 0 });
+  }
+
+  /* ============================================================
+     ARRANQUE
+  ============================================================ */
+  document.addEventListener('DOMContentLoaded', async () => {
+    db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const { data: { session } } = await db.auth.getSession();
+    if (!session) { window.location.href = 'index.html'; return; }
+    usuario = session.user;
+    if (window.AbuIdioma?.aprendeEspanol) {
+      vista().innerHTML = `<div class="card-3d p-7 text-center"><div class="text-5xl mb-2">🎓</div>
+        <h1 class="font-heading font-bold text-2xl text-slate-800">Exámenes de certificación</h1>
+        <p class="text-slate-500 mt-2">Los exámenes de certificación por ahora son para quienes aprenden inglés.</p>
+        <a href="abulingo.html" class="btn-juice inline-block bg-[#FF7A00] text-white font-bold px-6 py-3 rounded-xl mt-5">Volver</a></div>`;
+      return;
+    }
+    if (!window.ABU_EXAMENES) { vista().innerHTML = '<p class="text-center text-slate-500 py-10">No se pudieron cargar los exámenes. Recarga la página.</p>'; return; }
+    const nv = new URLSearchParams(location.search).get('nivel');
+    await inicio();
+    if (nv && leerBorrador(nv.toUpperCase())) preparar(nv.toUpperCase());
+  });
+})();
+</script>
+</body>
+</html>

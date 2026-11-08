@@ -60,6 +60,7 @@ async function verificar(codigo) {
     res.innerHTML = '<div class="ok"><div class="icono">✅</div><b class="t">Certificado auténtico</b>'
       + '<div class="nombre">' + esc(d.nombre) + '</div>'
       + '<div class="nivel">Nivel ' + esc(d.nivel) + (NIVEL[d.nivel] ? ' · ' + NIVEL[d.nivel] : '') + '</div>'
+      + (d.tipo === 'examen' && d.puntaje != null ? '<p class="dato">Aprobó el examen de certificación (listening, reading, grammar, writing y speaking) con <b>' + esc(d.puntaje) + ' %</b></p>' : '')
       + (d.palabras ? '<p class="dato">Domina las ' + d.palabras + ' palabras del nivel</p>' : '')
       + '<p class="dato">Emitido el <b>' + esc(fecha) + '</b> por Abulingo</p>'
       + '<p class="dato" style="font-size:.8rem">Código: ' + esc(codigo) + '</p></div>';
