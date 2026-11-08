@@ -5868,14 +5868,13 @@ function openAbuChat() {
     y += vertical ? 140 : 100;
     const pje = d.puntaje != null ? `${Math.round(Number(d.puntaje) * 10) / 10} %` : '';
     const lineas = d.tipo === 'examen'
-      ? (vertical
-        ? [`aprobó el examen de certificación con ${pje}`, 'en listening, reading, grammar, writing', 'y speaking del nivel']
-        : [`aprobó con ${pje} el examen de certificación (listening, reading,`, 'grammar, writing y speaking) del nivel'])
+      ? (vertical   // mismo número de líneas que el de vocabulario: la insignia y el QR no se tocan
+        ? [`aprobó con ${pje} el examen de certificación`, 'de las 5 habilidades del nivel']
+        : [`aprobó con ${pje} el examen de certificación de las 5 habilidades del nivel`])
       : vertical
       ? ['aprobó la prueba de vocabulario y domina', `las ${d.total} palabras del nivel`]
       : [`aprobó la prueba de vocabulario y domina las ${d.total} palabras del nivel`];
     for (const l of lineas) { certTexto(c, l, cx, y, { tam: 40, peso: 400, color: '#475569', ancho: W - 200 }); y += 56; }
-    if (d.tipo === 'examen') y -= 56;   // una línea más que el de vocabulario: no empujar la insignia sobre el QR
     // Insignia del nivel
     y += vertical ? 170 : 90;
     const R = vertical ? 130 : 105;
