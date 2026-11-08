@@ -5875,6 +5875,7 @@ function openAbuChat() {
       ? ['aprobó la prueba de vocabulario y domina', `las ${d.total} palabras del nivel`]
       : [`aprobó la prueba de vocabulario y domina las ${d.total} palabras del nivel`];
     for (const l of lineas) { certTexto(c, l, cx, y, { tam: 40, peso: 400, color: '#475569', ancho: W - 200 }); y += 56; }
+    if (d.tipo === 'examen') y -= 56;   // una línea más que el de vocabulario: no empujar la insignia sobre el QR
     // Insignia del nivel
     y += vertical ? 170 : 90;
     const R = vertical ? 130 : 105;

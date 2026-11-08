@@ -31,6 +31,7 @@ drop function if exists public.emitir_certificado(text, text, date);
 create function public.emitir_certificado(p_nivel text, p_codigo text, p_fecha date default null)
 returns table(codigo text, nombre text, nivel text, fecha date, tipo text, puntaje numeric)
 language plpgsql security definer set search_path = public as $$
+#variable_conflict use_column
 declare uid uuid := auth.uid(); v_nombre text; v_flujo jsonb; v_total int; v_ok int;
         v_examen numeric; v_fecha_examen date; v_palabras boolean;
 begin
