@@ -101,6 +101,12 @@
     .ruta-item.hecho { background: #f0fdf4; border-color: #bbf7d0; }
     .ruta-check { width: 26px; height: 26px; border-radius: 99px; border: 2px solid #cbd5e1; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: #fff; font-size: 12px; }
     .ruta-item.hecho .ruta-check { background: #22c55e; border-color: #22c55e; }
+    #volver-flot { position: fixed; left: 14px; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); z-index: 60;
+      display: flex; align-items: center; gap: 8px; padding: 11px 16px; border-radius: 999px; background: #1e293b; color: #fff;
+      font-weight: 900; font-size: 14px; box-shadow: 0 6px 18px rgba(15,23,42,.35); }
+    #volver-flot.hidden { display: none; }
+    .cv-oculto .ct-en, .cv-oculto .ct-es { filter: blur(7px); user-select: none; }
+    #app-container.con-volver { padding-bottom: 88px; }
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
     }
@@ -180,6 +186,7 @@
   </main>
 
   <!-- Contenido principal: cada vista se pinta en #mode-panel -->
+  <button id="volver-flot" class="hidden btn-juice" title="Volver" aria-label="Volver"><i class="fas fa-arrow-left"></i><span>Volver</span></button>
   <main id="app-container" class="hidden w-full max-w-2xl mx-auto px-4 pt-20 flex-1 flex flex-col pb-10">
     <!-- HUD (igual que en abulingo.html; lo pinta abu-menu.js) -->
     <div class="w-full flex items-center justify-between gap-2 mb-3">
@@ -497,8 +504,9 @@
     { id: 'prediccion', icon: 'fa-wand-magic-sparkles', color: 'from-purple-500 to-fuchsia-600', titulo: 'Predice y escucha', desc: 'Anticipa lo que vas a oír, escucha sin texto y revisa después.', tiempo: '8 min' },
     { id: 'contar', icon: 'fa-hashtag', color: 'from-amber-500 to-orange-500', titulo: 'Cuenta las palabras', desc: 'Frases rápidas: ¿cuántas palabras hay de verdad en lo que oíste?', tiempo: '3 min' },
     { id: 'shadowing', icon: 'fa-headphones', color: 'from-slate-700 to-slate-900', titulo: 'Shadowing de textos', desc: 'Escucha un texto, ordena sus frases y repítelas encima del audio.', tiempo: '10 min' },
-    { id: 'cuentos', icon: 'fa-book-open', color: 'from-teal-500 to-cyan-600', titulo: 'Cuentos para leer y escuchar', desc: 'Historias cortas con audio frase por frase y su traducción. Escúchalas completas mientras lees.', tiempo: '5 min' }
-  ].filter(a => !(a.id === 'cuentos' && ES));
+    { id: 'cuentos', icon: 'fa-book-open', color: 'from-teal-500 to-cyan-600', titulo: 'Cuentos para leer y escuchar', desc: 'Historias cortas con audio frase por frase y su traducción. Escúchalas completas mientras lees.', tiempo: '5 min' },
+    { id: 'conversaciones', icon: 'fa-comments', color: 'from-pink-500 to-rose-600', titulo: 'Conversaciones', desc: 'Diálogos de la vida real entre 2, 3 y 4 personas: presentarse, en un bar, en el médico... Dale play y escucha cómo hablan.', tiempo: '5 min' }
+  ].filter(a => !((a.id === 'cuentos' || a.id === 'conversaciones') && ES));
 
   function progresoActividad(id) {
     if (id === 'oido') { const o = oidoP(); return [o.hoy.n, OIDO_META]; }
@@ -508,11 +516,14 @@
     if (id === 'prediccion') { const l = D.prediccion[nivel]; return [l.filter(p => P.prediccion[p.id]).length, l.length]; }
     if (id === 'contar') { const m = P.contar[nivel]?.mejor || 0; return [m, D.contar[nivel].length]; }
     if (id === 'cuentos') { const l = window.LISTENING_CUENTOS || []; return [l.filter(c => P.cuentos?.[c.id]).length, l.length]; }
+    if (id === 'conversaciones') { const pre = `v${convNivel().toLowerCase()}-`; return [Object.keys(P.conversaciones || {}).filter(k => k.startsWith(pre)).length, CONV_POR_NIVEL]; }
     return null;
   }
 
   function renderInicio() {
     stopSpeaking();
+    ponerVolver(null);
+    try { if (history.state?.abuSub) history.back(); } catch {}
     const r = rutinaHoy();
     const rutina = [
       ['dictado', '10 min · Dictado', 'Un clip frase por frase.'],
@@ -856,6 +867,7 @@
     if (id === 'contar') return iniciarContar();
     if (id === 'shadowing') return renderListening();
     if (id === 'cuentos') return renderCuentos();
+    if (id === 'conversaciones') return renderConversaciones();
   }
 
   /* ============================================================
@@ -906,23 +918,7 @@
     cuento = { c, i: 0, sonando: false, traduccion: trad };
     window.scrollTo({ top: 0 });
     panel().innerHTML = cabecera(`${c.emoji} ${escapeHTML(c.titulo)}`, `${escapeHTML(c.tituloEs)} · Nivel ${c.nivel}${c.narrador ? ` · ${c.narrador === 'hombre' ? '👨 Narra un hombre' : '👩 Narra una mujer'}` : ''}`, { volver: renderCuentos }) + `
-      <div id="ct-controles" class="card-3d px-3 py-2 mb-3" style="position:sticky;top:68px;z-index:20">
-        <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <div class="flex items-center gap-2">
-            <button id="ct-ant" class="btn-juice w-10 h-10 rounded-full bg-slate-100 text-slate-600" title="Frase anterior"><i class="fas fa-backward-step"></i></button>
-            <button id="ct-play" class="btn-juice rounded-full text-white text-lg shadow" style="width:48px;height:48px;background:linear-gradient(135deg,#14b8a6,#0891b2)" title="Escuchar todo"><i class="fas fa-play"></i></button>
-            <button id="ct-sig" class="btn-juice w-10 h-10 rounded-full bg-slate-100 text-slate-600" title="Frase siguiente"><i class="fas fa-forward-step"></i></button>
-          </div>
-          <div class="flex items-center gap-2 flex-1" style="min-width:110px">
-            <div class="barra flex-1"><i id="ct-barra" style="width:0%"></i></div>
-            <span id="ct-cont" class="text-xs font-black text-slate-500">1/${c.frases.length}</span>
-          </div>
-          <div class="flex flex-wrap items-center gap-1.5">
-            ${VELOCIDADES.map(v => `<button class="ct-vel text-[11px] font-black rounded-full px-2 py-0.5 border ${v === velocidad ? 'bg-[#FF7A00] text-white border-[#FF7A00]' : 'bg-white text-slate-500 border-slate-200'}" data-vel="${v}">${v}x</button>`).join('')}
-            <button id="ct-trad" class="text-[11px] font-black rounded-full px-2 py-0.5 border bg-white text-slate-500 border-slate-200">${trad ? 'Ocultar traducción' : 'Ver traducción'}</button>
-          </div>
-        </div>
-      </div>
+      ${reproductorHTML(c.frases.length, trad)}
       <div class="card-3d p-4 sm:p-5" id="ct-texto">
         ${c.frases.map(([en, es], i) => `
           <div class="ct-frase rounded-xl px-3 py-2 mb-1 cursor-pointer transition" data-i="${i}">
@@ -932,6 +928,32 @@
       </div>
       <p class="text-[11px] text-slate-400 text-center mt-3">Toca cualquier frase para escucharla sola.</p>`;
     engancharVolver(() => { stopSpeaking(); renderCuentos(); });
+    engancharReproductor();
+  }
+
+  // Controles del reproductor (cuentos y conversaciones): fijos arriba al hacer scroll.
+  function reproductorHTML(n, trad, extra = '') {
+    return `
+      <div id="ct-controles" class="card-3d px-3 py-2 mb-3" style="position:sticky;top:68px;z-index:20">
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <div class="flex items-center gap-2">
+            <button id="ct-ant" class="btn-juice w-10 h-10 rounded-full bg-slate-100 text-slate-600" title="Frase anterior"><i class="fas fa-backward-step"></i></button>
+            <button id="ct-play" class="btn-juice rounded-full text-white text-lg shadow" style="width:48px;height:48px;background:linear-gradient(135deg,#14b8a6,#0891b2)" title="Escuchar todo"><i class="fas fa-play"></i></button>
+            <button id="ct-sig" class="btn-juice w-10 h-10 rounded-full bg-slate-100 text-slate-600" title="Frase siguiente"><i class="fas fa-forward-step"></i></button>
+          </div>
+          <div class="flex items-center gap-2 flex-1" style="min-width:110px">
+            <div class="barra flex-1"><i id="ct-barra" style="width:0%"></i></div>
+            <span id="ct-cont" class="text-xs font-black text-slate-500">1/${n}</span>
+          </div>
+          <div class="flex flex-wrap items-center gap-1.5">
+            ${VELOCIDADES.map(v => `<button class="ct-vel text-[11px] font-black rounded-full px-2 py-0.5 border ${v === velocidad ? 'bg-[#FF7A00] text-white border-[#FF7A00]' : 'bg-white text-slate-500 border-slate-200'}" data-vel="${v}">${v}x</button>`).join('')}
+            ${extra}
+            <button id="ct-trad" class="text-[11px] font-black rounded-full px-2 py-0.5 border bg-white text-slate-500 border-slate-200">${trad ? 'Ocultar traducción' : 'Ver traducción'}</button>
+          </div>
+        </div>
+      </div>`;
+  }
+  function engancharReproductor() {
     document.getElementById('ct-play').onclick = () => cuento.sonando ? cuentoPausar() : cuentoReproducir(cuento.i);
     document.getElementById('ct-ant').onclick = () => cuentoSaltar(cuento.i - 1);
     document.getElementById('ct-sig').onclick = () => cuentoSaltar(cuento.i + 1);
@@ -993,7 +1015,7 @@
 
   function cuentoTocar(i) {
     const [en] = cuento.c.frases[i];
-    return tocarClipUrl(`${CUENTOS_BASE}${cuento.c.id}-${i}.mp3`, en);
+    return tocarClipUrl(`${cuento.base || CUENTOS_BASE}${cuento.c.id}-${i}.mp3`, en);
   }
 
   // Igual que tocarClip, pero con la URL completa (los cuentos están en otra carpeta).
@@ -1027,9 +1049,10 @@
       if (id !== colaId || !cuento) return;
     }
     cuento.sonando = false; cuentoBoton();
-    P.cuentos = P.cuentos || {};
-    if (!P.cuentos[cuento.c.id]) { P.cuentos[cuento.c.id] = true; guardar(); }
-    if (typeof showToast === 'function') showToast('🎉 ¡Terminaste el cuento!');
+    const clave = cuento.clave || 'cuentos';
+    P[clave] = P[clave] || {};
+    if (!P[clave][cuento.c.id]) { P[clave][cuento.c.id] = true; guardar(); }
+    if (typeof showToast === 'function') showToast(clave === 'cuentos' ? '🎉 ¡Terminaste el cuento!' : '🎉 ¡Escuchaste toda la conversación!');
   }
 
   function cuentoPausar() {
@@ -1056,10 +1079,135 @@
     if (id === colaId) el?.classList.remove('sonando');
   }
 
+  /* ============================================================
+     CONVERSACIONES: diálogos de la vida real entre 2, 3 y 4 personas,
+     30 por nivel (A1–B2), cada persona con su propia voz Chirp3-HD.
+     Mismo reproductor que los cuentos. Audio: listening/conversaciones/{id}-{i}.mp3
+     Los datos (listening-conversaciones.js) se cargan solo al entrar aquí.
+  ============================================================ */
+  const CONV_BASE = `${SUPABASE_URL}/storage/v1/object/public/listening/conversaciones/`;
+  const CONV_NIVELES = ['A1', 'A2', 'B1', 'B2'];
+  const CONV_POR_NIVEL = 30;
+  const CONV_COLORES = ['#FF7A00', '#0D47A1', '#16a34a', '#9333ea'];
+  let convFiltro = { nivel: null, personas: 0 };
+  const convNivel = () => convFiltro.nivel || (CONV_NIVELES.includes(nivel) ? nivel : 'A1');
+
+  let convCarga = null;
+  function cargarConversaciones() {
+    if (window.LISTENING_CONVERSACIONES) return Promise.resolve(window.LISTENING_CONVERSACIONES);
+    convCarga = convCarga || new Promise((ok, mal) => {
+      const sc = document.createElement('script');
+      sc.src = 'listening-conversaciones.js?v=1';
+      sc.onload = () => ok(window.LISTENING_CONVERSACIONES || []);
+      sc.onerror = () => { convCarga = null; mal(new Error('No se pudieron cargar las conversaciones.')); };
+      document.head.appendChild(sc);
+    });
+    return convCarga;
+  }
+
+  async function renderConversaciones() {
+    panel().innerHTML = cabecera('Conversaciones', 'Diálogos reales entre 2, 3 y 4 personas, cada una con su voz. Dale play y escucha la conversación completa, o toca una línea para oírla sola.') +
+      '<div id="cv-lista" class="text-center text-slate-300 text-lg py-8"><i class="fas fa-circle-notch fa-spin"></i></div>';
+    engancharVolver();
+    let lista;
+    try { lista = await cargarConversaciones(); }
+    catch (e) { const w = document.getElementById('cv-lista'); if (w) w.innerHTML = `<p class="text-sm text-red-400">${escapeHTML(e.message)}</p>`; return; }
+    if (!document.getElementById('cv-lista')) return;   // el usuario ya se fue de esta pantalla
+    pintarListaConversaciones(lista);
+  }
+
+  function pintarListaConversaciones(lista) {
+    const nv = convNivel(), np = convFiltro.personas;
+    const delNivel = lista.filter(c => c.nivel === nv);
+    const visibles = delNivel.filter(c => !np || c.personas.length === np);
+    const hechas = delNivel.filter(c => P.conversaciones?.[c.id]).length;
+    const chip = (on) => `btn-juice font-black text-sm py-2 px-3 rounded-xl ${on ? 'bg-[#FF7A00] text-white' : 'bg-slate-100 text-slate-600'}`;
+    document.getElementById('cv-lista').outerHTML = `
+      <div id="cv-lista" class="text-left">
+        <div class="card-3d p-4 mb-4">
+          <p class="text-[10px] font-black uppercase tracking-wide text-slate-400 mb-2">Nivel</p>
+          <div class="flex gap-2 mb-3">${CONV_NIVELES.map(n => `<button class="${chip(n === nv)} flex-1" data-cvnivel="${n}">${n}</button>`).join('')}</div>
+          <p class="text-[10px] font-black uppercase tracking-wide text-slate-400 mb-2">Personas que hablan</p>
+          <div class="flex flex-wrap gap-2">${[[0, 'Todas'], [2, '👥 2'], [3, '👥 3'], [4, '👥 4']].map(([k, t]) => `<button class="${chip(k === np)}" data-cvpers="${k}">${t}</button>`).join('')}</div>
+          <div class="flex items-center gap-2 mt-4">
+            <div class="barra flex-1"><i style="width:${Math.round(hechas / Math.max(1, delNivel.length) * 100)}%"></i></div>
+            <span class="text-[11px] font-black text-slate-500">${hechas}/${delNivel.length} escuchadas</span>
+          </div>
+        </div>
+        <div class="grid sm:grid-cols-2 gap-3">
+          ${visibles.map(c => `
+          <button class="act-card" data-conv="${c.id}">
+            <div class="flex items-start gap-3">
+              <div class="act-ico" style="background:#fff1f2;font-size:26px">${c.emoji}</div>
+              <div class="min-w-0 flex-1">
+                <p class="font-heading font-black text-slate-800 leading-tight">${escapeHTML(c.titulo)}</p>
+                <p class="text-[11px] text-slate-500 leading-snug mt-0.5">${escapeHTML(c.tituloEs)}</p>
+              </div>
+              ${P.conversaciones?.[c.id] ? '<span class="text-green-600 text-lg" title="Ya la escuchaste completa">✅</span>' : ''}
+            </div>
+            <div class="flex items-center gap-2 mt-3 text-[10px] font-black text-slate-400 uppercase">
+              <span class="rounded-full px-2 py-0.5" style="background:#fff7ed;color:#FF7A00">${c.nivel}</span>
+              <span>👥 ${c.personas.length} personas · ${c.lineas.length} líneas</span>
+              <span class="ml-auto normal-case tracking-tight">${c.personas.map(p => p.genero === 'hombre' ? '👨' : '👩').join('')}</span>
+            </div>
+          </button>`).join('') || '<p class="text-sm text-slate-400">No hay conversaciones con ese filtro.</p>'}
+        </div>
+      </div>`;
+    panel().querySelectorAll('[data-cvnivel]').forEach(b => b.onclick = () => { convFiltro.nivel = b.dataset.cvnivel; pintarListaConversaciones(lista); });
+    panel().querySelectorAll('[data-cvpers]').forEach(b => b.onclick = () => { convFiltro.personas = +b.dataset.cvpers; pintarListaConversaciones(lista); });
+    panel().querySelectorAll('[data-conv]').forEach(b => b.onclick = () => abrirConversacion(b.dataset.conv));
+  }
+
+  function abrirConversacion(idConv) {
+    stopSpeaking();
+    const v = (window.LISTENING_CONVERSACIONES || []).find(x => x.id === idConv);
+    if (!v) return renderConversaciones();
+    let trad = true, oculto = false;
+    try { trad = localStorage.getItem('abu-cuentos-trad') !== '0'; } catch {}
+    cuento = { c: { id: v.id, frases: v.lineas.map(([, en, es]) => [en, es]) }, i: 0, sonando: false, traduccion: trad, base: CONV_BASE, clave: 'conversaciones' };
+    window.scrollTo({ top: 0 });
+    const volverLista = () => { stopSpeaking(); renderConversaciones(); };
+    panel().innerHTML = cabecera(`${v.emoji} ${escapeHTML(v.titulo)}`, `${escapeHTML(v.tituloEs)} · Nivel ${v.nivel} · ${v.personas.length} personas`, { volver: renderConversaciones }) + `
+      <div class="card-3d p-3 mb-3">
+        <div class="flex flex-wrap gap-x-4 gap-y-2">
+          ${v.personas.map((p, k) => `
+            <div class="flex items-center gap-2 min-w-0">
+              <span class="voz-dot" style="background:${CONV_COLORES[k]}">${escapeHTML(p.nombre[0])}</span>
+              <span class="min-w-0 leading-tight"><span class="block text-sm font-black text-slate-700">${escapeHTML(p.nombre)} ${p.genero === 'hombre' ? '👨' : '👩'}</span><span class="block text-[11px] text-slate-400">${escapeHTML(p.rol || '')}</span></span>
+            </div>`).join('')}
+        </div>
+      </div>
+      ${reproductorHTML(v.lineas.length, trad, '<button id="cv-ocultar" class="text-[11px] font-black rounded-full px-2 py-0.5 border bg-white text-slate-500 border-slate-200">Ocultar texto</button>')}
+      <div class="card-3d p-3 sm:p-4" id="ct-texto">
+        ${v.lineas.map(([k, en, es], i) => {
+          const p = v.personas[k] || { nombre: '?' };
+          return `
+          <div class="ct-frase rounded-xl px-2 py-2 mb-1 cursor-pointer transition" data-i="${i}">
+            <div class="flex gap-2.5 items-start">
+              <span class="voz-dot mt-0.5" style="background:${CONV_COLORES[k] || '#64748b'}">${escapeHTML(p.nombre[0])}</span>
+              <div class="min-w-0 flex-1">
+                <p class="text-[11px] font-black leading-none mb-1" style="color:${CONV_COLORES[k] || '#64748b'}">${escapeHTML(p.nombre)}</p>
+                <p class="ct-en text-slate-800 text-[17px] leading-relaxed">${escapeHTML(en)}</p>
+                <p class="ct-es text-[13px] text-slate-400 leading-snug ${trad ? '' : 'hidden'}">${escapeHTML(es)}</p>
+              </div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+      <p class="text-[11px] text-slate-400 text-center mt-3">Toca cualquier línea para escucharla sola. Reto: oculta el texto y escucha solo con el oído.</p>`;
+    engancharVolver(volverLista);
+    engancharReproductor();
+    document.getElementById('cv-ocultar').onclick = e => {
+      oculto = !oculto;
+      document.getElementById('ct-texto').classList.toggle('cv-oculto', oculto);
+      e.currentTarget.textContent = oculto ? 'Mostrar texto' : 'Ocultar texto';
+    };
+  }
+
   function cabecera(titulo, subtitulo, { volver = renderInicio, extra = '' } = {}) {
     return `
       <div class="card-3d p-4 sm:p-5 mb-4">
-        <button class="volver-btn text-[11px] font-black text-slate-400 hover:text-[#FF7A00] mb-2"><i class="fas fa-arrow-left mr-1"></i>Volver</button>
+        <button class="volver-btn btn-juice text-xs font-black text-slate-600 bg-slate-100 hover:text-[#FF7A00] rounded-xl px-3 py-1.5 mb-3"><i class="fas fa-arrow-left mr-1.5"></i>Volver</button>
         <p class="text-[10px] font-black uppercase tracking-widest text-slate-400">Nivel ${nivel}</p>
         <h2 class="font-heading font-black text-2xl text-[#FF7A00] leading-tight">${titulo}</h2>
         ${subtitulo ? `<p class="text-xs text-slate-500 mt-1 leading-snug">${subtitulo}</p>` : ''}
@@ -1068,7 +1216,29 @@
   }
   function engancharVolver(fn = renderInicio) {
     panel().querySelectorAll('.volver-btn').forEach(b => b.onclick = () => { stopSpeaking(); window.scrollTo({ top: 0 }); fn(); });
+    ponerVolver(fn);
   }
+
+  /* Botón «Volver» siempre a mano: flotante abajo a la izquierda en cualquier
+     pantalla interna (cuentos, conversaciones, dictado...), y también con el botón
+     «atrás» del celular o del navegador, que regresa a la pantalla anterior en
+     vez de salir de Listening. */
+  let volverActual = null;
+  function ponerVolver(fn) {
+    volverActual = fn;
+    const b = document.getElementById('volver-flot');
+    if (b) { b.classList.toggle('hidden', !fn); b.onclick = irAtras; }
+    document.getElementById('app-container')?.classList.toggle('con-volver', !!fn);
+    try { if (fn && !history.state?.abuSub) history.pushState({ abuSub: 1 }, ''); } catch {}
+  }
+  function irAtras() {
+    const fn = volverActual;
+    if (!fn) return;
+    stopSpeaking(); lsDetenerAudio?.();
+    window.scrollTo({ top: 0 });
+    fn();
+  }
+  window.addEventListener('popstate', () => { if (volverActual) irAtras(); });
 
   /* ============================================================
      6. DICTADO
@@ -2078,6 +2248,7 @@
       </div>`;
 
     document.getElementById('ls-volver').onclick = () => { lsDetenerAudio(); renderListening(); };
+    ponerVolver(() => { lsDetenerAudio(); renderListening(); });
     document.getElementById('ls-play-full').onclick = () => lsPlayFull();
     document.getElementById('ls-play-todo').onclick = () => lsPlaySecuencia(0);
     document.getElementById('ls-ver-texto').onclick = () => {
