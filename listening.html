@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <script src="abu-idioma.js"></script>
+  <script defer src="abu-ruta.js"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Abulingo - Listening</title>
   <link rel="preconnect" href="https://eylwewhqeaaqkgcxhgyv.supabase.co" crossorigin>
@@ -907,6 +908,13 @@
       </div>`).join('')}`;
     engancharVolver();
     panel().querySelectorAll('[data-cuento]').forEach(b => b.onclick = () => abrirCuento(b.dataset.cuento));
+    if (abrirSiguiente === 'cuento') {
+      abrirSiguiente = null;
+      const nv = convFiltro.nivel || nivel;
+      const pend = lista.filter(c => !P.cuentos?.[c.id]);
+      const sig = pend.find(c => c.nivel === nv) || pend.find(c => (orden[c.nivel] || 9) <= (orden[nv] || 4)) || pend[0] || lista[0];
+      if (sig) abrirCuento(sig.id);
+    }
   }
 
   function abrirCuento(idCuento) {
@@ -1053,6 +1061,7 @@
     P[clave] = P[clave] || {};
     if (!P[clave][cuento.c.id]) { P[clave][cuento.c.id] = true; guardar(); }
     if (typeof showToast === 'function') showToast(clave === 'cuentos' ? '🎉 ¡Terminaste el cuento!' : '🎉 ¡Escuchaste toda la conversación!');
+    window.AbuRuta?.listo();
   }
 
   function cuentoPausar() {
@@ -1090,6 +1099,19 @@
   const CONV_POR_NIVEL = 30;
   const CONV_COLORES = ['#FF7A00', '#0D47A1', '#16a34a', '#9333ea'];
   let convFiltro = { nivel: null, personas: 0 };
+  let abrirSiguiente = null;   // 'conv' | 'cuento': la ruta de abulingo.html pide abrir el siguiente sin escuchar
+
+  // listening.html?act=conversaciones&conv=sig&nivel=A1 (o act=cuentos&cuento=sig)
+  function abrirDesdeURLListening() {
+    const q = new URLSearchParams(location.search);
+    const act = q.get('act');
+    if (!act || !ACTIVIDADES.some(a => a.id === act)) return;
+    const nv = (q.get('nivel') || '').toUpperCase();
+    if (CONV_NIVELES.includes(nv)) convFiltro.nivel = nv;
+    if (q.get('conv') === 'sig') abrirSiguiente = 'conv';
+    if (q.get('cuento') === 'sig') abrirSiguiente = 'cuento';
+    abrirActividad(act);
+  }
   const convNivel = () => convFiltro.nivel || (CONV_NIVELES.includes(nivel) ? nivel : 'A1');
 
   let convCarga = null;
@@ -1114,6 +1136,12 @@
     catch (e) { const w = document.getElementById('cv-lista'); if (w) w.innerHTML = `<p class="text-sm text-red-400">${escapeHTML(e.message)}</p>`; return; }
     if (!document.getElementById('cv-lista')) return;   // el usuario ya se fue de esta pantalla
     pintarListaConversaciones(lista);
+    if (abrirSiguiente === 'conv') {
+      abrirSiguiente = null;
+      const delNivel = lista.filter(c => c.nivel === convNivel());
+      const sig = delNivel.find(c => !P.conversaciones?.[c.id]) || delNivel[Math.floor(Math.random() * delNivel.length)];
+      if (sig) abrirConversacion(sig.id);
+    }
   }
 
   function pintarListaConversaciones(lista) {
@@ -2649,6 +2677,7 @@
         document.getElementById('ls-volver-app').onclick = () => { window.location.href = 'abulingo.html'; };
       } else {
         renderInicio();
+        abrirDesdeURLListening();
       }
 
       window.AbuMenu?.init({

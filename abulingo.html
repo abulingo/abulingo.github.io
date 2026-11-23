@@ -558,6 +558,7 @@ function openAbuChat() {
       flujo.daily.misionPalabras = 0;
       flujo.daily.misionFrases = 0;
       flujo.daily.misionCumplida = false;
+      flujo.daily.estaciones = 0;
     }
     if (!flujo.daily.club) flujo.daily.club = { msgs: 0, joins: 0 };
     // Fin del descanso: se libera una tanda nueva de palabras
@@ -2357,15 +2358,20 @@ function openAbuChat() {
     return (idsSinRepaso = new Set((data || []).map(r => String(r.id))));
   }
 
-  async function getDueReviews(nivel) {
+  async function getDueReviews(nivel, { otrosNiveles = false } = {}) {
     const excluidas = await getIdsSinRepaso();
+    // Quien aprende inglés repasa SOLO las palabras de su nivel: estando en
+    // A1 no aparecen palabras de A2/B1. Las vencidas de otros niveles se
+    // ofrecen aparte («Repasos de otros niveles», en la pantalla de la ruta).
+    const delNivel = window.AbuIdioma?.aprendeEspanol ? null : await idsDeNivel(nivel);
+    const enAlcance = (id) => !delNivel || (otrosNiveles ? !delNivel.has(id) : delNivel.has(id));
     const cupo = repasosRestantesHoy();
     if (cupo <= 0) { console.log('[getDueReviews] cupo diario de repasos agotado'); return []; }
     const tope = Math.min(SRS_SESSION_MAX, cupo);
     const now = Date.now();
     const hoy = todayStr();
     const dueIds = Object.entries(flujo.srs)
-      .filter(([id, v]) => !v.learned && v.due && new Date(v.due).getTime() <= now && !excluidas.has(id))
+      .filter(([id, v]) => !v.learned && v.due && new Date(v.due).getTime() <= now && !excluidas.has(id) && enAlcance(id))
       // Tope diario: una palabra ya vista SRS_MAX_SHOWS_PER_DAY veces hoy no vuelve a salir hoy.
       .filter(([, v]) => (v.day !== hoy) || ((v.shownToday || 0) < SRS_MAX_SHOWS_PER_DAY))
       .sort((a, b) => {
@@ -2493,6 +2499,13 @@ function openAbuChat() {
      Prioridad: (1) repasos SRS vencidos  →  (2) repaso del grupo  →  (3) práctica  →  (4) siguiente grupo
   ============================================================ */
   async function runFlow() {
+    // Con la ruta continua (quien aprende inglés) "continuar" lleva a la
+    // pantalla de la ruta, salvo que haya una estación de 📚 Palabras en curso.
+    if (rutaOn() && rutaEst?.tipo !== 'palabras') return rutaPantalla();
+    return runFlowLibre();
+  }
+
+  async function runFlowLibre() {
     toolsBar.classList.remove('hidden');
     console.groupCollapsed('%c[runFlow]', 'color:#FF7A00;font-weight:bold');
     console.log('flujo actual:', JSON.parse(JSON.stringify(flujo)));
@@ -2528,8 +2541,8 @@ function openAbuChat() {
         'Elegir otro nivel', openNivelSelector);
     }
 
-    // (1) Repasos espaciados vencidos
-    const due = await getDueReviews(nivel);
+    // (1) Repasos espaciados vencidos (en la ruta, el repaso es su propia estación)
+    const due = rutaEst?.tipo === 'palabras' ? [] : await getDueReviews(nivel);
     if (due.length) { console.log('[runFlow] repasos SRS vencidos:', due.length); console.groupEnd(); return startSrsReview(due); }
 
     // (2)/(3)/(4) Progresión por grupos
@@ -2552,6 +2565,16 @@ function openAbuChat() {
 
     console.log(`[runFlow] estado grupo ${group}: review.done=${g.review.done} practice.done=${g.practice.done}`);
     console.groupEnd();
+
+    // 🗺️ Ruta: una estación de Palabras termina al cambiar de fase
+    // (tarjetas → práctica → diálogo) si ya se hizo algo en ella; el
+    // centro de decisión "¿Vocabulario o Dominar?" lo reemplaza la ruta.
+    if (rutaEst?.tipo === 'palabras' && !rutaEst.libre) {
+      const fase = `${group}|${fasePalabras(g)}`;
+      if (rutaEst.fase && rutaEst.fase !== fase && rutaEst.n > 0) return rutaFinEstacion();
+      rutaEst.fase = fase;
+      if (fasePalabras(g) === 'fin' && !g.pract2?.done) g.pract2 = { done: true };
+    }
 
     if (!g.review.done) return renderReview(nivel, group, words);
     if (!g.practice.done) return renderPractice(nivel, group);
@@ -2698,6 +2721,7 @@ function openAbuChat() {
       await updateSRS(word.id, result, { type: 'flashcard' }); // 'easy' | 'hard' (siembra el SRS)
       g.review.index = i + 1;
       await updateUserFlow();
+      if (rutaContar('palabras', RUTA_MAX.tarjetas)) return rutaFinEstacion();
       renderReview(nivel, group, words);
     }, i + 1, reviewList.length);
   }
@@ -3028,6 +3052,7 @@ function openAbuChat() {
       gg.practice.index = i + 1;
       await updateSRS(word.id, isCorrect ? 'practice_correct' : 'practice_wrong', { type: ex.type });
       await updateUserFlow();
+      if (rutaContar('palabras', RUTA_MAX.practica)) { setTimeout(() => rutaFinEstacion(), isCorrect ? 700 : 1800); return; }
       // Mensaje de ánimo cada 5 aciertos
       if (isCorrect && sessionCorrect > 0 && sessionCorrect % 5 === 0 && sessionCorrect !== lastMilestone) {
         lastMilestone = sessionCorrect;
@@ -3118,6 +3143,10 @@ function openAbuChat() {
      10. REPASO SRS (sesión de palabras vencidas)
   ============================================================ */
   function startSrsReview(words) {
+    if (rutaOn() && rutaEst) {
+      srsSession = { queue: words.slice(0, RUTA_MAX.repaso), index: 0, aciertos: 0 };
+      return nextSrsReview();
+    }
     srsSession = { queue: words.slice(0, SRS_SESSION_MAX), index: 0, aciertos: 0 };
     const hechosHoy = (flujo?.daily?.reviewed || 0);
     // Los repasos ya NO se limitan al nivel actual: si quedaron palabras
@@ -3136,7 +3165,14 @@ function openAbuChat() {
     if (!srsSession || srsSession.index >= srsSession.queue.length) {
       const aciertos = srsSession ? srsSession.aciertos : 0;
       const total = srsSession ? srsSession.queue.length : 0;
+      const eraExtra = !!srsSession?.extra;
       srsSession = null;
+      if (rutaOn() && rutaEst) {
+        if (!eraExtra) flujo.stats.sessionsCompleted = (flujo.stats.sessionsCompleted || 0) + 1;
+        playSound('complete'); triggerConfetti();
+        showToast(`${eraExtra ? '🔁' : '🧠'} ${aciertos}/${total} aciertos`);
+        return rutaFinEstacion();
+      }
       flujo.stats.sessionsCompleted = (flujo.stats.sessionsCompleted || 0) + 1;
       await updateUserFlow();
       playSound('complete'); triggerConfetti();
@@ -3156,6 +3192,15 @@ function openAbuChat() {
     const esDebil = (s.lapses || 0) >= 3 || (s.level || 0) === 0; // le cuesta: mejor volver a estudiarla
 
     const avanzar = async (result, type, fueBien) => {
+      if (rutaEst) rutaEst.n = (rutaEst.n || 0) + 1;
+      if (srsSession.extra) {
+        // 🔁 Práctica extra: no mueve el calendario del SRS (ver registrarPracticaExtra).
+        await registrarPracticaExtra(word, fueBien);
+        if (fueBien) srsSession.aciertos++;
+        srsSession.index++;
+        setTimeout(() => nextSrsReview(), fueBien ? 700 : 1800);
+        return;
+      }
       await updateSRS(word.id, result, { type, word });
       ensureDaily();
       flujo.daily.reviewed = (flujo.daily.reviewed || 0) + 1;
@@ -3241,6 +3286,7 @@ function openAbuChat() {
          Ahora: (1) el modal ofrece Dominar cuando queda pendiente, y
          (2) la felicitación se muestra UNA vez — después se entra directo
          al centro de decisión, que sí tiene los dos caminos abiertos. */
+      if (rutaOn()) return rutaVocabTerminado(nivel);
       const d = ensureDominar(nivel);
       const dominarPendiente = !d.completado;
       const yaFelicitado = !!flujo.niveles[nivel].vocabFelicitado;
@@ -3274,6 +3320,27 @@ function openAbuChat() {
         ]
       });
     }
+  }
+
+  // 🗺️ Con la ruta: se felicita UNA vez y se explica qué sigue (práctica
+  // extra y repasos del mismo nivel, y el examen de certificación).
+  async function rutaVocabTerminado(nivel) {
+    const ya = !!flujo.niveles[nivel].vocabFelicitado;
+    flujo.niveles[nivel].vocabFelicitado = true;
+    await updateUserFlow();
+    const seguir = () => { closeModal(); return rutaEst ? rutaFinEstacion() : rutaPantalla(); };
+    if (ya) return seguir();
+    playSound('complete'); triggerConfetti();
+    const cert = await getCertProgreso(nivel);
+    showModal({
+      icon: '🎓', title: `¡Terminaste el vocabulario de ${nivel}!`,
+      body: `Ya viste todas las palabras de <b>${nivel}</b>. Desde ahora tu ruta te pondrá <b>🔁 práctica extra</b> y <b>🧠 repasos</b> de ${nivel} (solo de ${nivel}) para que no se te olviden, junto con lecturas, frases, videos y escucha.` +
+        (cert.listo
+          ? `<span class="block mt-3 text-green-600 font-bold">🎓 ¡Dominaste las ${cert.total} palabras! Tu certificado del nivel ${nivel} ya está disponible.</span>`
+          : `<span class="block mt-3 text-slate-500">Te faltan <b class="text-[#FF7A00]">${cert.faltan}</b> palabra${cert.faltan === 1 ? '' : 's'} por dominar para el certificado por vocabulario, o puedes presentar el <b>examen de certificación</b>.</span>`),
+      dismissable: false,
+      actions: [{ label: 'Seguir con mi ruta 👉', onClick: seguir }]
+    });
   }
 
   /* ============================================================
@@ -3661,6 +3728,7 @@ function openAbuChat() {
     if (!puedeIA()) { await marcarHecho(); return runFlow(); }
 
     // Antes de pedir el guion a la IA se pregunta: generarlo o saltarlo.
+    if (rutaEst?.tipo === 'palabras') rutaEst.n = (rutaEst.n || 0) + 1;
     updateProgressBar(65);
     appContainer.innerHTML = `
       <div class="card-3d p-5 animate-pop mt-1 text-center">
@@ -4268,29 +4336,40 @@ function openAbuChat() {
     const item = cont.plan[n];
     if (!item) return dominarSinContenido(nivel);
     const st = ensureSub(nivel, n);
+    // 🗺️ Ruta: la estación de Dominar es UN paso (📖, 🧩/👂 hasta
+    // RUTA_MAX.frases frases, 🎬, 🎭 o 🦜). Al pasar al siguiente, vuelve a la ruta.
+    if (rutaEst?.tipo === 'dominar' && st.paso !== 'fin') {
+      const clave = `${n}|${st.paso}`;
+      if (rutaEst.clave && rutaEst.clave !== clave && rutaEst.n > 0) return rutaFinEstacion();
+      if (rutaEst.clave === clave && st.paso === 'ronda' && (st.rondaIdx || 0) - (rutaEst.ronda0 || 0) >= RUTA_MAX.frases) return rutaFinEstacion();
+      if (rutaEst.clave !== clave) { rutaEst.clave = clave; rutaEst.ronda0 = st.rondaIdx || 0; }
+    }
+    const ver = () => { if (rutaEst?.tipo === 'dominar') rutaEst.n = (rutaEst.n || 0) + 1; };
     const pctBase = ((n - 1) / DOMINAR_SUBS) * 100;
     const pasoPct = { lee: 5, ronda: 35, video: 60, conversar: 75, abu: 90 }[st.paso] || 95;
     domPintarFase('DOMINAR', pctBase + (pasoPct / DOMINAR_SUBS));
 
     if (st.paso === 'lee') {
-      if (item.lee) return domEjTexto(nivel, n, item.lee);
+      if (item.lee) { ver(); return domEjTexto(nivel, n, item.lee); }
       st.paso = 'ronda'; await updateUserFlow(); return pasoDominar(nivel);
     }
     if (st.paso === 'ronda') {
       if (st.rondaIdx < item.ronda.length) {
         const r = item.ronda[st.rondaIdx];
+        ver();
         return r.tipo === 'orden' ? domEjOrden(nivel, n, r.fila) : domEjEscucha(nivel, n, r.fila);
       }
       st.paso = 'video'; await updateUserFlow(); return pasoDominar(nivel);
     }
     if (st.paso === 'video') {
-      if (item.video) return domEjVideo(nivel, n, item.video);
+      if (item.video) { ver(); return domEjVideo(nivel, n, item.video); }
       st.paso = 'conversar'; await updateUserFlow(); return pasoDominar(nivel);
     }
     if (st.paso === 'conversar') {
-      if (item.conversar) return domIntroAhoraAConversar(nivel, n, item.conversar);
+      if (item.conversar) { ver(); return domIntroAhoraAConversar(nivel, n, item.conversar); }
       st.paso = 'abu'; await updateUserFlow(); return pasoDominar(nivel);
     }
+    ver();
     if (st.paso === 'abu') return domIntroConversaAbu(nivel, n, item);
     return domSubseccionCompleta(nivel, n);
   }
@@ -5240,13 +5319,15 @@ function openAbuChat() {
      se retoma exactamente donde quedó cada camino.
   ------------------------------------------------------------ */
   function volverAlHub() {
+    if (rutaOn()) return rutaEst ? rutaFinEstacion() : rutaPantalla();
     const nivel = flujo.currentNivel;
     const group = flujo.niveles[nivel]?.currentGroup || null;
     mostrarEleccionVocabularioODominar(nivel, group);
   }
 
-  async function mostrarEleccionVocabularioODominar(nivel, group) {
+  async function mostrarEleccionVocabularioODominar(nivel, group, opts = {}) {
     toolsBar.classList.remove('hidden');
+    const conRuta = rutaOn();
     updateProgressBar(70);
     const d = flujo.dominar?.[nivel];
     const hayAvanceDominar = d && (d.subseccionActual > 1 || Object.keys(d.subs || {}).length);
@@ -5261,26 +5342,41 @@ function openAbuChat() {
     const grupos = await getGroups(nivel);
     const est = flujo.niveles?.[nivel]?.grupos || {};
     const idx = group ? grupos.indexOf(group) : -1;
-    const hayMasVocab = grupos.some((gk, i) => i > idx && !est[gk]?.completed);
+    // Desde la ruta ("Elegir yo") el grupo actual todavía cuenta como pendiente.
+    const hayMasVocab = grupos.some((gk, i) => (opts.libre ? i >= idx : i > idx) && !est[gk]?.completed);
 
     appContainer.innerHTML = `
       <div class="card-3d p-6 text-center animate-pop mt-4">
         <div class="text-5xl mb-3">🚀</div>
         <h2 class="font-heading font-bold text-slate-800 text-xl mb-2">¿Qué quieres hacer ahora?</h2>
-        <p class="text-slate-500 mb-5">${group ? `Ya terminaste el repaso y la práctica de <b>${escapeHTML(group)}</b>. ` : ''}Elige por dónde seguir:</p>
+        <p class="text-slate-500 mb-5">${group && !opts.libre ? `Ya terminaste el repaso y la práctica de <b>${escapeHTML(group)}</b>. ` : ''}Elige por dónde seguir:</p>
         <div class="space-y-3">
           <button id="dom-ir-vocab" class="w-full btn-juice bg-white border-2 border-slate-200 text-slate-700 font-bold py-4 rounded-xl text-left px-5">
             <span class="block text-lg">${hayMasVocab ? '📚 Seguir con Vocabulario' : '🔁 Repasar mis palabras'}</span>
-            <span class="block text-xs font-normal text-slate-400 mt-0.5">${hayMasVocab ? 'Continúa con el siguiente grupo de palabras' : domTx(`Ya viste todas las palabras de ${escapeHTML(nivel)}: aquí solo repasas las que toquen hoy`, `You've seen all the ${escapeHTML(nivel)} words: here you only review the ones due today`)}</span>
+            <span class="block text-xs font-normal text-slate-400 mt-0.5">${hayMasVocab ? (opts.libre ? 'Tus palabras nuevas, sin pausas' : 'Continúa con el siguiente grupo de palabras') : domTx(`Ya viste todas las palabras de ${escapeHTML(nivel)}: aquí solo repasas las que toquen hoy`, `You've seen all the ${escapeHTML(nivel)} words: here you only review the ones due today`)}</span>
           </button>
           <button id="dom-ir-dominar" class="w-full btn-juice ${dominarListo ? 'bg-white border-2 border-slate-200 text-slate-700' : 'bg-[#FF7A00] text-white'} font-bold py-4 rounded-xl text-left px-5">
             <span class="block text-lg">🏆 Dominar${dominarListo ? ' (completado)' : ''}</span>
             <span class="block text-xs font-normal ${dominarListo ? 'text-slate-400' : 'text-orange-100'} mt-0.5">${dominarListo ? 'Puedes volver a repasar cualquier subsección' : (hayAvanceDominar ? domTx(`Sigue en la subsección ${d.subseccionActual}/${DOMINAR_SUBS}`, `Continue at subsection ${d.subseccionActual}/${DOMINAR_SUBS}`) : domTx(`Frases, videos y conversaciones del nivel ${escapeHTML(nivel)}`, `Readings, phrases and conversations for level ${escapeHTML(nivel)}`))}</span>
           </button>
+          ${conRuta ? '<button id="dom-ir-ruta" class="w-full btn-juice bg-slate-800 text-white font-bold py-3 rounded-xl">🗺️ Volver a mi ruta</button>' : ''}
           <button id="dom-ir-nivel" class="w-full text-slate-400 font-bold text-sm py-2">🎯 Cambiar de nivel</button>
+          ${window.AbuIdioma?.aprendeEspanol ? '' : `<button id="dom-ruta-modo" class="w-full text-slate-400 font-bold text-xs py-1">${conRuta ? 'Prefiero elegir siempre yo (apagar la ruta)' : '🗺️ Activar la ruta guiada'}</button>`}
         </div>
       </div>`;
+    const bRuta = document.getElementById('dom-ir-ruta');
+    if (bRuta) bRuta.onclick = () => { rutaEst = null; rutaPantalla(); };
+    const bModo = document.getElementById('dom-ruta-modo');
+    if (bModo) bModo.onclick = async () => {
+      ensureRuta().off = conRuta;
+      rutaEst = null;
+      await updateUserFlow();
+      showToast(conRuta ? 'Ruta apagada: tú eliges cada paso.' : '🗺️ Ruta guiada activada');
+      runFlow();
+    };
     document.getElementById('dom-ir-vocab').onclick = async () => {
+      // Desde la ruta, "Vocabulario" es libre: sigue con las palabras sin topes.
+      if (conRuta) rutaEst = { tipo: 'palabras', n: 0, suelta: true, libre: true };
       const g = group && flujo.niveles[nivel]?.grupos?.[group];
       if (g) { if (!g.pract2) g.pract2 = { done: false }; g.pract2.done = true; await updateUserFlow(); }
       if (hayMasVocab) return runFlow();
@@ -5292,7 +5388,7 @@ function openAbuChat() {
         `No tienes repasos pendientes de <b>${escapeHTML(nivel)}</b> por ahora. Vuelve más tarde o sigue con las otras secciones. 🧠`,
         'Volver', volverAlHub, salidaDominar(nivel));
     };
-    document.getElementById('dom-ir-dominar').onclick = () => iniciarDominar(nivel);
+    document.getElementById('dom-ir-dominar').onclick = () => { rutaEst = null; iniciarDominar(nivel); };
     document.getElementById('dom-ir-nivel').onclick = openNivelSelector;
   }
 
@@ -5385,7 +5481,426 @@ function openAbuChat() {
   // directamente en el nivel actual, sin pasar por el grupo de vocabulario.
   function abrirDominarDesdeMenu() {
     closeModal();
+    rutaEst = null;
     iniciarDominar(flujo.currentNivel || 'A1');
+  }
+
+  /* ============================================================
+     13.4. RUTA CONTINUA (solo quien aprende inglés)
+     ------------------------------------------------------------
+     En vez de bloques largos de un solo tipo (30 tarjetas seguidas,
+     60 ejercicios seguidos...), el estudio se reparte en ESTACIONES
+     cortas de 3-6 minutos que se van alternando solas:
+
+        🧠 Repaso → 📚 Palabras → 🏆 Dominar → 📚 Palabras → 🏆 Dominar → 🧰 Herramienta
+
+       · 🧠 Repaso: palabras VENCIDAS del nivel actual (memoria espaciada),
+         máximo RUTA_MAX.repaso por estación.
+       · 📚 Palabras: el grupo actual (tarjetas → práctica → diálogo), en
+         trozos de RUTA_MAX.tarjetas tarjetas o RUTA_MAX.practica ejercicios.
+         Si ya no quedan palabras nuevas del nivel → 🔁 Práctica extra
+         del MISMO nivel (las que más cuestan primero).
+       · 🏆 Dominar: un paso de la subsección actual (📖 lectura, 👂/🧩
+         frases, 🎬 video, 🎭 conversación o 🦜 Abu).
+       · 🧰 Herramienta: Listening, Pronunciación, Gramática, cuentos y el
+         examen de certificación. Van APARECIENDO SOLAS: una nueva cada
+         vuelta completa de la ruta (la primera vez se presenta).
+
+     Mezclar tipos de práctica (interleaving) y repartir el repaso en el
+     tiempo (spacing) es lo que mejor fija la memoria a largo plazo, y
+     además evita el cansancio de hacer lo mismo 20 minutos seguidos.
+
+     Estado: flujo.ruta = { i, ciclos, h, vistas, externo, off } y el
+     contador del día flujo.daily.estaciones. La estación en curso vive
+     solo en memoria (rutaEst): al recargar, la ruta te muestra su
+     pantalla y sigues desde la siguiente estación.
+  ============================================================ */
+  const RUTA_CICLO = ['repaso', 'palabras', 'dominar', 'palabras', 'dominar', 'herramienta'];
+  const RUTA_MAX = { repaso: 15, tarjetas: 10, practica: 12, frases: 8, extra: 12 };
+  const RUTA_META_DIA = 6;
+  // Herramientas en el orden en que van apareciendo (una por vuelta de la ruta).
+  const RUTA_HERRAMIENTAS = ['listening', 'pronunciacion', 'gramatica', 'cuento'];
+  const RUTA_PTS_HERRAMIENTA = 10;
+  let rutaEst = null;   // { tipo, n, fase, clave, ronda0, reintento }
+
+  const rutaOn = () => !window.AbuIdioma?.aprendeEspanol && !!flujo && flujo.ruta?.off !== true;
+  function ensureRuta() {
+    if (!flujo.ruta) flujo.ruta = { i: 0, ciclos: 0, h: 0, vistas: {}, externo: null, off: false };
+    const r = flujo.ruta;
+    if (!r.vistas) r.vistas = {};
+    if (typeof r.i !== 'number') r.i = 0;
+    if (typeof r.ciclos !== 'number') r.ciclos = 0;
+    if (typeof r.h !== 'number') r.h = 0;
+    ensureDaily();
+    if (typeof flujo.daily.estaciones !== 'number') flujo.daily.estaciones = 0;
+    return r;
+  }
+
+  // Suma una unidad (tarjeta, ejercicio, palabra) a la estación en curso.
+  // true = la estación ya llegó a su tope y hay que pasar a la siguiente.
+  function rutaContar(tipo, tope) {
+    if (!rutaEst || rutaEst.tipo !== tipo) return false;
+    rutaEst.n = (rutaEst.n || 0) + 1;
+    return !rutaEst.libre && rutaEst.n >= tope;   // "Elegir yo" → Vocabulario no tiene topes
+  }
+
+  // Ids de las palabras de un nivel (para que el repaso sea SOLO de tu nivel).
+  const idsNivelCache = {};
+  async function idsDeNivel(nivel) {
+    if (idsNivelCache[nivel]) return idsNivelCache[nivel];
+    const { data, error } = await dbClient.from('palabras').select('id').eq('nivel', nivel).range(0, 9999);
+    if (error) { console.error('[idsDeNivel]', error.message); return null; }
+    return (idsNivelCache[nivel] = new Set((data || []).map(r => String(r.id))));
+  }
+
+  // Repasos vencidos de OTROS niveles (no salen en la ruta; se ofrecen aparte).
+  async function contarRepasosOtrosNiveles(nivel) {
+    const ids = await idsDeNivel(nivel);
+    if (!ids) return 0;
+    const excluidas = await getIdsSinRepaso();
+    const now = Date.now();
+    return Object.entries(flujo.srs || {}).filter(([id, v]) => !ids.has(id) && !excluidas.has(id) && !v.learned && v.due && new Date(v.due).getTime() <= now).length;
+  }
+
+  /* ------------------------------------------------------------
+     🔁 PRÁCTICA EXTRA del nivel: para repasar el nivel las veces que
+     quieras sin romper la memoria espaciada. Elige primero las que más
+     cuestan (difíciles, con más fallos, nivel SRS bajo) y luego las
+     que hace más tiempo no ves; las dominadas también entran, al final.
+     Acertar aquí NO adelanta su calendario (repasar antes de tiempo casi
+     no fija más); fallar sí la trae de vuelta al repaso en 30 minutos.
+  ------------------------------------------------------------ */
+  async function palabrasPracticaExtra(nivel, cuantas = RUTA_MAX.extra) {
+    const ids = await idsDeNivel(nivel);
+    if (!ids) return [];
+    const now = Date.now();
+    const vistas = Object.entries(flujo.srs || {}).filter(([id]) => ids.has(id));
+    if (!vistas.length) return [];
+    const peso = ([, s]) => (s.learned ? 0 : 40) + (s.difficult ? 30 : 0) + Math.min(5, s.lapses || 0) * 6 + Math.min(4, s.xf || 0) * 5
+      + (GRADUATED_LEVEL - Math.min(GRADUATED_LEVEL, s.level || 0)) * 2
+      + Math.min(10, (now - ((s.xt || 0) * 1000 || new Date(s.updated || 0).getTime())) / 86400000);
+    const elegidas = vistas.map(e => [e, peso(e) + Math.random() * 6]).sort((a, b) => b[1] - a[1]).slice(0, cuantas).map(([[id]]) => parseInt(id)).filter(n => !isNaN(n));
+    if (!elegidas.length) return [];
+    const { data, error } = await dbClient.from('palabras').select('*').in('id', elegidas);
+    if (error) { console.error('[practicaExtra]', error.message); return []; }
+    return barajarDom(data || []);
+  }
+  async function registrarPracticaExtra(word, ok) {
+    const s = flujo.srs[String(word.id)];
+    if (!s) return;
+    s.xt = Math.round(Date.now() / 1000);
+    if (ok) {
+      sessionStreak++; sessionCorrect++;
+      flujo.stats.totalCorrect = (flujo.stats.totalCorrect || 0) + 1;
+      playSound('correct');
+      await addPoints(4);
+    } else {
+      sessionStreak = 0;
+      flujo.stats.totalWrong = (flujo.stats.totalWrong || 0) + 1;
+      s.xf = (s.xf || 0) + 1;
+      // Si todavía la está aprendiendo, vuelve al repaso espaciado en 30 min.
+      if (!s.learned) {
+        const pronto = Date.now() + SRS_FAIL_GAP_MIN * 60000;
+        if (!s.due || new Date(s.due).getTime() > pronto) s.due = new Date(pronto).toISOString();
+        s.difficult = true; s.okStreak = 0;
+      }
+      playSound('wrong');
+    }
+    touchStreak();
+    await updateUserFlow();
+  }
+  async function iniciarPracticaExtra(nivel) {
+    const words = await palabrasPracticaExtra(nivel);
+    if (!words.length) {
+      return renderMessage('📭', 'Aún no hay qué practicar',
+        `Primero estudia algunas palabras de <b>${escapeHTML(nivel)}</b>: la práctica extra usa las que ya viste.`,
+        'Volver', () => rutaEst ? rutaFinEstacion() : rutaPantalla());
+    }
+    srsSession = { queue: words, index: 0, aciertos: 0, extra: true };
+    nextSrsReview();
+  }
+
+  /* ------------------------------------------------------------
+     DISPONIBILIDAD de cada estación (se salta lo que no aplica)
+  ------------------------------------------------------------ */
+  function fasePalabras(g) {
+    if (!g) return 'review';
+    if (!g.review?.done) return 'review';
+    if (!g.practice?.done) return 'practice';
+    if (!g.dialogo?.done) return 'dialogo';
+    return 'fin';
+  }
+  async function rutaInfoPalabras(nivel) {
+    const grupos = await getGroups(nivel);
+    const n = await ensureNivel(nivel);
+    const est = n.grupos || {};
+    const pendiente = grupos.some(gk => !est[gk]?.completed);
+    if (!pendiente || !n.currentGroup) return null;
+    const words = await getGroupWords(nivel, n.currentGroup);
+    if (!words.length) return null;            // p. ej. tope del plan Gratis
+    const g = est[n.currentGroup] || defaultGroupState();
+    const fase = fasePalabras(g);
+    if (fase === 'review' && newWordsLocked()) return null;
+    const nombre = { review: '📚 Palabras nuevas', practice: '✍️ Practica tus palabras', dialogo: '🎭 Diálogo con tus palabras', fin: '📚 Palabras nuevas' }[fase];
+    const desc = {
+      review: `Tarjetas con imagen y sonido · ${escapeHTML(n.currentGroup)}`,
+      practice: 'Identifica la imagen y escribe lo que oyes',
+      dialogo: 'Una conversación corta con las palabras que estudiaste',
+      fin: `Siguiente grupo de ${escapeHTML(nivel)}`
+    }[fase];
+    return { tipo: 'palabras', icono: nombre.split(' ')[0], nombre: nombre.slice(nombre.indexOf(' ') + 1), desc };
+  }
+  async function rutaInfoDominar(nivel) {
+    const d = ensureDominar(nivel);
+    if (d.completado) return null;
+    if (esGratis() && d.subseccionActual > GRATIS_DOMINAR_SUBS) return null;
+    const cont = await cargarContenidoDominar(nivel);
+    const item = cont.plan?.[d.subseccionActual];
+    if (!item) return null;
+    const st = ensureSub(nivel, d.subseccionActual);
+    // El primer paso que de verdad tiene contenido (igual que pasoDominar).
+    let paso = st.paso;
+    if (paso === 'lee' && !item.lee) paso = 'ronda';
+    if (paso === 'ronda' && (st.rondaIdx || 0) >= item.ronda.length) paso = 'video';
+    if (paso === 'video' && !item.video) paso = 'conversar';
+    if (paso === 'conversar' && !item.conversar) paso = 'abu';
+    const info = {
+      lee: ['📖', 'Lectura', 'Lee un texto corto y completa las palabras que faltan'],
+      ronda: ['🧩', 'Frases', 'Escucha y completa · ordena frases reales'],
+      video: ['🎬', 'Video', 'Mira un video corto y completa lo que dicen'],
+      conversar: ['🎭', 'Conversación', 'Una conversación real para escuchar y practicar'],
+      abu: ['🦜', 'Conversa con Abu', 'Responde con tu voz usando lo que aprendiste'],
+      fin: ['🏆', 'Cierre de la sección', `Termina la sección ${d.subseccionActual} de ${DOMINAR_SUBS}`]
+    }[paso] || ['🏆', 'Dominar', ''];
+    return { tipo: 'dominar', icono: info[0], nombre: info[1], desc: `${info[2]} · sección ${d.subseccionActual}/${DOMINAR_SUBS}` };
+  }
+  const RUTA_HERR_INFO = {
+    listening: { icono: '🎧', nombre: 'Listening', desc: (nv) => `Una conversación de ${nv} entre varias personas, con voces reales`,
+      nuevo: 'Escucha conversaciones de la vida real (en un bar, en el médico, presentándose...) leyendo y oyendo cada línea. Entrena el oído para el inglés de verdad.',
+      url: (nv) => `listening.html?ruta=1&act=conversaciones&conv=sig&nivel=${encodeURIComponent(nv)}` },
+    pronunciacion: { icono: '🗣️', nombre: 'Pronunciación', desc: () => 'Repite frases y la IA te dice qué sonidos corregir',
+      nuevo: 'Lees frases en voz alta y la inteligencia artificial te califica palabra por palabra. Así tu inglés se entiende cada vez mejor.',
+      url: () => 'pronunciacion.html?ruta=1' },
+    gramatica: { icono: '📘', nombre: 'Gramática', desc: () => 'Tu siguiente lección, corta y con ejercicios',
+      nuevo: 'Lecciones cortas que explican cómo se arma el inglés (verbos, tiempos, preguntas...) con ejemplos y ejercicios.',
+      url: () => 'gramatica.html?ruta=1' },
+    cuento: { icono: '📗', nombre: 'Cuento', desc: (nv) => `Una historia de ${nv} para leer y escuchar`,
+      nuevo: 'Historias cortas y divertidas narradas frase por frase, con su traducción. Ideal para aprender sin darte cuenta.',
+      url: (nv) => `listening.html?ruta=1&act=cuentos&cuento=sig&nivel=${encodeURIComponent(nv)}` },
+    examen: { icono: '🎓', nombre: 'Examen de certificación', desc: (nv) => `Ya viste todo el vocabulario de ${nv}: demuestra tu nivel`,
+      nuevo: 'Un examen con listening, reading, gramática, writing y speaking. Si sacas 95 % o más, obtienes tu certificado del nivel.',
+      url: () => 'certificacion.html?ruta=1' }
+  };
+  async function rutaInfoHerramienta(nivel, avanzar = false) {
+    if (!puedeHerramientas()) return null;
+    const r = ensureRuta();
+    // El examen se sugiere UNA vez por nivel, cuando terminas su vocabulario.
+    if (nivel !== 'C1' && !r.vistas[`examen-${nivel}`]) {
+      const grupos = await getGroups(nivel);
+      const est = flujo.niveles?.[nivel]?.grupos || {};
+      if (grupos.length && grupos.every(gk => est[gk]?.completed)) {
+        if (avanzar) r.vistas[`examen-${nivel}`] = true;
+        return { tipo: 'herramienta', herr: 'examen', ...rutaHerrInfo('examen', nivel) };
+      }
+    }
+    // Van apareciendo: en la vuelta k ya están las k primeras (mínimo 1).
+    const abiertas = RUTA_HERRAMIENTAS.slice(0, Math.max(1, Math.min(RUTA_HERRAMIENTAS.length, (r.ciclos || 0) + 1)));
+    const herr = abiertas[(r.h || 0) % abiertas.length];
+    if (avanzar) r.h = (r.h || 0) + 1;
+    return { tipo: 'herramienta', herr, ...rutaHerrInfo(herr, nivel) };
+  }
+  function rutaHerrInfo(herr, nivel) {
+    const h = RUTA_HERR_INFO[herr];
+    const nuevo = !ensureRuta().vistas[herr];
+    return { icono: h.icono, nombre: h.nombre, desc: h.desc(nivel), nuevo };
+  }
+
+  // Siguiente estación disponible a partir de flujo.ruta.i (sin moverla).
+  async function rutaResolver(nivel, avanzar = false) {
+    const r = ensureRuta();
+    let palabrasInfo, extraOk;
+    for (let k = 0; k < RUTA_CICLO.length; k++) {
+      const idx = (r.i + k) % RUTA_CICLO.length;
+      const tipo = RUTA_CICLO[idx];
+      let info = null;
+      if (tipo === 'repaso') {
+        const due = await getDueReviews(nivel);
+        if (due.length) info = { tipo, icono: '🧠', nombre: 'Repaso', desc: `${Math.min(due.length, RUTA_MAX.repaso)} palabra${due.length === 1 ? '' : 's'} de ${nivel} que tu memoria está por olvidar`, due };
+      } else if (tipo === 'palabras') {
+        if (palabrasInfo === undefined) palabrasInfo = await rutaInfoPalabras(nivel);
+        info = palabrasInfo;
+        if (!info) {
+          // Sin palabras nuevas: práctica extra del mismo nivel.
+          if (extraOk === undefined) {
+            const ids = await idsDeNivel(nivel);
+            extraOk = !!ids && Object.keys(flujo.srs || {}).some(id => ids.has(id));
+          }
+          if (extraOk) info = { tipo: 'extra', icono: '🔁', nombre: `Práctica extra de ${nivel}`, desc: 'Las palabras del nivel que más te cuestan, para fijarlas aún más' };
+        }
+      } else if (tipo === 'dominar') {
+        info = await rutaInfoDominar(nivel);
+      } else if (tipo === 'herramienta') {
+        info = await rutaInfoHerramienta(nivel, avanzar);
+      }
+      if (info) {
+        if (avanzar) {
+          // Una vuelta completa = se llegó (o se pasó) a la última estación del ciclo.
+          if (idx < (r.i % RUTA_CICLO.length) || idx === RUTA_CICLO.length - 1) r.ciclos = (r.ciclos || 0) + 1;
+          r.i = (idx + 1) % RUTA_CICLO.length;
+        }
+        return { ...info, idx };
+      }
+    }
+    return null;
+  }
+
+  /* ------------------------------------------------------------
+     PANTALLA DE LA RUTA (entre estación y estación)
+  ------------------------------------------------------------ */
+  let rutaUltima = null;   // { icono, nombre } de la estación que se acaba de terminar
+  async function rutaPantalla() {
+    if (!rutaOn()) { rutaEst = null; return runFlow(); }
+    rutaEst = null;
+    srsSession = null;
+    toolsBar.classList.remove('hidden');
+    const r = ensureRuta();
+    const nivel = flujo.currentNivel;
+    document.getElementById('nivel-label').textContent = nivel;
+    appContainer.innerHTML = `<div class="text-center animate-pulse mt-10"><i class="fas fa-circle-notch fa-spin text-4xl text-[#FF7A00]"></i></div>`;
+
+    // Volvió de una herramienta (listening, pronunciación, gramática...).
+    if (r.externo) {
+      const h = RUTA_HERR_INFO[r.externo.herr];
+      r.externo = null;
+      flujo.daily.estaciones = (flujo.daily.estaciones || 0) + 1;
+      rutaUltima = h ? { icono: h.icono, nombre: h.nombre } : null;
+      await updateUserFlow();
+      await addPoints(RUTA_PTS_HERRAMIENTA);
+    }
+
+    const niveles = await getNiveles();
+    if (niveles.length && !niveles.includes(nivel)) return runFlowLibre();
+    await ensureNivel(nivel);
+    const sig = await rutaResolver(nivel);
+    const otros = await contarRepasosOtrosNiveles(nivel);
+    const hechas = flujo.daily.estaciones || 0;
+    const metaOk = hechas >= RUTA_META_DIA;
+    const ids = await idsDeNivel(nivel);
+    const vistasNivel = ids ? Object.keys(flujo.srs || {}).filter(id => ids.has(id)) : [];
+    const dominadas = vistasNivel.filter(id => flujo.srs[id]?.learned).length;
+    const totalNivel = ids ? ids.size : 0;
+    const posCiclo = sig ? sig.idx : -1;
+    const ICONOS = { repaso: '🧠', palabras: '📚', dominar: '🏆', herramienta: '🧰' };
+    updateProgressBar(Math.min(100, Math.round(hechas / RUTA_META_DIA * 100)));
+
+    appContainer.innerHTML = `
+      <div class="card-3d p-5 sm:p-6 animate-pop mt-4">
+        ${rutaUltima ? `<p class="text-center text-sm font-black text-green-600 mb-3">✅ ${rutaUltima.icono} ${escapeHTML(rutaUltima.nombre)} · ¡listo!</p>` : ''}
+        <div class="flex items-center justify-between mb-1">
+          <h2 class="font-heading font-bold text-slate-800 text-xl">🗺️ Tu ruta · ${escapeHTML(nivel)}</h2>
+          <span class="text-xs font-black ${metaOk ? 'text-green-600' : 'text-[#FF7A00]'}">${Math.min(hechas, RUTA_META_DIA)}/${RUTA_META_DIA} hoy</span>
+        </div>
+        <div class="h-2 bg-slate-100 rounded-full overflow-hidden mb-4"><div class="h-full rounded-full" style="background:linear-gradient(90deg,#FF7A00,#fbbf24);width:${Math.min(100, Math.round(hechas / RUTA_META_DIA * 100))}%"></div></div>
+        ${metaOk ? `<p class="text-center text-sm text-green-700 bg-green-50 rounded-xl py-2 px-3 mb-4 font-bold">🎉 ¡Meta de hoy cumplida! Si quieres, sigue: cada estación suma.</p>` : ''}
+        <div class="flex items-center justify-between gap-1 mb-5 px-1">
+          ${RUTA_CICLO.map((t, k) => `
+            <div class="flex flex-col items-center flex-1 min-w-0">
+              <div class="w-10 h-10 rounded-full flex items-center justify-center text-lg ${k === posCiclo ? 'bg-[#FF7A00] text-white shadow-lg ring-4 ring-orange-100' : (posCiclo >= 0 && k < posCiclo ? 'bg-green-100' : 'bg-slate-100 opacity-60')}">${k === posCiclo ? sig.icono : ICONOS[t]}</div>
+            </div>`).join('<div class="h-0.5 flex-1 bg-slate-200 -mx-2 mb-0"></div>')}
+        </div>
+        ${sig ? `
+          <button id="ruta-seguir" class="w-full btn-juice bg-[#FF7A00] text-white font-bold py-4 rounded-2xl text-left px-5 shadow-lg">
+            <span class="block text-[11px] font-black uppercase tracking-wide text-orange-100">${sig.nuevo ? '🆕 Nuevo para ti' : 'Siguiente'}</span>
+            <span class="block text-xl">${sig.icono} ${escapeHTML(sig.nombre)}</span>
+            <span class="block text-xs font-normal text-orange-50 mt-0.5">${sig.desc}</span>
+          </button>` : `
+          <div class="text-center py-3">
+            <div class="text-4xl mb-2">😴</div>
+            <p class="font-bold text-slate-700">Todo al día en ${escapeHTML(nivel)}</p>
+            <p class="text-sm text-slate-500">No hay repasos pendientes ni pasos nuevos por ahora.</p>
+          </div>`}
+        <div class="grid grid-cols-2 gap-2 mt-3">
+          ${vistasNivel.length ? `<button id="ruta-extra" class="btn-juice bg-slate-100 text-slate-700 font-bold py-3 rounded-xl text-sm">🔁 Practicar ${escapeHTML(nivel)}</button>` : ''}
+          <button id="ruta-libre" class="btn-juice bg-slate-100 text-slate-700 font-bold py-3 rounded-xl text-sm">🧭 Elegir yo</button>
+          ${otros ? `<button id="ruta-otros" class="btn-juice bg-slate-100 text-slate-700 font-bold py-3 rounded-xl text-sm col-span-2">🔁 Repasos de otros niveles (${otros})</button>` : ''}
+        </div>
+        <div class="flex items-center justify-between mt-4 text-[11px] text-slate-400 font-bold">
+          <span>📈 ${escapeHTML(nivel)}: ${vistasNivel.length}/${totalNivel} vistas · ${dominadas} dominadas</span>
+          <button id="ruta-nivel" class="hover:text-[#FF7A00]">🎯 Cambiar nivel</button>
+        </div>
+      </div>`;
+    rutaUltima = null;
+    if (sig) document.getElementById('ruta-seguir').onclick = (e) => { e.currentTarget.disabled = true; rutaIniciarSiguiente(); };
+    const bx = document.getElementById('ruta-extra');
+    if (bx) bx.onclick = () => { rutaEst = { tipo: 'extra', n: 0, suelta: true, icono: '🔁', nombre: `Práctica extra de ${nivel}` }; iniciarPracticaExtra(nivel); };
+    const bo = document.getElementById('ruta-otros');
+    if (bo) bo.onclick = async () => {
+      const due = await getDueReviews(nivel, { otrosNiveles: true });
+      if (!due.length) return rutaPantalla();
+      rutaEst = { tipo: 'repaso', n: 0, suelta: true, icono: '🔁', nombre: 'Repasos de otros niveles' };
+      startSrsReview(due);
+    };
+    document.getElementById('ruta-libre').onclick = () => mostrarEleccionVocabularioODominar(nivel, flujo.niveles[nivel]?.currentGroup || null, { libre: true });
+    document.getElementById('ruta-nivel').onclick = openNivelSelector;
+  }
+
+  async function rutaIniciarSiguiente() {
+    const nivel = flujo.currentNivel;
+    const sig = await rutaResolver(nivel, true);
+    await updateUserFlow();
+    if (!sig) return rutaPantalla();
+    rutaEst = { tipo: sig.tipo, n: 0, nombre: sig.nombre, icono: sig.icono };
+    touchStreak();
+    if (sig.tipo === 'repaso') return startSrsReview(sig.due);
+    if (sig.tipo === 'extra') return iniciarPracticaExtra(nivel);
+    if (sig.tipo === 'palabras') return runFlowLibre();
+    if (sig.tipo === 'dominar') { await cargarContenidoDominar(nivel); return pasoDominar(nivel); }
+    if (sig.tipo === 'herramienta') return rutaHerramienta(sig.herr, nivel);
+  }
+
+  // Fin de la estación en curso → cuenta para la meta del día y vuelve a la ruta.
+  async function rutaFinEstacion() {
+    const e = rutaEst;
+    rutaEst = null;
+    srsSession = null;
+    if (e && (e.n > 0 || e.tipo === 'herramienta')) {
+      ensureRuta();
+      if (!e.suelta) flujo.daily.estaciones = (flujo.daily.estaciones || 0) + 1;
+      rutaUltima = { icono: e.icono || '✅', nombre: e.nombre || 'Actividad' };
+      await updateUserFlow();
+      if (!e.suelta && flujo.daily.estaciones === RUTA_META_DIA) {
+        playSound('complete'); triggerConfetti();
+        showToast(`🎉 ¡Meta de hoy cumplida: ${RUTA_META_DIA} estaciones!`);
+      }
+    }
+    closeModal();
+    return rutaPantalla();
+  }
+
+  function rutaHerramienta(herr, nivel) {
+    const h = RUTA_HERR_INFO[herr];
+    const r = ensureRuta();
+    const nuevo = !r.vistas[herr];
+    updateProgressBar(50);
+    appContainer.innerHTML = `
+      <div class="card-3d p-6 text-center animate-pop mt-4">
+        ${nuevo ? '<span class="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-black uppercase mb-3 inline-block">🆕 Nueva herramienta</span>' : ''}
+        <div class="text-6xl mb-3">${h.icono}</div>
+        <h2 class="font-heading font-bold text-slate-800 text-2xl mb-2">${escapeHTML(h.nombre)}</h2>
+        <p class="text-slate-500 mb-2">${nuevo ? h.nuevo : h.desc(nivel)}</p>
+        <p class="text-xs text-slate-400 mb-5">Cuando termines, toca <b>«🗺️ Seguir mi ruta»</b> (abajo a la derecha) para volver aquí. <span class="text-yellow-600 font-bold">+${RUTA_PTS_HERRAMIENTA} puntos</span></p>
+        <button id="ruta-ir" class="w-full btn-juice bg-[#FF7A00] text-white font-bold py-3 rounded-xl text-lg">Ir a ${escapeHTML(h.nombre)} 👉</button>
+        <button id="ruta-saltar" class="w-full mt-2 text-slate-400 font-bold text-sm py-2">Ahora no, seguir con la ruta</button>
+      </div>`;
+    document.getElementById('ruta-ir').onclick = async (e) => {
+      e.currentTarget.disabled = true;
+      r.vistas[herr] = true;
+      r.externo = { herr, t: Date.now() };
+      rutaEst = null;
+      await updateUserFlow();
+      irA(h.url(nivel));
+    };
+    document.getElementById('ruta-saltar').onclick = () => { r.vistas[herr] = true; rutaEst = null; updateUserFlow(); rutaPantalla(); };
   }
 
   /* ============================================================
@@ -7698,6 +8213,9 @@ function openAbuChat() {
      directamente la pantalla pedida (y se limpia la URL). */
   function abrirDesdeURL() {
     const q = new URLSearchParams(window.location.search);
+    // De vuelta de una herramienta de la ruta (listening.html?ruta=1 → aquí).
+    try { sessionStorage.removeItem('abu-ruta'); } catch {}
+    if (q.get('ruta')) { q.delete('ruta'); history.replaceState(null, '', window.location.pathname + (q.toString() ? '?' + q : '')); }
     const tool = q.get('tool'), menu = q.get('menu');
     if (!tool && !menu) return;
     history.replaceState(null, '', window.location.pathname + (q.get('embed') === '1' ? '?embed=1' : ''));
