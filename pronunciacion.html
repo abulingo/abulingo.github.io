@@ -1287,7 +1287,7 @@
      · Texto del guion: Edge Function "generar-dialogo"; si esa no
        devuelve nada usable, se reintenta con "tutor-abu" pidiéndole
        un JSON. Así la función no depende de un solo endpoint.
-     · Voz: Edge Function "generar-audio-abu" (Orpheus en Groq), la
+     · Voz: Edge Function "generar-audio-abu" (voces Chirp3-HD), la
        misma que usa "Conversa con Abu" en abulingo.html. El audio se
        pide bajo demanda (al tocar 🔊) y se guarda en memoria mientras
        dure la sesión; si falla, se cae a la voz del navegador.
@@ -1304,15 +1304,40 @@
   let pzCrearForm = { tema: '', nivel: null, mensajes: 8, a: 'Alex', b: 'Sam' };
   let pzCrearGenerando = false;
   const pzAudioCache = new Map();    // "voz|texto" -> audioContent (base64 mp3)
-  // Etiqueta de voz por personaje: A y B suenan distinto (la Edge
-  // Function traduce estas etiquetas a voces Chirp 3: HD concretas).
-  // "A"/"B" son los personajes de una conversación creada; cualquier otra
-  // etiqueta ("mujer", "abu"...) se pasa tal cual a la Edge Function.
-  const pzVozDe = (rol) => {
+  /* Voz de cada personaje: si es mujer, voz de mujer; si es hombre, voz de
+     hombre (la Edge Function traduce "mujer"/"hombre" a voces Chirp 3: HD).
+     El género viene de la IA al crear la conversación (generoA/generoB); en
+     las conversaciones viejas se deduce del nombre y, si el nombre no lo
+     dice, A es mujer y B hombre. Si los dos son del mismo género, B usa la
+     segunda voz de ese género ("mujer2"/"hombre2") para que se distingan.
+     Cualquier otra etiqueta ("mujer", "abu"...) se pasa tal cual.          */
+  const PZ_NOMBRES_F = new Set('isabel carmen raquel ines pilar beatriz rocio mercedes luz sharon emily kate sarah rachel megan jennifer karen ashley elizabeth abigail grace chloe zoe madison allison hannah susan ruth esther lucy amy jane mary nicole michelle stephanie kimberly lily ivy paz dolores consuelo soledad nieves rosario belen noemi maribel anabel ingrid miriam judith lourdes marisol abril flor sophie rose joy hope eve beth ann anne lauren kristen catherine caroline natalie jessica olivia amelia ella mia ava harper evelyn scarlett leah aubrey'.split(' '));
+  const PZ_NOMBRES_M = new Set('juan carlos jose luis miguel pedro david daniel jorge andres diego javier sebastian nicolas samuel gabriel tomas felipe martin ivan raul oscar victor hector ruben manuel angel joel adrian cesar esteban julian cristian kevin brian john james robert michael william richard thomas charles chris mark paul steven jason ryan eric adam ben jack tom peter george frank henry harry jake josh luke matt mike nick joe max leo noah liam ethan mason logan owen dylan caleb aaron isaac joshua luca elijah jonah ezra'.split(' '));
+  function pzGeneroNombre(nombre) {
+    const n = String(nombre || '').trim().split(/\s+/)[0].toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+    if (!n || n === 'persona') return null;
+    if (PZ_NOMBRES_F.has(n)) return 'f';
+    if (PZ_NOMBRES_M.has(n)) return 'm';
+    if (/a$/.test(n)) return 'f';
+    if (/o$/.test(n)) return 'm';
+    return null;
+  }
+  function pzGenerosConv(conv) {
+    const valido = (g) => (g === 'f' || g === 'm') ? g : null;
+    let a = valido(conv?.generoA) || pzGeneroNombre(conv?.personajeA);
+    let b = valido(conv?.generoB) || pzGeneroNombre(conv?.personajeB);
+    if (!a && !b) { a = 'f'; b = 'm'; }
+    else if (!a) a = b === 'f' ? 'm' : 'f';
+    else if (!b) b = a === 'f' ? 'm' : 'f';
+    return { a, b };
+  }
+  const pzVozDe = (rol, conv = (pzVivo?.conv || pzConvActual)) => {
     const r = String(rol || '').trim();
-    if (/^b$/i.test(r)) return 'b';
-    if (/^a$/i.test(r)) return 'a';
-    return r.toLowerCase() || 'a';
+    if (!/^[ab]$/i.test(r)) return r.toLowerCase() || 'a';
+    const g = pzGenerosConv(conv);
+    const base = (x) => (x === 'm' ? 'hombre' : 'mujer');
+    if (/^a$/i.test(r)) return base(g.a);
+    return g.a === g.b ? base(g.b) + '2' : base(g.b);
   };
   const pzClaveVoz = (voz, texto) => `${voz}|${texto}`;
 
@@ -1562,6 +1587,9 @@
       tema: ctx.tema,
       personajeA: (payload.personajeA || ctx.personajeA).toString().trim().slice(0, 18),
       personajeB: (payload.personajeB || ctx.personajeB).toString().trim().slice(0, 18),
+      // género de cada personaje (lo da la IA) para elegir voz de mujer u hombre
+      generoA: ['f', 'm'].includes(payload.generoA) ? payload.generoA : null,
+      generoB: ['f', 'm'].includes(payload.generoB) ? payload.generoB : null,
       mensajes,
       creada: true,
       creadaEn: new Date().toISOString()
@@ -1574,6 +1602,7 @@
     lista.unshift({
       id: conv.id, titulo: conv.titulo, nivel: conv.nivel, tema: conv.tema,
       personajeA: conv.personajeA, personajeB: conv.personajeB, creadaEn: conv.creadaEn,
+      generoA: conv.generoA || null, generoB: conv.generoB || null,
       mensajes: conv.mensajes.map(m => ({ rol: m.rol, en: m.en, es: m.es }))
     });
     if (lista.length > CREAR_MAX_GUARDADAS) {
@@ -1599,6 +1628,7 @@
     pzConvActual = {
       id: c.id, titulo: c.titulo, nivel: c.nivel, tema: c.tema,
       personajeA: c.personajeA || 'Persona A', personajeB: c.personajeB || 'Persona B',
+      generoA: c.generoA || null, generoB: c.generoB || null,
       mensajes: c.mensajes.map(m => ({ ...m })),
       creada: true
     };
@@ -2424,6 +2454,7 @@
       return {
         id: c.id, titulo: c.titulo, nivel: c.nivel_ingles,
         personajeA: j.personajeA || 'Persona A', personajeB: j.personajeB || 'Persona B',
+        generoA: j.generoA || null, generoB: j.generoB || null,
         mensajes: Array.isArray(j.mensajes) ? j.mensajes : []
       };
     } catch (e) {
