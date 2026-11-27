@@ -738,7 +738,7 @@ function openAbuChat() {
   window.playAudioUrl = (url) => { if (url) new Audio(url).play().catch(() => {}); };
 
   // Síntesis de voz (Text-to-Speech) en inglés
-  // VOZ_VELOCIDAD manda tanto en la voz REAL de Google Cloud (se envía a
+  // VOZ_VELOCIDAD manda tanto en la voz REAL (Groq) (se envía a
   // la Edge Function) como en la del navegador, que es el respaldo: así
   // el ritmo es el mismo se oiga una u otra. 0.85 ≈ 15 % más lento que
   // el normal, que es lo que un principiante alcanza a seguir.
@@ -807,7 +807,7 @@ function openAbuChat() {
     if (window.speechSynthesis) window.speechSynthesis.cancel();
     // También corta el audio REAL que esté sonando: antes stopSpeaking()
     // solo silenciaba la voz del navegador, así que si estaba sonando un
-    // mp3 de Google Cloud se montaba encima de la línea siguiente.
+    // audio de la voz real se montaba encima de la línea siguiente.
     detenerVozReal();
   }
 
@@ -815,9 +815,9 @@ function openAbuChat() {
      MOTOR DE VOZ REAL — lo usan TODOS los chats en inglés de esta
      página: "Conversa con Abu" (Dominar), el chat de vocabulario y el
      diálogo con las palabras del grupo. En vez de la síntesis del
-     navegador (speak(), que es la que suena robótica), pide el mp3 a la
-     Edge Function "generar-audio-abu", que genera con voces Chirp 3: HD
-     de Google Cloud y a velocidad VOZ_VELOCIDAD (más lenta que la
+     navegador (speak(), que es la que suena robótica), pide el audio a la
+     Edge Function "generar-audio-abu", que lo genera con Orpheus en Groq
+     y se reproduce a velocidad VOZ_VELOCIDAD (más lenta que la
      nativa, para principiantes).
 
      ÚNICA EXCEPCIÓN a propósito: "Ahora, a conversar" de Dominar sigue
@@ -849,7 +849,7 @@ function openAbuChat() {
 
   function reproducirBase64(audioContent, onend, vel) {
     detenerVozReal();
-    const audio = new Audio(`data:audio/mp3;base64,${audioContent}`);
+    const audio = new Audio(`data:audio/${String(audioContent).startsWith('UklGR') ? 'wav' : 'mp3'};base64,${audioContent}`);
     if (vel) aplicarVelocidad(audio, vel);
     abuAudioActual = audio;
     const fin = () => { if (abuAudioActual === audio) abuAudioActual = null; if (onend) onend(); };
@@ -907,8 +907,8 @@ function openAbuChat() {
   }
 
   /* ---------- Voz REAL para cualquier línea en inglés ----------
-     Pide el mp3 a la Edge Function "generar-audio-abu" (voces Chirp 3:
-     HD, ritmo VOZ_VELOCIDAD) y lo reproduce. Guarda lo ya generado en
+     Pide el audio a la Edge Function "generar-audio-abu" (Orpheus en
+     Groq, ritmo VOZ_VELOCIDAD) y lo reproduce. Guarda lo ya generado en
      vozCache por voz+texto, así reescuchar una burbuja no vuelve a
      gastar cupo. Si no hay plan/sesión o la función falla, cae a la voz
      del navegador para que ninguna línea quede muda. */

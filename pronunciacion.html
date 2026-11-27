@@ -1287,7 +1287,7 @@
      · Texto del guion: Edge Function "generar-dialogo"; si esa no
        devuelve nada usable, se reintenta con "tutor-abu" pidiéndole
        un JSON. Así la función no depende de un solo endpoint.
-     · Voz: Edge Function "generar-audio-abu" (voces Chirp3-HD), la
+     · Voz: Edge Function "generar-audio-abu" (Orpheus en Groq), la
        misma que usa "Conversa con Abu" en abulingo.html. El audio se
        pide bajo demanda (al tocar 🔊) y se guarda en memoria mientras
        dure la sesión; si falla, se cae a la voz del navegador.
@@ -1750,7 +1750,7 @@
       let url = m.audio_url;
       if (!url) {
         const b64 = await pzAudioAbu(m.en, m.rol);
-        if (b64) { m.audio_url = `data:audio/mp3;base64,${b64}`; url = m.audio_url; }
+        if (b64) { m.audio_url = `data:audio/${String(b64).startsWith('UklGR') ? 'wav' : 'mp3'};base64,${b64}`; url = m.audio_url; }
       }
       if (!pzVivo) return;
       const seguir = () => { if (pzVivo) { pzVivo.idx++; pzVivoPaso(); } };
@@ -2004,7 +2004,7 @@
     (mensajes || []).forEach(m => {
       const t = String(m?.en || '').trim();
       const c = pzAudioCache.get(pzClaveVoz(pzVozDe(m?.rol), t));
-      if (c && !m.audio_url) m.audio_url = `data:audio/mp3;base64,${c}`;
+      if (c && !m.audio_url) m.audio_url = `data:audio/${String(c).startsWith('UklGR') ? 'wav' : 'mp3'};base64,${c}`;
     });
     if (!pendientes.length) return 0;
 
@@ -2036,7 +2036,7 @@
         const l = lista && lista.shift();
         if (!l || !a?.audioContent) return;
         pzAudioCache.set(pzClaveVoz(l.voz, l.texto), a.audioContent);
-        l.ref.audio_url = `data:audio/mp3;base64,${a.audioContent}`;
+        l.ref.audio_url = `data:audio/${String(a.audioContent).startsWith('UklGR') ? 'wav' : 'mp3'};base64,${a.audioContent}`;
         ok++;
       });
       return ok;
@@ -2063,7 +2063,7 @@
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-circle-notch fa-spin text-[10px]"></i>'; }
     const b64 = await pzAudioAbu(t, rol);
     if (btn) { btn.disabled = false; btn.innerHTML = previo; }
-    if (b64) pzTocarUrl(`data:audio/mp3;base64,${b64}`, null, vel);
+    if (b64) pzTocarUrl(`data:audio/${String(b64).startsWith('UklGR') ? 'wav' : 'mp3'};base64,${b64}`, null, vel);
     else speak(t, vel || 1);
   }
 
@@ -2076,7 +2076,7 @@
     const b64 = await pzAudioAbu(m.en, m.rol);
     if (btn) { btn.disabled = false; btn.innerHTML = previo; }
     if (b64) {
-      m.audio_url = `data:audio/mp3;base64,${b64}`;
+      m.audio_url = `data:audio/${String(b64).startsWith('UklGR') ? 'wav' : 'mp3'};base64,${b64}`;
       pzTocarUrl(m.audio_url, null, pzVelConv);
     } else speak(m.en, pzVelConv);
   }
@@ -2108,7 +2108,7 @@
         let url = m.audio_url;
         if (!url && conv.creada) {
           const b64 = await pzAudioAbu(m.en, m.rol);
-          if (b64) { m.audio_url = `data:audio/mp3;base64,${b64}`; url = m.audio_url; }
+          if (b64) { m.audio_url = `data:audio/${String(b64).startsWith('UklGR') ? 'wav' : 'mp3'};base64,${b64}`; url = m.audio_url; }
         }
         if (url) {
           const a = pzAplicarVel(new Audio(url), pzVelConv);
@@ -2930,7 +2930,7 @@
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-circle-notch fa-spin text-[10px]"></i>'; }
     const b64 = await pzAudioAbu(m.en, voz);
     if (btn) { btn.disabled = false; btn.innerHTML = previo; }
-    if (b64) { m.audio_url = `data:audio/mp3;base64,${b64}`; pzTocarUrl(m.audio_url, null, pzVelConv); }
+    if (b64) { m.audio_url = `data:audio/${String(b64).startsWith('UklGR') ? 'wav' : 'mp3'};base64,${b64}`; pzTocarUrl(m.audio_url, null, pzVelConv); }
     else speak(m.en, pzVelConv);
   }
 
@@ -2944,7 +2944,7 @@
       await new Promise(async (resolve) => {
         if (!m.audio_url) {
           const b64 = await pzAudioAbu(m.en, voz);
-          if (b64) m.audio_url = `data:audio/mp3;base64,${b64}`;
+          if (b64) m.audio_url = `data:audio/${String(b64).startsWith('UklGR') ? 'wav' : 'mp3'};base64,${b64}`;
         }
         if (m.audio_url) {
           const a = pzTocarUrl(m.audio_url, resolve, pzVelConv);
@@ -3211,7 +3211,7 @@
         const b64 = await pzAudioAbu(target.text, target.rol);
         b.disabled = false; b.innerHTML = previo;
         if (b64) {
-          target.audioUrl = `data:audio/mp3;base64,${b64}`;
+          target.audioUrl = `data:audio/${String(b64).startsWith('UklGR') ? 'wav' : 'mp3'};base64,${b64}`;
           const linea = target.conversacion.mensajes?.[target.msgIndex];
           if (linea) linea.audio_url = target.audioUrl;
           new Audio(target.audioUrl).play().catch(() => speak(target.text));
