@@ -569,6 +569,8 @@
        v2 → v3: los temas repetidos entre niveles se fusionaron en uno solo
                 (ver GRAM_FUSIONAR); el avance del tema eliminado se pasa al
                 tema base para que nadie pierda estrellas.
+       v3 → v4: segunda tanda de fusiones (B1 que repetía A1/A2). Se vuelve
+                a pasar el avance; los temas ya migrados no se tocan.
   ------------------------------------------------------------ */
   const GRAM_ORDEN = ['A1', 'A2', 'B1', 'B2'];
   const gramRank = (n) => { const i = GRAM_ORDEN.indexOf(n); return i < 0 ? 0 : i; };
@@ -576,7 +578,7 @@
   const GRAM_FUSION_DESTINO = {};
 
   function ensureGram() {
-    if (!flujo.gram) flujo.gram = { v: 3, cfg: { quizLen: 15, autoEs: false }, niveles: {} };
+    if (!flujo.gram) flujo.gram = { v: 4, cfg: { quizLen: 15, autoEs: false }, niveles: {} };
     const g = flujo.gram;
     if (!g.cfg) g.cfg = { quizLen: 15, autoEs: false };
     // Las prácticas ahora son de 5, 10 o 15: los valores viejos (7) suben a 15.
@@ -591,8 +593,9 @@
       }
       g.v = 2;
     }
-    // v2 → v3: rescatar el avance de los temas que ya no existen por sí solos
-    if (g.v < 3) { gramMigrarFusion(g); g.v = 3; }
+    // v2 → v3 → v4: rescatar el avance de los temas que ya no existen por sí solos.
+    // Solo con el temario ya cargado: sin él no se sabe qué temas se fusionaron.
+    if (g.v < 4 && Object.keys(GRAM_FUSION_DESTINO).length) { gramMigrarFusion(g); g.v = 4; }
     /* Publica cuántos temas tiene cada nivel DESPUÉS de la fusión. Es el
        único sitio de la app que conoce ese número, y pronunciacion.html lo
        necesita para calcular el % de gramática dominada en su pantalla de
@@ -2720,7 +2723,7 @@
   ============================================================ */
   const GRAM_BUCKET = 'contenido';
   const GRAM_RUTA = (n) => `gramatica/${GRAM_ES ? 'es_' : ''}${n}.json`;
-  const GRAM_CONTENIDO_VERSION = GRAM_ES ? 'v2' : 'v1';   // ⬅️ súbelo al publicar contenido nuevo (el 1.º es el temario de español)
+  const GRAM_CONTENIDO_VERSION = GRAM_ES ? 'v2' : 'v2';   // ⬅️ súbelo al publicar contenido nuevo (el 1.º es el temario de español; el inglés pasó a v2 al quitar lo repetido)
   const GRAM_CACHE = 'abu-gramatica';
 
   let gramContenidoListo = false;
@@ -2728,7 +2731,7 @@
   /* Cuántos temas tiene cada nivel DESPUÉS de la fusión. Se usa para el
      porcentaje de "Progreso nivel" mientras el contenido aún no ha llegado;
      en cuanto carga, gramCargarContenido() escribe los valores reales. */
-  const GRAM_TOTALES_APROX = { A1: 50, A2: 24, B1: 53, B2: 75 };
+  const GRAM_TOTALES_APROX = { A1: 50, A2: 24, B1: 41, B2: 75 };
 
   async function gramLeerNivel(nivel) {
     const pref = GRAM_ES ? 'es_' : '';
@@ -2896,6 +2899,19 @@
     'B1-14.1', // Conectores básicos         → A1 6.3
     'B1-14.3', // Tiempo con valor de futuro → A2-42
     'B1-15.1', // Gramática americana        → A2-50
+    // Segunda tanda (v4): temas de B1 que eran el mismo tema de A1/A2 con otro nombre
+    'B1-1.6',  // Simple o continuo en pasado → A2-25
+    'B1-1.12', // El futuro con will          → A2-29
+    'B1-1.13', // El futuro con going to      → A2-29 (A1 3.13 ya lo enseña)
+    'B1-2.4',  // Prohibido o no necesario    → A2-32
+    'B1-7.3',  // Some, any, no y none        → A1 1.6
+    'B1-7.4',  // Mucho y muchos              → A1 1.6
+    'B1-7.5',  // Pocos y un poco             → A1 1.6
+    'B1-7.6',  // Demasiado y suficiente      → A2-15
+    'B1-8.1',  // Pronombres y posesivos      → A1 2.4
+    'B1-9.9',  // Adverbios de grado          → A1 4.2
+    'B1-11.5', // Respuestas y coincidir      → A2-46
+    'B1-15.3', // Vocabulario americano       → A1 B
 
     /* ── B2 que repetía B1 ── */
     'B2-2.2',  // Modales en pasado          → B1 2.7
@@ -3215,6 +3231,70 @@
     if (tab === 'learn') gramTabLearn(t); else gramStartTopicQuiz(t);
   }
 
+  /* ── Nada repetido ──
+     Un tema fusionado junta ejemplos, errores y preguntas de varios niveles,
+     y varios temas comparten errores típicos. Para no mostrar dos veces lo
+     mismo se compara la "firma" de cada frase: minúsculas, contracciones
+     desarrolladas (doesn't = does not), números y pronombres sujeto igualados.
+     Dos frases cuentan como la misma si comparten al menos el `umbral` de sus
+     palabras en el mismo orden ("I have 20 years" = "I have 25 years").
+     Se filtra al MOSTRAR: los índices de t.errs y t.quiz que guarda
+     "mis errores" no cambian.                                              */
+  const GRAM_NUM_RE = /\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|twenty|thirty|forty|fifty)\b/g;
+  function gramFirma(s) {
+    return String(s || '').replace(/<[^>]+>/g, ' ').toLowerCase().replace(/[’´`]/g, "'")
+      .replace(/\bcan't\b/g, 'can not').replace(/\bwon't\b/g, 'will not').replace(/n't\b/g, ' not')
+      .replace(/'m\b/g, ' am').replace(/'re\b/g, ' are').replace(/'s\b/g, ' is')
+      .replace(/'ve\b/g, ' have').replace(/'ll\b/g, ' will').replace(/'d\b/g, ' would')
+      .replace(/\d+([:.,]\d+)?/g, ' # ').replace(GRAM_NUM_RE, '#')
+      .replace(/\b(i|you|he|she|we|they)\b/g, 'P')
+      .replace(/[^a-z0-9#P'áéíóúñü ]/g, ' ')
+      .split(/\s+/).filter(Boolean)
+      .filter((w, i, a) => !(w === '#' && a[i - 1] === '#'));   // "six thirty" → un solo número
+  }
+  // Parecido entre 0 y 1: palabras en común en el mismo orden (LCS).
+  function gramParecido(a, b) {
+    const x = Array.isArray(a) ? a : gramFirma(a), y = Array.isArray(b) ? b : gramFirma(b);
+    if (!x.length || !y.length) return 0;
+    let prev = new Array(y.length + 1).fill(0);
+    for (let i = 0; i < x.length; i++) {
+      const cur = [0];
+      for (let j = 0; j < y.length; j++) cur.push(x[i] === y[j] ? prev[j] + 1 : Math.max(prev[j + 1], cur[j]));
+      prev = cur;
+    }
+    return 2 * prev[y.length] / (x.length + y.length);
+  }
+  // Deja solo la primera frase de cada grupo de frases iguales o casi iguales.
+  function gramSinRepetir(lista, texto, umbral = 0.85) {
+    const vistas = [];
+    return lista.filter(x => {
+      const f = gramFirma(texto(x));
+      if (!f.length || vistas.some(v => gramParecido(v, f) >= umbral)) return false;
+      vistas.push(f);
+      return true;
+    });
+  }
+  /* Cada error típico y cada ejemplo fijo se muestra en UNA lección: la
+     primera del temario (de A1 a B2) donde aparece. Las listas-resumen de
+     errores (A1 "C" y B2 "APX-A") son completas a propósito y no se filtran. */
+  const GRAM_RESUMENES = new Set(['C', 'B2-APX-A']);
+  let GRAM_PRIMERO = null;
+  function gramPrimero() {
+    if (GRAM_PRIMERO) return GRAM_PRIMERO;
+    const err = new Map(), ex = new Map();
+    const anotar = (mapa, frase, id) => { const k = gramFirma(frase).join(' '); if (k && !mapa.has(k)) mapa.set(k, id); };
+    GRAM_ORDEN.forEach(n => (GRAM_NIVELES[n]?.temas || []).forEach(t => {
+      (t.errs || []).forEach(e => anotar(err, e.b, t.id));
+      [...(t.ex || []), ...(t.amp || []).flatMap(a => a.ex || [])].forEach(e => anotar(ex, e.en, t.id));
+    }));
+    return (GRAM_PRIMERO = { err, ex });
+  }
+  function gramEsDeOtraLeccion(mapa, frase, t) {
+    if (GRAM_RESUMENES.has(t.id)) return false;
+    const duenno = mapa.get(gramFirma(frase).join(' '));
+    return !!duenno && duenno !== t.id;
+  }
+
   /* ── Ejemplos con audio y traducción que se descubre ──
      `nivel` marca de qué nivel viene la frase en un tema fusionado.  */
   function gramExRow(e) {
@@ -3252,15 +3332,16 @@
 
   function gramNewExamples(t, n = 3) {
     const { gens, extra } = gramFuentes(t);
-    const seen = new Set((gramExSession[t.id] || []).map(e => e.en));
-    (t.ex || []).forEach(e => seen.add(e.en));
+    // Lo que ya está en pantalla, para no generar la misma frase ni una casi igual
+    const ya = [...(gramExSession[t.id] || []), ...(t.ex || []), ...(t.amp || []).flatMap(a => a.ex || [])].map(e => gramFirma(e.en));
+    const repetida = (e) => { const f = gramFirma(e.en); return !f.length || ya.some(v => gramParecido(v, f) >= 0.85); };
     const out = [];
     let guard = 0;
     while (out.length < n && guard++ < 80) {
       let e = null;
       if (gens.length) e = gPick(gens).fn();
-      if ((!e || seen.has(e.en)) && extra.length) { const x = gPick(extra); e = { en: x[0], es: x[1] }; }
-      if (e && !seen.has(e.en)) { seen.add(e.en); out.push(e); }
+      if ((!e || repetida(e)) && extra.length) { const x = gPick(extra); e = { en: x[0], es: x[1] }; }
+      if (e && !repetida(e)) { ya.push(gramFirma(e.en)); out.push(e); }
     }
     if (!out.length) {
       const pool = [...extra.map(x => ({ en: x[0], es: x[1] })), ...(t.ex || [])];
@@ -3306,12 +3387,14 @@
     const body = document.getElementById('gl-body');
     if (!gramExSession[t.id]) gramExSession[t.id] = gramNewExamples(t, 3);
     const amps = t.amp || [];
-    // El tema base y sus ampliaciones repiten ejemplos, errores y claves: se muestran una vez.
-    const clave = (x) => String(x || '').replace(/<[^>]+>/g, '').toLowerCase().replace(/[^a-z0-9áéíóúñü ]/g, '').replace(/\s+/g, ' ').trim();
-    const unicos = (lista, fn) => { const v = new Set(); return lista.filter(x => { const k = clave(fn(x)); if (!k || v.has(k)) return false; v.add(k); return true; }); };
-    const ejemplos = unicos([...(t.ex || []), ...amps.flatMap(a => a.ex || []), ...gramExSession[t.id]], e => e?.en);
-    const errores = unicos(t.errs || [], e => e?.b);
-    const claves = unicos([t.tip, ...amps.map(a => a.tip)], x => x);
+    // Nada repetido: ni dentro del tema (base + ampliaciones de otros niveles)
+    // ni lo que ya enseña otra lección (los errores típicos se comparten mucho).
+    const primero = gramPrimero();
+    const ejemplos = gramSinRepetir([...(t.ex || []), ...amps.flatMap(a => a.ex || []), ...gramExSession[t.id]], e => e?.en)
+      .filter(e => !gramEsDeOtraLeccion(primero.ex, e.en, t));
+    const errores = gramSinRepetir(t.errs || [], e => e?.b, 0.8)
+      .filter(e => !gramEsDeOtraLeccion(primero.err, e.b, t));
+    const claves = gramSinRepetir([t.tip, ...amps.map(a => a.tip)], x => x);
 
     body.innerHTML = `
       ${t.prev ? gramPrevBanner(t.prev) : ''}
@@ -3644,9 +3727,31 @@
     const duenno = gramDuenno();
     const qs = [];
     // En un tema fusionado, quiz y errores están acumulados de todos los
-    // niveles y entran enteros: no se aparta nada del material.
-    (t.quiz || []).forEach((q, i) => qs.push({ k: 'mc', t: t.id, i, q: q.q, o: q.o, a: q.a, w: q.w }));
-    (t.errs || []).forEach((e, i) => qs.push({ k: 'pick', t: t.id, i, b: e.b, g: e.g, w: e.w }));
+    // niveles. Entran todos menos los repetidos (misma pregunta con las mismas
+    // opciones, o el mismo error con otras palabras). El índice `i` es el
+    // original, porque "mis errores" lo guarda.
+    const qVistas = [];
+    (t.quiz || []).forEach((q, i) => {
+      const f = gramFirma(q.q), o = (q.o || []).map(x => gramFirma(x).join(' ')).sort().join('|');
+      if (qVistas.some(v => v.o === o && gramParecido(v.f, f) >= 0.9)) return;
+      qVistas.push({ f, o });
+      qs.push({ k: 'mc', t: t.id, i, q: q.q, o: q.o, a: q.a, w: q.w });
+    });
+    const eVistas = [];
+    (t.errs || []).forEach((e, i) => {
+      const f = gramFirma(e.b);
+      if (eVistas.some(v => gramParecido(v, f) >= 0.8)) return;
+      eVistas.push(f);
+      qs.push({ k: 'pick', t: t.id, i, b: e.b, g: e.g, w: e.w });
+    });
+    // Una misma frase (o casi) no sale dos veces como ejercicio del mismo tipo.
+    const elegidas = { order: [], fill: [] };
+    const distinta = (tipo, frase) => {
+      const f = gramFirma(frase);
+      if (elegidas[tipo].some(v => gramParecido(v, f) >= 0.85)) return false;
+      elegidas[tipo].push(f);
+      return true;
+    };
 
     // Frases base: ejemplos fijos + extras + muchas generadas al vuelo (sin repetir)
     const vistas = new Set();
@@ -3661,17 +3766,21 @@
 
     // Ordenar la frase
     if (!t.noOrder) {
+      let nOrder = 0;
       gShuffle(base.filter(e => { const n = e.en.split(' ').length; return n >= 3 && n <= 8 && !/[—→:]/.test(e.en); }))
-        .slice(0, 5).forEach(e => qs.push({ k: 'order', t: t.id, en: e.en, es: e.es }));
+        .forEach(e => {
+          if (nOrder >= 5 || !distinta('order', e.en)) return;
+          nOrder++;
+          qs.push({ k: 'order', t: t.id, en: e.en, es: e.es });
+        });
     }
     // Escribir la palabra que falta
-    const usadas = new Set();
     let nType = 0;
     gShuffle(base).forEach(e => {
       if (nType >= 4) return;
       const f = gramFillFrom(e);
-      if (!f || usadas.has(f.frase)) return;
-      usadas.add(f.frase); nType++;
+      if (!f || !distinta('fill', f.frase)) return;
+      nType++;
       qs.push({ k: 'type', t: t.id, q: f.frase, a: f.resp, es: f.es, full: f.full });
     });
     // Elegir la palabra correcta entre su misma familia
@@ -3679,8 +3788,8 @@
     gShuffle(base).forEach(e => {
       if (nGmc >= 6) return;
       const g = gramGenMC(e, t.id);
-      if (!g || usadas.has(g.q)) return;
-      usadas.add(g.q); nGmc++;
+      if (!g || !distinta('fill', g.q)) return;
+      nGmc++;
       qs.push(g);
     });
     return qs;
@@ -3704,7 +3813,15 @@
 
   function gramReto() {
     const pool = [];
-    gramTemasPractica().forEach(t => gramQsOfTopic(t).forEach(q => pool.push(q)));
+    // Varios temas comparten errores y frases: en el reto cada pregunta sale una vez.
+    const vistas = new Set();
+    gramTemasPractica().forEach(t => gramQsOfTopic(t).forEach(q => {
+      const texto = q.k === 'pick' ? q.b : (q.k === 'order' ? q.en : `${q.q} ${(q.o || []).join(' ')}`);
+      const k = gramFirma(texto).join(' ');
+      if (vistas.has(k)) return;
+      vistas.add(k);
+      pool.push(q);
+    }));
     if (!pool.length) return showToast('Este nivel todavía no tiene práctica. 🚧');
     gramQuiz = { list: gShuffle(pool).slice(0, 10), i: 0, ok: 0, streak: 0, pts: 0, mode: 'reto' };
     gramRenderQ();
@@ -4447,7 +4564,9 @@
       pintarNivelLabel();
 
       // ?tema=3.3 abre una lección directamente (enlaces desde otras pantallas)
-      const tema = new URLSearchParams(location.search).get('tema');
+      // (si ese tema se fusionó en otro, se abre el tema donde vive ahora)
+      const temaPedido = new URLSearchParams(location.search).get('tema');
+      const tema = temaPedido && (GRAM_FUSION_DESTINO[temaPedido]?.id || temaPedido);
       if (tema && gramById(tema)) gramLesson(tema);
       else openGramatica();
 
